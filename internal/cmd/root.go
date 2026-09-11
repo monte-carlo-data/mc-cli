@@ -37,6 +37,9 @@ Every string flag accepts @<path> to read its value from a file.`,
 func Execute() int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	if completionRequest(os.Args[1:]) {
+		return executeCompletion(ctx, os.Stdout)
+	}
 	if err := rootCmd.ExecuteContext(ctx); err != nil {
 		fmt.Fprintf(os.Stderr, "%s: %v\n", binaryName, err)
 		return 1
