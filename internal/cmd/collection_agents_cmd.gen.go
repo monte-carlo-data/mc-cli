@@ -67,7 +67,7 @@ func newCollectionAgentsCreateGenericOauthClientCmd() *cobra.Command {
 				body.SetExpirationDays(expirationDays)
 			}
 			req = req.GenericCollectionAgentOAuthClientIn(*body)
-			out, resp, err := req.Execute()
+			out, resp, err := retryOnTransient(cmd, req.Execute)
 			if err != nil {
 				return apiErr(resp, err)
 			}
@@ -106,7 +106,7 @@ func newCollectionAgentsCreateGenericTokenCmd() *cobra.Command {
 				body.SetDescription(description)
 			}
 			req = req.GenericCollectionAgentTokenIn(*body)
-			out, resp, err := req.Execute()
+			out, resp, err := retryOnTransient(cmd, req.Execute)
 			if err != nil {
 				return apiErr(resp, err)
 			}
@@ -503,7 +503,7 @@ func newCollectionAgentsRegisterAwsCmd() *cobra.Command {
 				body.SetName(name)
 			}
 			req = req.AwsCollectionAgentIn(*body)
-			out, resp, err := req.Execute()
+			out, resp, err := retryOnTransient(cmd, req.Execute)
 			if err != nil {
 				return apiErr(resp, err)
 			}
@@ -600,7 +600,7 @@ func newCollectionAgentsRegisterAzureCmd() *cobra.Command {
 				body.SetServicePrincipal(*nested)
 			}
 			req = req.AzureCollectionAgentIn(*body)
-			out, resp, err := req.Execute()
+			out, resp, err := retryOnTransient(cmd, req.Execute)
 			if err != nil {
 				return apiErr(resp, err)
 			}
@@ -680,7 +680,7 @@ func newCollectionAgentsRegisterGcpCmd() *cobra.Command {
 				body.SetAuthHeaders(*nested)
 			}
 			req = req.GcpCollectionAgentIn(*body)
-			out, resp, err := req.Execute()
+			out, resp, err := retryOnTransient(cmd, req.Execute)
 			if err != nil {
 				return apiErr(resp, err)
 			}
@@ -726,7 +726,7 @@ func newCollectionAgentsRegisterGenericCmd() *cobra.Command {
 				body.SetName(name)
 			}
 			req = req.GenericCollectionAgentIn(*body)
-			out, resp, err := req.Execute()
+			out, resp, err := retryOnTransient(cmd, req.Execute)
 			if err != nil {
 				return apiErr(resp, err)
 			}
@@ -786,7 +786,7 @@ func newCollectionAgentsUpdateAwsCmd() *cobra.Command {
 				body.SetRoleArn(roleArn)
 			}
 			req = req.AwsCollectionAgentPatch(*body)
-			out, resp, err := req.Execute()
+			out, resp, err := retryOnTransient(cmd, req.Execute)
 			if err != nil {
 				return apiErr(resp, err)
 			}
@@ -881,7 +881,7 @@ func newCollectionAgentsUpdateAzureCmd() *cobra.Command {
 				body.SetServicePrincipal(*nested)
 			}
 			req = req.AzureCollectionAgentPatch(*body)
-			out, resp, err := req.Execute()
+			out, resp, err := retryOnTransient(cmd, req.Execute)
 			if err != nil {
 				return apiErr(resp, err)
 			}
@@ -959,7 +959,7 @@ func newCollectionAgentsUpdateGcpCmd() *cobra.Command {
 				body.SetAuthHeaders(*nested)
 			}
 			req = req.GcpCollectionAgentPatch(*body)
-			out, resp, err := req.Execute()
+			out, resp, err := retryOnTransient(cmd, req.Execute)
 			if err != nil {
 				return apiErr(resp, err)
 			}
@@ -997,7 +997,7 @@ func newCollectionAgentsUpdateGenericCmd() *cobra.Command {
 				body.SetName(name)
 			}
 			req = req.GenericCollectionAgentPatch(*body)
-			out, resp, err := req.Execute()
+			out, resp, err := retryOnTransient(cmd, req.Execute)
 			if err != nil {
 				return apiErr(resp, err)
 			}

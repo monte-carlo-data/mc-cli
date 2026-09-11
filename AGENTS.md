@@ -57,6 +57,7 @@ The generated files call these by bare name, all defined in the hand-written fil
 | `flagString`, `flagInt`, `flagBool`, `flagStringSlice`, `flagStringMap`, `flagSecret` | Typed flag readers. Strings accept `@<path>`; maps take `key=value` pairs or `@<path>` holding JSON; a secret honours its `--<name>-prompt` companion. |
 | `render(cmd, v, fields...)`, `renderList(cmd, v, columns)` | One object, or a list with the named columns, as a table or JSON. |
 | `enumCompletion(values)` | Shell completion for an enum flag, from the values the SDK exports. |
+| `retryOnTransient(cmd, call)` | Repeats a call while the API answers 503 or 429, within a bounded budget, saying so on stderr. |
 
 Renaming or removing one is a change to the generator's template as well, landed as a pair.
 

@@ -3,8 +3,11 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/spf13/cobra"
 )
@@ -29,9 +32,12 @@ Every string flag accepts @<path> to read its value from a file.`,
 	SilenceErrors: true,
 }
 
-// Execute runs the command and returns the process exit code.
+// Execute runs the command and returns the process exit code. Ctrl-C cancels the command's
+// context, which ends a retry wait.
 func Execute() int {
-	if err := rootCmd.Execute(); err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := rootCmd.ExecuteContext(ctx); err != nil {
 		fmt.Fprintf(os.Stderr, "%s: %v\n", binaryName, err)
 		return 1
 	}

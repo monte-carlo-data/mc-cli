@@ -62,7 +62,7 @@ func newDeploymentsCreateCmd() *cobra.Command {
 				body.SetName(name)
 			}
 			req = req.DeploymentIn(*body)
-			out, resp, err := req.Execute()
+			out, resp, err := retryOnTransient(cmd, req.Execute)
 			if err != nil {
 				return apiErr(resp, err)
 			}
@@ -219,7 +219,7 @@ func newDeploymentsUpdateCmd() *cobra.Command {
 				body.SetName(name)
 			}
 			req = req.DeploymentPatch(*body)
-			out, resp, err := req.Execute()
+			out, resp, err := retryOnTransient(cmd, req.Execute)
 			if err != nil {
 				return apiErr(resp, err)
 			}

@@ -241,7 +241,7 @@ func newCollectionDataStoresRegisterAwsCmd() *cobra.Command {
 				body.SetName(name)
 			}
 			req = req.AwsCollectionDataStoreIn(*body)
-			out, resp, err := req.Execute()
+			out, resp, err := retryOnTransient(cmd, req.Execute)
 			if err != nil {
 				return apiErr(resp, err)
 			}
@@ -345,7 +345,7 @@ func newCollectionDataStoresRegisterAzureCmd() *cobra.Command {
 				body.SetStorageAccountKeys(*nested)
 			}
 			req = req.AzureCollectionDataStoreIn(*body)
-			out, resp, err := req.Execute()
+			out, resp, err := retryOnTransient(cmd, req.Execute)
 			if err != nil {
 				return apiErr(resp, err)
 			}
@@ -407,7 +407,7 @@ func newCollectionDataStoresRegisterGcpCmd() *cobra.Command {
 				body.SetName(name)
 			}
 			req = req.GcpCollectionDataStoreIn(*body)
-			out, resp, err := req.Execute()
+			out, resp, err := retryOnTransient(cmd, req.Execute)
 			if err != nil {
 				return apiErr(resp, err)
 			}
@@ -470,7 +470,7 @@ func newCollectionDataStoresUpdateAwsCmd() *cobra.Command {
 				body.SetRoleArn(roleArn)
 			}
 			req = req.AwsCollectionDataStorePatch(*body)
-			out, resp, err := req.Execute()
+			out, resp, err := retryOnTransient(cmd, req.Execute)
 			if err != nil {
 				return apiErr(resp, err)
 			}
@@ -572,7 +572,7 @@ func newCollectionDataStoresUpdateAzureCmd() *cobra.Command {
 				body.SetStorageAccountKeys(*nested)
 			}
 			req = req.AzureCollectionDataStorePatch(*body)
-			out, resp, err := req.Execute()
+			out, resp, err := retryOnTransient(cmd, req.Execute)
 			if err != nil {
 				return apiErr(resp, err)
 			}
@@ -629,7 +629,7 @@ func newCollectionDataStoresUpdateGcpCmd() *cobra.Command {
 				body.SetServiceAccountKey(serviceAccountKey)
 			}
 			req = req.GcpCollectionDataStorePatch(*body)
-			out, resp, err := req.Execute()
+			out, resp, err := retryOnTransient(cmd, req.Execute)
 			if err != nil {
 				return apiErr(resp, err)
 			}
