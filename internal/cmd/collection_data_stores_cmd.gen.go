@@ -42,7 +42,7 @@ func newCollectionDataStoresDeleteAwsCmd() *cobra.Command {
 		Long:  "Deregister an S3 data store.\n\nIts deployment is left without one. Reprovision that deployment before registering another.\n\nThe bucket itself is yours and is not deleted.\n\nA data store cannot be deleted while its deployment still has a connection running through\nit. Delete or move those connections first.\n\nAn id that names a data store on another platform, or no data store in your account,\nreturns 404.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := confirm(cmd, "Delete aws collection data store "+args[0]); err != nil {
+			if err := confirm(cmd, "Delete aws collection data store"+" "+args[0]); err != nil {
 				return err
 			}
 			api, ctx, err := apiClient(cmd)
@@ -66,7 +66,7 @@ func newCollectionDataStoresDeleteAzureCmd() *cobra.Command {
 		Long:  "Deregister a data store held in Azure Blob Storage.\n\nIts deployment is left without one. Reprovision that deployment before registering another.\n\nThe container itself is yours and is not deleted.\n\nA data store cannot be deleted while its deployment still has a connection running through\nit. Delete or move those connections first.\n\nAn id that names a data store on another platform, or no data store in your account,\nreturns 404.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := confirm(cmd, "Delete azure collection data store "+args[0]); err != nil {
+			if err := confirm(cmd, "Delete azure collection data store"+" "+args[0]); err != nil {
 				return err
 			}
 			api, ctx, err := apiClient(cmd)
@@ -90,7 +90,7 @@ func newCollectionDataStoresDeleteGcpCmd() *cobra.Command {
 		Long:  "Deregister a data store held in Google Cloud Storage.\n\nIts deployment is left without one. Reprovision that deployment before registering another.\n\nThe bucket itself is yours and is not deleted.\n\nA data store cannot be deleted while its deployment still has a connection running through\nit. Delete or move those connections first.\n\nAn id that names a data store on another platform, or no data store in your account,\nreturns 404.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := confirm(cmd, "Delete gcp collection data store "+args[0]); err != nil {
+			if err := confirm(cmd, "Delete gcp collection data store"+" "+args[0]); err != nil {
 				return err
 			}
 			api, ctx, err := apiClient(cmd)
@@ -371,11 +371,11 @@ func newCollectionDataStoresRegisterAzureCmd() *cobra.Command {
 	cmd.Flags().String("name", "", "Display name for the data store. Replaces the name its deployment gave it.")
 	cmd.Flags().String("service-principal-tenant-id", "", "Directory (tenant) id the service principal lives in.")
 	cmd.Flags().String("service-principal-client-id", "", "Application (client) id of the service principal.")
-	cmd.Flags().String("service-principal-client-secret", "", "Client secret of the service principal.")
+	cmd.Flags().String("service-principal-client-secret", "", "Client secret of the service principal. Visible in the process list; --service-principal-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("service-principal-client-secret-prompt", false, "Read --service-principal-client-secret from a hidden prompt instead of the command line.")
 	cmd.Flags().String("service-principal-account-url", "", "URL of the storage account Monte Carlo sends requests to. A private endpoint or a custom host works, so this is not required to be under blob.core.windows.net.")
 	cmd.Flags().String("service-principal-account-name", "", "Name of the storage account, needed only when account_url does not start with it. Monte Carlo takes the first label of the host otherwise, which is right for a standard or private-link URL but not for a custom ingress host.")
-	cmd.Flags().String("storage-account-keys-connection-string", "", "Connection string for the storage account holding the container. It carries the account key, so treat it as a secret.")
+	cmd.Flags().String("storage-account-keys-connection-string", "", "Connection string for the storage account holding the container. It carries the account key, so treat it as a secret. Visible in the process list; --storage-account-keys-connection-string-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("storage-account-keys-connection-string-prompt", false, "Read --storage-account-keys-connection-string from a hidden prompt instead of the command line.")
 	return cmd
 }
@@ -427,7 +427,7 @@ func newCollectionDataStoresRegisterGcpCmd() *cobra.Command {
 	_ = cmd.MarkFlagRequired("deployment-id")
 	cmd.Flags().String("bucket-name", "", "Name of the Cloud Storage bucket Monte Carlo should use.")
 	_ = cmd.MarkFlagRequired("bucket-name")
-	cmd.Flags().String("service-account-key", "", "Service account key Monte Carlo reaches the bucket with, as the contents of the JSON key file Google issued for it. It replaces the stored key rather than merging into it.")
+	cmd.Flags().String("service-account-key", "", "Service account key Monte Carlo reaches the bucket with, as the contents of the JSON key file Google issued for it. It replaces the stored key rather than merging into it. Visible in the process list; --service-account-key-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("service-account-key-prompt", false, "Read --service-account-key from a hidden prompt instead of the command line.")
 	cmd.Flags().String("name", "", "Display name for the data store. Replaces the name its deployment gave it.")
 	return cmd
@@ -594,11 +594,11 @@ func newCollectionDataStoresUpdateAzureCmd() *cobra.Command {
 	cmd.Flags().String("name", "", "Display name for the data store. Replaces the name its deployment gave it.")
 	cmd.Flags().String("service-principal-tenant-id", "", "Directory (tenant) id the service principal lives in.")
 	cmd.Flags().String("service-principal-client-id", "", "Application (client) id of the service principal.")
-	cmd.Flags().String("service-principal-client-secret", "", "Client secret of the service principal.")
+	cmd.Flags().String("service-principal-client-secret", "", "Client secret of the service principal. Visible in the process list; --service-principal-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("service-principal-client-secret-prompt", false, "Read --service-principal-client-secret from a hidden prompt instead of the command line.")
 	cmd.Flags().String("service-principal-account-url", "", "URL of the storage account Monte Carlo sends requests to. A private endpoint or a custom host works, so this is not required to be under blob.core.windows.net.")
 	cmd.Flags().String("service-principal-account-name", "", "Name of the storage account, needed only when account_url does not start with it. Monte Carlo takes the first label of the host otherwise, which is right for a standard or private-link URL but not for a custom ingress host.")
-	cmd.Flags().String("storage-account-keys-connection-string", "", "Connection string for the storage account holding the container. It carries the account key, so treat it as a secret.")
+	cmd.Flags().String("storage-account-keys-connection-string", "", "Connection string for the storage account holding the container. It carries the account key, so treat it as a secret. Visible in the process list; --storage-account-keys-connection-string-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("storage-account-keys-connection-string-prompt", false, "Read --storage-account-keys-connection-string from a hidden prompt instead of the command line.")
 	return cmd
 }
@@ -647,7 +647,7 @@ func newCollectionDataStoresUpdateGcpCmd() *cobra.Command {
 	}
 	cmd.Flags().String("bucket-name", "", "Name of the Cloud Storage bucket Monte Carlo should use.")
 	cmd.Flags().String("name", "", "Display name for the data store. Replaces the name its deployment gave it.")
-	cmd.Flags().String("service-account-key", "", "Service account key Monte Carlo reaches the bucket with, as the contents of the JSON key file Google issued for it. It replaces the stored key rather than merging into it.")
+	cmd.Flags().String("service-account-key", "", "Service account key Monte Carlo reaches the bucket with, as the contents of the JSON key file Google issued for it. It replaces the stored key rather than merging into it. Visible in the process list; --service-account-key-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("service-account-key-prompt", false, "Read --service-account-key from a hidden prompt instead of the command line.")
 	return cmd
 }

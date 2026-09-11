@@ -86,7 +86,7 @@ func newDeploymentsDeleteCmd() *cobra.Command {
 		Long:  "Delete a deployment, releasing the infrastructure Monte Carlo runs for it.\n\nThe deployment's storage is deleted with it, so empty that storage first. A deployment\nwith an enabled collection agent or data store, or with connections still running through\nit, cannot be deleted. Neither can one hosted by Monte Carlo, which this API does not\nprovision. One that is not enabled is deleted along with the deployment.\n\nDeleting reaches several systems and can stop partway through. Repeating the request\npicks up where it stopped, so clear whatever a refusal named and send it again.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := confirm(cmd, "Delete deployment "+args[0]); err != nil {
+			if err := confirm(cmd, "Delete deployment"+" "+args[0]); err != nil {
 				return err
 			}
 			api, ctx, err := apiClient(cmd)
@@ -154,7 +154,7 @@ func newDeploymentsReprovisionCmd() *cobra.Command {
 		Long:  "Give a deployment something fresh to register.\n\nUse this to recover a deployment whose collection agent or data store was deleted, and to\nchange what a deployment hosts. The deployment itself is kept, so it does not count\nagainst your account's limit a second time, and what it hosted is discarded. An AWS\ndeployment is given a new external id, so a role trust policy naming the old one has to be\nupdated.\n\nA deployment whose collection agent or data store is enabled cannot be reprovisioned;\ndelete that first. Neither can one hosted by Monte Carlo, which this API does not\nprovision.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := confirm(cmd, "Reprovision deployment "+args[0]); err != nil {
+			if err := confirm(cmd, "Reprovision deployment"+" "+args[0]); err != nil {
 				return err
 			}
 			api, ctx, err := apiClient(cmd)

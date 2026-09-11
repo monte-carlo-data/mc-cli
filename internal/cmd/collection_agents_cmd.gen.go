@@ -140,7 +140,7 @@ func newCollectionAgentsDeleteAwsCmd() *cobra.Command {
 		Long:  "Deregister an AWS collection agent.\n\nIts deployment is left without an agent. Reprovision that deployment before registering\nanother agent on it.\n\nAn agent cannot be deleted while its deployment still has a connection running through\nit. Delete or move those connections first.\n\nAn id that names an agent on another platform, or no agent in your account, returns 404.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := confirm(cmd, "Delete aws collection agent "+args[0]); err != nil {
+			if err := confirm(cmd, "Delete aws collection agent"+" "+args[0]); err != nil {
 				return err
 			}
 			api, ctx, err := apiClient(cmd)
@@ -164,7 +164,7 @@ func newCollectionAgentsDeleteAzureCmd() *cobra.Command {
 		Long:  "Deregister an Azure collection agent.\n\nIts deployment is left without an agent. Reprovision that deployment before registering\nanother agent on it.\n\nAn agent cannot be deleted while its deployment still has a connection running through it.\nDelete or move those connections first.\n\nAn id that names an agent on another platform, or no agent in your account, returns 404.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := confirm(cmd, "Delete azure collection agent "+args[0]); err != nil {
+			if err := confirm(cmd, "Delete azure collection agent"+" "+args[0]); err != nil {
 				return err
 			}
 			api, ctx, err := apiClient(cmd)
@@ -188,7 +188,7 @@ func newCollectionAgentsDeleteGcpCmd() *cobra.Command {
 		Long:  "Deregister a GCP collection agent.\n\nIts deployment is left without an agent. Reprovision that deployment before registering\nanother agent on it.\n\nAn agent cannot be deleted while its deployment still has a connection running through it.\nDelete or move those connections first.\n\nAn id that names an agent on another platform, or no agent in your account, returns 404.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := confirm(cmd, "Delete gcp collection agent "+args[0]); err != nil {
+			if err := confirm(cmd, "Delete gcp collection agent"+" "+args[0]); err != nil {
 				return err
 			}
 			api, ctx, err := apiClient(cmd)
@@ -212,7 +212,7 @@ func newCollectionAgentsDeleteGenericCmd() *cobra.Command {
 		Long:  "Deregister a generic collection agent.\n\nEvery credential created for its deployment is deleted with it, so a running agent stops\nbeing able to connect. Its deployment is left without an agent. Reprovision that deployment\nbefore registering another agent on it.\n\nAn agent cannot be deleted while its deployment still has a connection running through it.\nDelete or move those connections first.\n\nAn id that names an agent on another platform, or no agent in your account, returns 404.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := confirm(cmd, "Delete generic collection agent "+args[0]); err != nil {
+			if err := confirm(cmd, "Delete generic collection agent"+" "+args[0]); err != nil {
 				return err
 			}
 			api, ctx, err := apiClient(cmd)
@@ -236,7 +236,7 @@ func newCollectionAgentsDeleteGenericOauthClientCmd() *cobra.Command {
 		Long:  "Delete an OAuth client.\n\nAn agent still running with it stops being able to get new access tokens. Access tokens it\nalready holds stay valid until they expire.\n\nDeleting an id your account does not hold, or has already deleted, also returns 204.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := confirm(cmd, "Delete generic-oauth-client collection agent "+args[0]); err != nil {
+			if err := confirm(cmd, "Delete generic-oauth-client collection agent"+" "+args[0]); err != nil {
 				return err
 			}
 			api, ctx, err := apiClient(cmd)
@@ -260,7 +260,7 @@ func newCollectionAgentsDeleteGenericTokenCmd() *cobra.Command {
 		Long:  "Delete a token. An agent still running with it stops being able to connect.\n\nDeleting an id your account does not hold, or has already deleted, also returns 204.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := confirm(cmd, "Delete generic-token collection agent "+args[0]); err != nil {
+			if err := confirm(cmd, "Delete generic-token collection agent"+" "+args[0]); err != nil {
 				return err
 			}
 			api, ctx, err := apiClient(cmd)
@@ -633,11 +633,11 @@ func newCollectionAgentsRegisterAzureCmd() *cobra.Command {
 	cmd.Flags().String("function-app-url", "", "URL of the function app Monte Carlo should call.")
 	_ = cmd.MarkFlagRequired("function-app-url")
 	cmd.Flags().String("name", "", "Display name for the collection agent. Replaces the name it currently has.")
-	cmd.Flags().String("function-app-key-app-key", "", "Function app key Monte Carlo presents when it calls the agent.")
+	cmd.Flags().String("function-app-key-app-key", "", "Function app key Monte Carlo presents when it calls the agent. Visible in the process list; --function-app-key-app-key-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("function-app-key-app-key-prompt", false, "Read --function-app-key-app-key from a hidden prompt instead of the command line.")
 	cmd.Flags().String("service-principal-tenant-id", "", "Directory (tenant) id the service principal lives in.")
 	cmd.Flags().String("service-principal-client-id", "", "Application (client) id of the service principal.")
-	cmd.Flags().String("service-principal-client-secret", "", "Client secret of the service principal.")
+	cmd.Flags().String("service-principal-client-secret", "", "Client secret of the service principal. Visible in the process list; --service-principal-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("service-principal-client-secret-prompt", false, "Read --service-principal-client-secret from a hidden prompt instead of the command line.")
 	cmd.Flags().String("service-principal-audience", "", "Audience the issued token is for, usually the function app's application id.")
 	return cmd
@@ -713,9 +713,9 @@ func newCollectionAgentsRegisterGcpCmd() *cobra.Command {
 	cmd.Flags().String("cloud-run-url", "", "URL of the Cloud Run service Monte Carlo should call.")
 	_ = cmd.MarkFlagRequired("cloud-run-url")
 	cmd.Flags().String("name", "", "Display name for the collection agent. Replaces the name it currently has.")
-	cmd.Flags().String("service-account-key", "", "Credentials for GCP_JSON_SERVICE_ACCOUNT_KEY, as the contents of the JSON key file Google issued for the service account. Send this or auth_headers, never both. It replaces the stored credentials rather than merging into them.")
+	cmd.Flags().String("service-account-key", "", "Credentials for GCP_JSON_SERVICE_ACCOUNT_KEY, as the contents of the JSON key file Google issued for the service account. Send this or auth_headers, never both. It replaces the stored credentials rather than merging into them. Visible in the process list; --service-account-key-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("service-account-key-prompt", false, "Read --service-account-key from a hidden prompt instead of the command line.")
-	cmd.Flags().StringArray("auth-headers-headers", nil, "Header names, each mapped to the value to send for it. Names have to be valid HTTP header names. At most 20 headers, each value up to 8192 characters. Repeat key=value, or pass @file holding JSON.")
+	cmd.Flags().StringArray("auth-headers-headers", nil, "Header names, each mapped to the value to send for it. Names have to be valid HTTP header names. At most 20 headers, each value up to 8192 characters. Visible in the process list. Repeat key=value, or pass @file holding JSON.")
 	return cmd
 }
 
@@ -910,11 +910,11 @@ func newCollectionAgentsUpdateAzureCmd() *cobra.Command {
 	_ = cmd.RegisterFlagCompletionFunc("authentication-type", enumCompletion(sdk.AllowedAzureAgentAuthenticationTypeEnumValues))
 	cmd.Flags().String("function-app-url", "", "URL of the function app Monte Carlo should call.")
 	cmd.Flags().String("name", "", "Display name for the collection agent. Replaces the name it currently has.")
-	cmd.Flags().String("function-app-key-app-key", "", "Function app key Monte Carlo presents when it calls the agent.")
+	cmd.Flags().String("function-app-key-app-key", "", "Function app key Monte Carlo presents when it calls the agent. Visible in the process list; --function-app-key-app-key-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("function-app-key-app-key-prompt", false, "Read --function-app-key-app-key from a hidden prompt instead of the command line.")
 	cmd.Flags().String("service-principal-tenant-id", "", "Directory (tenant) id the service principal lives in.")
 	cmd.Flags().String("service-principal-client-id", "", "Application (client) id of the service principal.")
-	cmd.Flags().String("service-principal-client-secret", "", "Client secret of the service principal.")
+	cmd.Flags().String("service-principal-client-secret", "", "Client secret of the service principal. Visible in the process list; --service-principal-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("service-principal-client-secret-prompt", false, "Read --service-principal-client-secret from a hidden prompt instead of the command line.")
 	cmd.Flags().String("service-principal-audience", "", "Audience the issued token is for, usually the function app's application id.")
 	return cmd
@@ -988,9 +988,9 @@ func newCollectionAgentsUpdateGcpCmd() *cobra.Command {
 	_ = cmd.RegisterFlagCompletionFunc("authentication-type", enumCompletion(sdk.AllowedGcpAgentAuthenticationTypeEnumValues))
 	cmd.Flags().String("cloud-run-url", "", "URL of the Cloud Run service Monte Carlo should call.")
 	cmd.Flags().String("name", "", "Display name for the collection agent. Replaces the name it currently has.")
-	cmd.Flags().String("service-account-key", "", "Credentials for GCP_JSON_SERVICE_ACCOUNT_KEY, as the contents of the JSON key file Google issued for the service account. Send this or auth_headers, never both. It replaces the stored credentials rather than merging into them.")
+	cmd.Flags().String("service-account-key", "", "Credentials for GCP_JSON_SERVICE_ACCOUNT_KEY, as the contents of the JSON key file Google issued for the service account. Send this or auth_headers, never both. It replaces the stored credentials rather than merging into them. Visible in the process list; --service-account-key-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("service-account-key-prompt", false, "Read --service-account-key from a hidden prompt instead of the command line.")
-	cmd.Flags().StringArray("auth-headers-headers", nil, "Header names, each mapped to the value to send for it. Names have to be valid HTTP header names. At most 20 headers, each value up to 8192 characters. Repeat key=value, or pass @file holding JSON.")
+	cmd.Flags().StringArray("auth-headers-headers", nil, "Header names, each mapped to the value to send for it. Names have to be valid HTTP header names. At most 20 headers, each value up to 8192 characters. Visible in the process list. Repeat key=value, or pass @file holding JSON.")
 	return cmd
 }
 
