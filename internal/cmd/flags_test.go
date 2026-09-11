@@ -214,7 +214,9 @@ func TestFlagStringSliceParsesRepeatedFlagsAndCommaSeparatedValues(t *testing.T)
 
 func TestExpandHomeExpandsOnlyALeadingTilde(t *testing.T) {
 	dir := t.TempDir()
+	// os.UserHomeDir reads HOME on Unix and USERPROFILE on Windows.
 	t.Setenv("HOME", dir)
+	t.Setenv("USERPROFILE", dir)
 
 	if got, err := expandHome("~"); err != nil || got != dir {
 		t.Fatalf("got %q, %v", got, err)

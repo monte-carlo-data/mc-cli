@@ -99,6 +99,9 @@ func TestINISaveCreatesTheDirectoryWithTheGivenMode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if runtime.GOOS == "windows" {
+		t.Skip("file modes are not POSIX on Windows")
+	}
 	if info.Mode().Perm() != credentialsMode {
 		t.Fatalf("mode %o, want %o", info.Mode().Perm(), credentialsMode)
 	}
