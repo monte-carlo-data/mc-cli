@@ -31,8 +31,10 @@ func outputFormat(cmd *cobra.Command) (string, error) {
 	return "", fmt.Errorf("--output must be table or json, not %q", format)
 }
 
-// render prints one object: as JSON, or as a two-column table of its fields.
-func render(cmd *cobra.Command, v any) error {
+// render prints one object: as JSON, or as a two-column table of its fields. The table shows
+// `fields` in that order, or every field sorted by name when none are given. JSON is always
+// the whole object.
+func render(cmd *cobra.Command, v any, fields ...string) error {
 	format, err := outputFormat(cmd)
 	if err != nil {
 		return err
@@ -40,18 +42,21 @@ func render(cmd *cobra.Command, v any) error {
 	if format == "json" {
 		return writeJSON(cmd.OutOrStdout(), v)
 	}
-	fields, err := asFields(v)
+	values, err := asFields(v)
 	if err != nil {
 		return err
 	}
-	keys := make([]string, 0, len(fields))
-	for k := range fields {
-		keys = append(keys, k)
+	keys := fields
+	if len(keys) == 0 {
+		keys = make([]string, 0, len(values))
+		for k := range values {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
 	}
-	sort.Strings(keys)
 	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
 	for _, k := range keys {
-		fmt.Fprintf(w, "%s\t%s\n", k, cell(fields[k]))
+		fmt.Fprintf(w, "%s\t%s\n", k, cell(values[k]))
 	}
 	return w.Flush()
 }

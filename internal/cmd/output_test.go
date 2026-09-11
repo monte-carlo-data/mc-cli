@@ -45,6 +45,26 @@ func TestRenderTableSortsFieldsAndFormatsValues(t *testing.T) {
 	}
 }
 
+func TestRenderTableShowsTheGivenFieldsInOrder(t *testing.T) {
+	cmd, out := outputCmd(t, "table")
+	if err := render(cmd, widget{ID: "1", Name: "w", Enabled: true}, "name", "id"); err != nil {
+		t.Fatal(err)
+	}
+	if out.String() != "name  w\nid    1\n" {
+		t.Fatalf("got:\n%s", out.String())
+	}
+}
+
+func TestRenderJSONIgnoresTheFieldList(t *testing.T) {
+	cmd, out := outputCmd(t, "json")
+	if err := render(cmd, widget{ID: "1", Enabled: true}, "name"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), `"enabled": true`) {
+		t.Fatalf("got:\n%s", out.String())
+	}
+}
+
 func TestRenderJSON(t *testing.T) {
 	cmd, out := outputCmd(t, "json")
 	if err := render(cmd, widget{ID: "1"}); err != nil {

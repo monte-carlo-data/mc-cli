@@ -18,7 +18,10 @@ func init() {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out)
+			// The table leaves out account_frozen; the JSON output carries it.
+			return render(cmd, out,
+				"email", "first_name", "last_name", "identity_type", "auth_groups",
+				"account_name", "account_id", "user_id")
 		},
 	})
 }
