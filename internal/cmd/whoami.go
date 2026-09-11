@@ -14,9 +14,9 @@ func init() {
 			if err != nil {
 				return err
 			}
-			out, _, err := api.UsersAPI.GetCurrentUser(ctx).Execute()
+			out, resp, err := api.UsersAPI.GetCurrentUser(ctx).Execute()
 			if err != nil {
-				return apiErr(err)
+				return apiErr(resp, err)
 			}
 			return render(cmd, out)
 		},

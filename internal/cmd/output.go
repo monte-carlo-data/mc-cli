@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"sort"
 	"strings"
@@ -138,25 +139,49 @@ func cell(v any) string {
 	return string(raw)
 }
 
-// apiErr renders an API failure from the problem the SDK decoded: detail, code and request id,
-// then one line per invalid field. Without a decoded problem the raw body is shown.
-func apiErr(err error) error {
+// apiErr renders an API failure. With a problem document: its detail, code and request id, then
+// one line per invalid field. Without one, the request, the status and the body's message, which
+// is what the API gateway answers when a credential or a URL is wrong.
+func apiErr(resp *http.Response, err error) error {
 	var apiError *sdk.GenericOpenAPIError
 	if !errors.As(err, &apiError) {
 		return err
 	}
-	problem, ok := apiError.Model().(sdk.ProblemOut)
-	if !ok {
-		body := strings.TrimSpace(string(apiError.Body()))
+	if problem, ok := apiError.Model().(sdk.ProblemOut); ok {
+		var b strings.Builder
+		fmt.Fprintf(&b, "%s (%s, request %s)", problem.GetDetail(), problem.GetCode(), problem.GetRequestId())
+		for _, fieldErr := range problem.GetErrors() {
+			fmt.Fprintf(&b, "\n  %s: %s", strings.Join(fieldErr.GetField(), "."), fieldErr.GetMessage())
+		}
+		return errors.New(b.String())
+	}
+	body := bodyMessage(apiError.Body())
+	if resp == nil || resp.Request == nil {
 		if body == "" {
 			return err
 		}
-		return fmt.Errorf("%s: %s", apiError.Error(), body)
+		return errors.New(body)
 	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "%s (%s, request %s)", problem.GetDetail(), problem.GetCode(), problem.GetRequestId())
-	for _, fieldErr := range problem.GetErrors() {
-		fmt.Fprintf(&b, "\n  %s: %s", strings.Join(fieldErr.GetField(), "."), fieldErr.GetMessage())
+	msg := fmt.Sprintf("%s %s: %s", resp.Request.Method, resp.Request.URL, resp.Status)
+	if body != "" {
+		msg += ": " + body
 	}
-	return errors.New(b.String())
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		msg += "\nCheck the credentials and --endpoint, or the profile they come from."
+	}
+	return errors.New(msg)
+}
+
+// bodyMessage is the body's `message` when it is a JSON object with one, else the body itself.
+func bodyMessage(body []byte) string {
+	text := strings.TrimSpace(string(body))
+	var object map[string]any
+	if json.Unmarshal(body, &object) == nil {
+		for _, key := range []string{"message", "Message", "detail", "error"} {
+			if v, ok := object[key].(string); ok && v != "" {
+				return v
+			}
+		}
+	}
+	return text
 }

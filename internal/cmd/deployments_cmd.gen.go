@@ -62,9 +62,9 @@ func newDeploymentsCreateCmd() *cobra.Command {
 				body.SetName(name)
 			}
 			req = req.DeploymentIn(*body)
-			out, _, err := req.Execute()
+			out, resp, err := req.Execute()
 			if err != nil {
-				return apiErr(err)
+				return apiErr(resp, err)
 			}
 			return render(cmd, out)
 		},
@@ -89,8 +89,8 @@ func newDeploymentsDeleteCmd() *cobra.Command {
 				return err
 			}
 			req := api.DeploymentsAPI.DeleteDeployment(ctx, args[0])
-			if _, err := req.Execute(); err != nil {
-				return apiErr(err)
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
 			}
 			return nil
 		},
@@ -110,9 +110,9 @@ func newDeploymentsGetCmd() *cobra.Command {
 				return err
 			}
 			req := api.DeploymentsAPI.GetDeployment(ctx, args[0])
-			out, _, err := req.Execute()
+			out, resp, err := req.Execute()
 			if err != nil {
-				return apiErr(err)
+				return apiErr(resp, err)
 			}
 			return render(cmd, out)
 		},
@@ -132,9 +132,9 @@ func newDeploymentsListCmd() *cobra.Command {
 				return err
 			}
 			req := api.DeploymentsAPI.ListDeployments(ctx)
-			out, _, err := req.Execute()
+			out, resp, err := req.Execute()
 			if err != nil {
-				return apiErr(err)
+				return apiErr(resp, err)
 			}
 			return renderList(cmd, out, []string{"id", "name", "type", "runtime_platform", "enabled"})
 		},
@@ -179,9 +179,9 @@ func newDeploymentsReprovisionCmd() *cobra.Command {
 				body.SetName(name)
 			}
 			req = req.DeploymentIn(*body)
-			out, _, err := req.Execute()
+			out, resp, err := req.Execute()
 			if err != nil {
-				return apiErr(err)
+				return apiErr(resp, err)
 			}
 			return render(cmd, out)
 		},
@@ -215,9 +215,9 @@ func newDeploymentsUpdateCmd() *cobra.Command {
 				body.SetName(name)
 			}
 			req = req.DeploymentPatch(*body)
-			out, _, err := req.Execute()
+			out, resp, err := req.Execute()
 			if err != nil {
-				return apiErr(err)
+				return apiErr(resp, err)
 			}
 			return render(cmd, out)
 		},

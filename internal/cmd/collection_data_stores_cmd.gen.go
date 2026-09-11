@@ -47,8 +47,8 @@ func newCollectionDataStoresDeleteAwsCmd() *cobra.Command {
 				return err
 			}
 			req := api.CollectionDataStoresAPI.DeleteAwsCollectionDataStore(ctx, args[0])
-			if _, err := req.Execute(); err != nil {
-				return apiErr(err)
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
 			}
 			return nil
 		},
@@ -68,8 +68,8 @@ func newCollectionDataStoresDeleteAzureCmd() *cobra.Command {
 				return err
 			}
 			req := api.CollectionDataStoresAPI.DeleteAzureCollectionDataStore(ctx, args[0])
-			if _, err := req.Execute(); err != nil {
-				return apiErr(err)
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
 			}
 			return nil
 		},
@@ -89,8 +89,8 @@ func newCollectionDataStoresDeleteGcpCmd() *cobra.Command {
 				return err
 			}
 			req := api.CollectionDataStoresAPI.DeleteGcpCollectionDataStore(ctx, args[0])
-			if _, err := req.Execute(); err != nil {
-				return apiErr(err)
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
 			}
 			return nil
 		},
@@ -121,9 +121,9 @@ func newCollectionDataStoresGetAwsCmd() *cobra.Command {
 				return err
 			}
 			req := api.CollectionDataStoresAPI.GetAwsCollectionDataStore(ctx, args[0])
-			out, _, err := req.Execute()
+			out, resp, err := req.Execute()
 			if err != nil {
-				return apiErr(err)
+				return apiErr(resp, err)
 			}
 			return render(cmd, out)
 		},
@@ -143,9 +143,9 @@ func newCollectionDataStoresGetAzureCmd() *cobra.Command {
 				return err
 			}
 			req := api.CollectionDataStoresAPI.GetAzureCollectionDataStore(ctx, args[0])
-			out, _, err := req.Execute()
+			out, resp, err := req.Execute()
 			if err != nil {
-				return apiErr(err)
+				return apiErr(resp, err)
 			}
 			return render(cmd, out)
 		},
@@ -165,9 +165,9 @@ func newCollectionDataStoresGetGcpCmd() *cobra.Command {
 				return err
 			}
 			req := api.CollectionDataStoresAPI.GetGcpCollectionDataStore(ctx, args[0])
-			out, _, err := req.Execute()
+			out, resp, err := req.Execute()
 			if err != nil {
-				return apiErr(err)
+				return apiErr(resp, err)
 			}
 			return render(cmd, out)
 		},
@@ -187,9 +187,9 @@ func newCollectionDataStoresListCmd() *cobra.Command {
 				return err
 			}
 			req := api.CollectionDataStoresAPI.ListCollectionDataStores(ctx)
-			out, _, err := req.Execute()
+			out, resp, err := req.Execute()
 			if err != nil {
-				return apiErr(err)
+				return apiErr(resp, err)
 			}
 			return renderList(cmd, out, []string{"id", "name", "platform", "storage_type", "enabled", "deployment_id"})
 		},
@@ -241,9 +241,9 @@ func newCollectionDataStoresRegisterAwsCmd() *cobra.Command {
 				body.SetName(name)
 			}
 			req = req.AwsCollectionDataStoreIn(*body)
-			out, _, err := req.Execute()
+			out, resp, err := req.Execute()
 			if err != nil {
-				return apiErr(err)
+				return apiErr(resp, err)
 			}
 			return render(cmd, out)
 		},
@@ -345,9 +345,9 @@ func newCollectionDataStoresRegisterAzureCmd() *cobra.Command {
 				body.SetStorageAccountKeys(*nested)
 			}
 			req = req.AzureCollectionDataStoreIn(*body)
-			out, _, err := req.Execute()
+			out, resp, err := req.Execute()
 			if err != nil {
-				return apiErr(err)
+				return apiErr(resp, err)
 			}
 			return render(cmd, out)
 		},
@@ -406,9 +406,9 @@ func newCollectionDataStoresRegisterGcpCmd() *cobra.Command {
 				body.SetName(name)
 			}
 			req = req.GcpCollectionDataStoreIn(*body)
-			out, _, err := req.Execute()
+			out, resp, err := req.Execute()
 			if err != nil {
-				return apiErr(err)
+				return apiErr(resp, err)
 			}
 			return render(cmd, out)
 		},
@@ -469,9 +469,9 @@ func newCollectionDataStoresUpdateAwsCmd() *cobra.Command {
 				body.SetRoleArn(roleArn)
 			}
 			req = req.AwsCollectionDataStorePatch(*body)
-			out, _, err := req.Execute()
+			out, resp, err := req.Execute()
 			if err != nil {
-				return apiErr(err)
+				return apiErr(resp, err)
 			}
 			return render(cmd, out)
 		},
@@ -571,9 +571,9 @@ func newCollectionDataStoresUpdateAzureCmd() *cobra.Command {
 				body.SetStorageAccountKeys(*nested)
 			}
 			req = req.AzureCollectionDataStorePatch(*body)
-			out, _, err := req.Execute()
+			out, resp, err := req.Execute()
 			if err != nil {
-				return apiErr(err)
+				return apiErr(resp, err)
 			}
 			return render(cmd, out)
 		},
@@ -627,9 +627,9 @@ func newCollectionDataStoresUpdateGcpCmd() *cobra.Command {
 				body.SetServiceAccountKey(serviceAccountKey)
 			}
 			req = req.GcpCollectionDataStorePatch(*body)
-			out, _, err := req.Execute()
+			out, resp, err := req.Execute()
 			if err != nil {
-				return apiErr(err)
+				return apiErr(resp, err)
 			}
 			return render(cmd, out)
 		},

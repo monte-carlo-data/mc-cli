@@ -67,9 +67,9 @@ func newCollectionAgentsCreateGenericOauthClientCmd() *cobra.Command {
 				body.SetExpirationDays(expirationDays)
 			}
 			req = req.GenericCollectionAgentOAuthClientIn(*body)
-			out, _, err := req.Execute()
+			out, resp, err := req.Execute()
 			if err != nil {
-				return apiErr(err)
+				return apiErr(resp, err)
 			}
 			return render(cmd, out)
 		},
@@ -106,9 +106,9 @@ func newCollectionAgentsCreateGenericTokenCmd() *cobra.Command {
 				body.SetDescription(description)
 			}
 			req = req.GenericCollectionAgentTokenIn(*body)
-			out, _, err := req.Execute()
+			out, resp, err := req.Execute()
 			if err != nil {
-				return apiErr(err)
+				return apiErr(resp, err)
 			}
 			return render(cmd, out)
 		},
@@ -145,8 +145,8 @@ func newCollectionAgentsDeleteAwsCmd() *cobra.Command {
 				return err
 			}
 			req := api.CollectionAgentsAPI.DeleteAwsCollectionAgent(ctx, args[0])
-			if _, err := req.Execute(); err != nil {
-				return apiErr(err)
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
 			}
 			return nil
 		},
@@ -166,8 +166,8 @@ func newCollectionAgentsDeleteAzureCmd() *cobra.Command {
 				return err
 			}
 			req := api.CollectionAgentsAPI.DeleteAzureCollectionAgent(ctx, args[0])
-			if _, err := req.Execute(); err != nil {
-				return apiErr(err)
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
 			}
 			return nil
 		},
@@ -187,8 +187,8 @@ func newCollectionAgentsDeleteGcpCmd() *cobra.Command {
 				return err
 			}
 			req := api.CollectionAgentsAPI.DeleteGcpCollectionAgent(ctx, args[0])
-			if _, err := req.Execute(); err != nil {
-				return apiErr(err)
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
 			}
 			return nil
 		},
@@ -208,8 +208,8 @@ func newCollectionAgentsDeleteGenericCmd() *cobra.Command {
 				return err
 			}
 			req := api.CollectionAgentsAPI.DeleteGenericCollectionAgent(ctx, args[0])
-			if _, err := req.Execute(); err != nil {
-				return apiErr(err)
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
 			}
 			return nil
 		},
@@ -229,8 +229,8 @@ func newCollectionAgentsDeleteGenericOauthClientCmd() *cobra.Command {
 				return err
 			}
 			req := api.CollectionAgentsAPI.DeleteGenericCollectionAgentOauthClient(ctx, args[0])
-			if _, err := req.Execute(); err != nil {
-				return apiErr(err)
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
 			}
 			return nil
 		},
@@ -250,8 +250,8 @@ func newCollectionAgentsDeleteGenericTokenCmd() *cobra.Command {
 				return err
 			}
 			req := api.CollectionAgentsAPI.DeleteGenericCollectionAgentToken(ctx, args[0])
-			if _, err := req.Execute(); err != nil {
-				return apiErr(err)
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
 			}
 			return nil
 		},
@@ -285,9 +285,9 @@ func newCollectionAgentsGetAwsCmd() *cobra.Command {
 				return err
 			}
 			req := api.CollectionAgentsAPI.GetAwsCollectionAgent(ctx, args[0])
-			out, _, err := req.Execute()
+			out, resp, err := req.Execute()
 			if err != nil {
-				return apiErr(err)
+				return apiErr(resp, err)
 			}
 			return render(cmd, out)
 		},
@@ -307,9 +307,9 @@ func newCollectionAgentsGetAzureCmd() *cobra.Command {
 				return err
 			}
 			req := api.CollectionAgentsAPI.GetAzureCollectionAgent(ctx, args[0])
-			out, _, err := req.Execute()
+			out, resp, err := req.Execute()
 			if err != nil {
-				return apiErr(err)
+				return apiErr(resp, err)
 			}
 			return render(cmd, out)
 		},
@@ -329,9 +329,9 @@ func newCollectionAgentsGetGcpCmd() *cobra.Command {
 				return err
 			}
 			req := api.CollectionAgentsAPI.GetGcpCollectionAgent(ctx, args[0])
-			out, _, err := req.Execute()
+			out, resp, err := req.Execute()
 			if err != nil {
-				return apiErr(err)
+				return apiErr(resp, err)
 			}
 			return render(cmd, out)
 		},
@@ -351,9 +351,9 @@ func newCollectionAgentsGetGenericCmd() *cobra.Command {
 				return err
 			}
 			req := api.CollectionAgentsAPI.GetGenericCollectionAgent(ctx, args[0])
-			out, _, err := req.Execute()
+			out, resp, err := req.Execute()
 			if err != nil {
-				return apiErr(err)
+				return apiErr(resp, err)
 			}
 			return render(cmd, out)
 		},
@@ -373,9 +373,9 @@ func newCollectionAgentsGetGenericOauthClientCmd() *cobra.Command {
 				return err
 			}
 			req := api.CollectionAgentsAPI.GetGenericCollectionAgentOauthClient(ctx, args[0])
-			out, _, err := req.Execute()
+			out, resp, err := req.Execute()
 			if err != nil {
-				return apiErr(err)
+				return apiErr(resp, err)
 			}
 			return render(cmd, out)
 		},
@@ -395,9 +395,9 @@ func newCollectionAgentsGetGenericTokenCmd() *cobra.Command {
 				return err
 			}
 			req := api.CollectionAgentsAPI.GetGenericCollectionAgentToken(ctx, args[0])
-			out, _, err := req.Execute()
+			out, resp, err := req.Execute()
 			if err != nil {
-				return apiErr(err)
+				return apiErr(resp, err)
 			}
 			return render(cmd, out)
 		},
@@ -417,9 +417,9 @@ func newCollectionAgentsListCmd() *cobra.Command {
 				return err
 			}
 			req := api.CollectionAgentsAPI.ListCollectionAgents(ctx)
-			out, _, err := req.Execute()
+			out, resp, err := req.Execute()
 			if err != nil {
-				return apiErr(err)
+				return apiErr(resp, err)
 			}
 			return renderList(cmd, out, []string{"id", "name", "platform", "enabled", "deployment_id"})
 		},
@@ -447,9 +447,9 @@ func newCollectionAgentsListGenericCredentialsCmd() *cobra.Command {
 				}
 				req = req.DeploymentId(deploymentId)
 			}
-			out, _, err := req.Execute()
+			out, resp, err := req.Execute()
 			if err != nil {
-				return apiErr(err)
+				return apiErr(resp, err)
 			}
 			return renderList(cmd, out, []string{"id", "type", "deployment_id", "description", "created_time"})
 		},
@@ -503,9 +503,9 @@ func newCollectionAgentsRegisterAwsCmd() *cobra.Command {
 				body.SetName(name)
 			}
 			req = req.AwsCollectionAgentIn(*body)
-			out, _, err := req.Execute()
+			out, resp, err := req.Execute()
 			if err != nil {
-				return apiErr(err)
+				return apiErr(resp, err)
 			}
 			return render(cmd, out)
 		},
@@ -600,9 +600,9 @@ func newCollectionAgentsRegisterAzureCmd() *cobra.Command {
 				body.SetServicePrincipal(*nested)
 			}
 			req = req.AzureCollectionAgentIn(*body)
-			out, _, err := req.Execute()
+			out, resp, err := req.Execute()
 			if err != nil {
-				return apiErr(err)
+				return apiErr(resp, err)
 			}
 			return render(cmd, out)
 		},
@@ -679,9 +679,9 @@ func newCollectionAgentsRegisterGcpCmd() *cobra.Command {
 				body.SetAuthHeaders(*nested)
 			}
 			req = req.GcpCollectionAgentIn(*body)
-			out, _, err := req.Execute()
+			out, resp, err := req.Execute()
 			if err != nil {
-				return apiErr(err)
+				return apiErr(resp, err)
 			}
 			return render(cmd, out)
 		},
@@ -724,9 +724,9 @@ func newCollectionAgentsRegisterGenericCmd() *cobra.Command {
 				body.SetName(name)
 			}
 			req = req.GenericCollectionAgentIn(*body)
-			out, _, err := req.Execute()
+			out, resp, err := req.Execute()
 			if err != nil {
-				return apiErr(err)
+				return apiErr(resp, err)
 			}
 			return render(cmd, out)
 		},
@@ -784,9 +784,9 @@ func newCollectionAgentsUpdateAwsCmd() *cobra.Command {
 				body.SetRoleArn(roleArn)
 			}
 			req = req.AwsCollectionAgentPatch(*body)
-			out, _, err := req.Execute()
+			out, resp, err := req.Execute()
 			if err != nil {
-				return apiErr(err)
+				return apiErr(resp, err)
 			}
 			return render(cmd, out)
 		},
@@ -879,9 +879,9 @@ func newCollectionAgentsUpdateAzureCmd() *cobra.Command {
 				body.SetServicePrincipal(*nested)
 			}
 			req = req.AzureCollectionAgentPatch(*body)
-			out, _, err := req.Execute()
+			out, resp, err := req.Execute()
 			if err != nil {
-				return apiErr(err)
+				return apiErr(resp, err)
 			}
 			return render(cmd, out)
 		},
@@ -956,9 +956,9 @@ func newCollectionAgentsUpdateGcpCmd() *cobra.Command {
 				body.SetAuthHeaders(*nested)
 			}
 			req = req.GcpCollectionAgentPatch(*body)
-			out, _, err := req.Execute()
+			out, resp, err := req.Execute()
 			if err != nil {
-				return apiErr(err)
+				return apiErr(resp, err)
 			}
 			return render(cmd, out)
 		},
@@ -993,9 +993,9 @@ func newCollectionAgentsUpdateGenericCmd() *cobra.Command {
 				body.SetName(name)
 			}
 			req = req.GenericCollectionAgentPatch(*body)
-			out, _, err := req.Execute()
+			out, resp, err := req.Execute()
 			if err != nil {
-				return apiErr(err)
+				return apiErr(resp, err)
 			}
 			return render(cmd, out)
 		},

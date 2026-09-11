@@ -85,7 +85,7 @@ func problemServer(t *testing.T, status int, contentType, body string) *httptest
 	return srv
 }
 
-func callWhoami(t *testing.T, srv *httptest.Server) error {
+func callWhoami(t *testing.T, srv *httptest.Server) (*http.Response, error) {
 	t.Helper()
 	api, err := sdk.NewClient(context.Background(), sdk.Options{
 		Endpoint: srv.URL, TokenID: "id", TokenSecret: "secret",
@@ -93,11 +93,11 @@ func callWhoami(t *testing.T, srv *httptest.Server) error {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _, err = api.UsersAPI.GetCurrentUser(context.Background()).Execute()
+	_, resp, err := api.UsersAPI.GetCurrentUser(context.Background()).Execute()
 	if err == nil {
 		t.Fatal("the server's error was swallowed")
 	}
-	return err
+	return resp, err
 }
 
 func TestApiErrRendersTheProblem(t *testing.T) {
@@ -113,17 +113,48 @@ func TestApiErrRendersTheProblem(t *testing.T) {
 	}
 }
 
+func TestApiErrRendersAGatewayDenial(t *testing.T) {
+	// A declared status with the API gateway's body, not a problem document.
+	srv := problemServer(t, http.StatusForbidden, "application/json",
+		`{"Message":"User is not authorized to access this resource with an explicit deny in an identity-based policy"}`)
+	got := apiErr(callWhoami(t, srv)).Error()
+	want := "GET " + srv.URL + "/api/v2/users/me: 403 Forbidden: User is not authorized to access this resource with an explicit deny in an identity-based policy\nCheck the credentials and --endpoint, or the profile they come from."
+	if got != want {
+		t.Fatalf("got:\n%s\nwant:\n%s", got, want)
+	}
+	if strings.Contains(got, "required property") {
+		t.Fatal("the SDK's decode error leaked into the message")
+	}
+}
+
 func TestApiErrFallsBackToTheBody(t *testing.T) {
 	srv := problemServer(t, http.StatusTeapot, "text/plain", "short and stout")
 	got := apiErr(callWhoami(t, srv)).Error()
-	if !strings.Contains(got, "short and stout") {
-		t.Fatalf("got %q", got)
+	want := "GET " + srv.URL + "/api/v2/users/me: 418 I'm a teapot: short and stout"
+	if got != want {
+		t.Fatalf("got:\n%s\nwant:\n%s", got, want)
 	}
 }
 
 func TestApiErrPassesOtherErrorsThrough(t *testing.T) {
 	err := context.Canceled
-	if apiErr(err) != err {
+	if apiErr(nil, err) != err {
 		t.Fatal("a non-API error was rewrapped")
+	}
+}
+
+func TestBodyMessage(t *testing.T) {
+	cases := map[string]string{
+		`{"message":"Unauthorized"}`: "Unauthorized",
+		`{"Message":"Denied"}`:       "Denied",
+		`{"detail":"x"}`:             "x",
+		`{"other":"x"}`:              `{"other":"x"}`,
+		"plain text\n":               "plain text",
+		"":                           "",
+	}
+	for body, want := range cases {
+		if got := bodyMessage([]byte(body)); got != want {
+			t.Errorf("%q: got %q, want %q", body, got, want)
+		}
 	}
 }
