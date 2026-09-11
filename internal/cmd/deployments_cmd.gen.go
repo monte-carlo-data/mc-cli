@@ -187,7 +187,7 @@ func newDeploymentsReprovisionCmd() *cobra.Command {
 				body.SetName(name)
 			}
 			req = req.DeploymentIn(*body)
-			out, resp, err := req.Execute()
+			out, resp, err := retryOnTransient(cmd, req.Execute)
 			if err != nil {
 				return apiErr(resp, err)
 			}

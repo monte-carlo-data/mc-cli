@@ -71,7 +71,7 @@ func newCollectionAgentsCreateGenericOauthClientCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "client_id", "client_secret", "secret_id", "id", "deployment_id", "description", "expiration_time", "scopes", "created_time")
+			return render(cmd, out, "client_id", "client_secret", "secret_id", "id", "deployment_id", "type", "description", "expiration_time", "scopes", "created_time")
 		},
 	}
 	cmd.Flags().String("deployment-id", "", "Deployment whose generic collection agent will present this credential. It must have been provisioned for a generic collection agent.")
@@ -110,7 +110,7 @@ func newCollectionAgentsCreateGenericTokenCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "mcd_id", "mcd_token", "id", "deployment_id", "description", "created_time")
+			return render(cmd, out, "mcd_id", "mcd_token", "id", "deployment_id", "type", "description", "created_time")
 		},
 	}
 	cmd.Flags().String("deployment-id", "", "Deployment whose generic collection agent will present this credential. It must have been provisioned for a generic collection agent.")
