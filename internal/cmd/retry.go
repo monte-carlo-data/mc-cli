@@ -29,6 +29,7 @@ func retryOnTransient[T any](cmd *cobra.Command, call func() (T, *http.Response,
 		}
 		wait := retryAfter(resp)
 		if time.Until(deadline) <= wait {
+			fmt.Fprintf(cmd.ErrOrStderr(), "%s\ngiving up after %s.\n", firstLine(apiErr(resp, err)), transientRetryTimeout)
 			return out, resp, err
 		}
 		fmt.Fprintf(cmd.ErrOrStderr(), "%s\nRetrying in %s.\n", firstLine(apiErr(resp, err)), wait)
@@ -46,17 +47,35 @@ func retryableStatus(status int) bool {
 	return status == http.StatusServiceUnavailable || status == http.StatusTooManyRequests
 }
 
-// retryAfter is the Retry-After header in seconds, floored, else the fixed interval. A value
-// at or beyond the budget falls back to the interval too.
+// retryAfter is the wait the Retry-After header asks for, seconds or an HTTP date, never less
+// than a second. A missing or unreadable header gives the fixed interval.
 func retryAfter(resp *http.Response) time.Duration {
-	seconds, err := strconv.Atoi(strings.TrimSpace(resp.Header.Get("Retry-After")))
-	if err != nil || seconds < 0 || seconds > int(transientRetryTimeout/time.Second) {
+	header := strings.TrimSpace(resp.Header.Get("Retry-After"))
+	if header == "" {
 		return transientRetryInterval
 	}
-	if wait := time.Duration(seconds) * time.Second; wait > retryAfterFloor {
-		return wait
+	if seconds, err := strconv.Atoi(header); err == nil {
+		if seconds < 0 {
+			return transientRetryInterval
+		}
+		return withFloor(time.Duration(seconds) * time.Second)
 	}
-	return retryAfterFloor
+	if when, err := http.ParseTime(header); err == nil {
+		wait := time.Until(when)
+		if wait < 0 {
+			wait = 0
+		}
+		return withFloor(wait)
+	}
+	return transientRetryInterval
+}
+
+// withFloor never returns less than the one-second floor.
+func withFloor(wait time.Duration) time.Duration {
+	if wait < retryAfterFloor {
+		return retryAfterFloor
+	}
+	return wait
 }
 
 func firstLine(err error) string {

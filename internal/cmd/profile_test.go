@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -76,24 +77,116 @@ func TestProfileSetRefusesMixedOrPartialCredentials(t *testing.T) {
 	}
 }
 
-func TestProfileUseAndList(t *testing.T) {
+func TestProfileUseChoosesTheActiveProfileThatListReflects(t *testing.T) {
 	dir := writeProfiles(t, legacyProfiles)
-	if _, err := execute(t, "profile", "use", "nope", "--config-dir", dir); err == nil || !strings.Contains(err.Error(), "default, staging") {
-		t.Fatalf("err = %v", err)
-	}
-	if _, err := execute(t, "profile", "use", "staging", "--config-dir", dir); err != nil {
-		t.Fatal(err)
-	}
-	out, err := execute(t, "profile", "list", "--config-dir", dir, "--output", "table")
+
+	t.Run("use rejects an unknown profile", func(t *testing.T) {
+		_, err := execute(t, "profile", "use", "nope", "--config-dir", dir)
+		if err == nil || !strings.Contains(err.Error(), "default, staging") {
+			t.Fatalf("err = %v", err)
+		}
+	})
+
+	t.Run("use selects the active profile", func(t *testing.T) {
+		if _, err := execute(t, "profile", "use", "staging", "--config-dir", dir); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	t.Run("list marks it active in a table", func(t *testing.T) {
+		out, err := execute(t, "profile", "list", "--config-dir", dir, "--output", "table")
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := "NAME     AUTH   INSTANCE  ID          ACTIVE\ndefault  token            legacy-id   false\nstaging  token            staging-id  true\n"
+		if out != want {
+			t.Fatalf("got:\n%s\nwant:\n%s", out, want)
+		}
+	})
+
+	t.Run("list omits secrets as json", func(t *testing.T) {
+		out, err := execute(t, "profile", "list", "--config-dir", dir, "--output", "json")
+		if err != nil || !strings.Contains(out, `"name": "staging"`) || strings.Contains(out, "legacy-token") {
+			t.Fatalf("json: %v\n%s", err, out)
+		}
+	})
+}
+
+func TestProfileSetRejectsInputThatWouldCorruptProfilesINI(t *testing.T) {
+	t.Run("newline in the name", func(t *testing.T) {
+		dir := t.TempDir()
+		_, err := execute(t, "profile", "set", "dev\nline", "--config-dir", dir,
+			"--api-id", "i", "--api-token", "t")
+		if err == nil || !strings.Contains(err.Error(), "profile name") {
+			t.Fatalf("err = %v", err)
+		}
+		if _, err := os.Stat(profilesPath(dir)); !os.IsNotExist(err) {
+			t.Fatal("a rejected set wrote the file")
+		}
+	})
+
+	t.Run("empty name", func(t *testing.T) {
+		dir := t.TempDir()
+		_, err := execute(t, "profile", "set", "", "--config-dir", dir,
+			"--api-id", "i", "--api-token", "t")
+		if err == nil || !strings.Contains(err.Error(), "a profile name is required") {
+			t.Fatalf("err = %v", err)
+		}
+		if _, err := os.Stat(profilesPath(dir)); !os.IsNotExist(err) {
+			t.Fatal("a rejected set wrote the file")
+		}
+	})
+
+	t.Run("interior newline in an @file value", func(t *testing.T) {
+		dir := t.TempDir()
+		tokenFile := filepath.Join(t.TempDir(), "token")
+		if err := os.WriteFile(tokenFile, []byte("first-line\nsecond-line\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		_, err := execute(t, "profile", "set", "dev", "--config-dir", dir,
+			"--api-id", "i", "--api-token", "@"+tokenFile)
+		if err == nil || !strings.Contains(err.Error(), "--api-token") {
+			t.Fatalf("err = %v", err)
+		}
+		if _, err := os.Stat(profilesPath(dir)); !os.IsNotExist(err) {
+			t.Fatal("a rejected set wrote the file")
+		}
+	})
+}
+
+func TestResolvedProfileNameFollowsPrecedence(t *testing.T) {
+	isolateEnv(t)
+	dir := writeProfiles(t, "[default]\nmcd_id = i\n")
+	f, err := loadINI(profilesPath(dir))
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "NAME     AUTH   INSTANCE  ID          ACTIVE\ndefault  token            legacy-id   false\nstaging  token            staging-id  true\n"
-	if out != want {
-		t.Fatalf("got:\n%s\nwant:\n%s", out, want)
+
+	if got, err := resolvedProfileName(dir, f); err != nil || got != "default" {
+		t.Fatalf("default section only: %q, %v", got, err)
 	}
-	out, err = execute(t, "profile", "list", "--config-dir", dir, "--output", "json")
-	if err != nil || !strings.Contains(out, `"name": "staging"`) || strings.Contains(out, "legacy-token") {
-		t.Fatalf("json: %v\n%s", err, out)
+
+	t.Setenv("MCD_DEFAULT_PROFILE", "envprofile")
+	if got, err := resolvedProfileName(dir, f); err != nil || got != "envprofile" {
+		t.Fatalf("env set: %q, %v", got, err)
+	}
+
+	if err := setActiveProfile(dir, "cliprofile"); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := resolvedProfileName(dir, f); err != nil || got != "cliprofile" {
+		t.Fatalf("cli.ini set: %q, %v", got, err)
+	}
+}
+
+func TestResolvedProfileNameIsEmptyWithNoSignal(t *testing.T) {
+	isolateEnv(t)
+	dir := t.TempDir()
+	f, err := loadINI(profilesPath(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := resolvedProfileName(dir, f); err != nil || got != "" {
+		t.Fatalf("got %q, %v", got, err)
 	}
 }

@@ -3,6 +3,8 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -24,6 +26,30 @@ token. "profile use" picks the profile commands run with when --profile is not p
 	return cmd
 }
 
+// validateProfileValue rejects a profile name or value that would corrupt profiles.ini: one
+// spanning multiple lines, or, for the profile name, one holding a section delimiter. flag
+// names the command-line flag the value came from, or "profile name" for the name itself.
+func validateProfileValue(flag, value string) error {
+	if flag == "profile name" && value == "" {
+		return errors.New("a profile name is required")
+	}
+	bad := "\r\n"
+	invariant := "a profile value is one line"
+	if flag == "profile name" {
+		bad += sectionOpen + sectionClose
+		invariant = "a profile name is one line and holds no " + sectionOpen + " or " + sectionClose
+	}
+	idx := strings.IndexAny(value, bad)
+	if idx < 0 {
+		return nil
+	}
+	what := "a newline"
+	if value[idx] == sectionOpen[0] || value[idx] == sectionClose[0] {
+		what = fmt.Sprintf("%q", string(value[idx]))
+	}
+	return fmt.Errorf("%s holds %s; %s", flag, what, invariant)
+}
+
 func newProfileSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <name>",
@@ -32,10 +58,16 @@ func newProfileSetCmd() *cobra.Command {
 
 Pass --client-id, --client-secret and --instance for OAuth client credentials, or --api-id and
 --api-token for an API token. Writing one kind removes the other from the profile. Keys this
-command does not know are left as they are. The first profile written becomes the active one.`,
+command does not know are left as they are. The first profile written becomes the active one.
+
+These flags are the values written here. The environment defaults listed under the global flags
+do not apply to this command.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
+			if err := validateProfileValue("profile name", name); err != nil {
+				return err
+			}
 			dir, err := configDir(cmd)
 			if err != nil {
 				return err
@@ -58,6 +90,21 @@ command does not know are left as they are. The first profile written becomes th
 			}
 			apiToken, err := flagSecret(cmd, "api-token")
 			if err != nil {
+				return err
+			}
+			if err := validateProfileValue("--client-id", clientID); err != nil {
+				return err
+			}
+			if err := validateProfileValue("--client-secret", clientSecret); err != nil {
+				return err
+			}
+			if err := validateProfileValue("--instance", instance); err != nil {
+				return err
+			}
+			if err := validateProfileValue("--api-id", apiID); err != nil {
+				return err
+			}
+			if err := validateProfileValue("--api-token", apiToken); err != nil {
 				return err
 			}
 
@@ -113,8 +160,6 @@ command does not know are left as they are. The first profile written becomes th
 			return nil
 		},
 	}
-	cmd.Flags().Bool("client-secret-prompt", false, "Read --client-secret from a hidden prompt instead of the command line.")
-	cmd.Flags().Bool("api-token-prompt", false, "Read --api-token from a hidden prompt instead of the command line.")
 	return cmd
 }
 
@@ -147,6 +192,15 @@ is not set. The choice is stored in cli.ini beside profiles.ini.`,
 	}
 }
 
+// profileNotFound reports that name is not a section in f, listing the profiles that do exist.
+func profileNotFound(f *iniFile, name string) error {
+	names := f.sections()
+	if len(names) == 0 {
+		return fmt.Errorf("profile %q not found; %s has no profiles yet", name, f.path)
+	}
+	return fmt.Errorf("profile %q not found in %s; profiles: %s", name, f.path, strings.Join(names, ", "))
+}
+
 func newProfileListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
@@ -161,7 +215,7 @@ func newProfileListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			active, err := activeProfile(dir)
+			active, err := resolvedProfileName(dir, f)
 			if err != nil {
 				return err
 			}
@@ -172,4 +226,47 @@ func newProfileListCmd() *cobra.Command {
 			return renderList(cmd, rows, []string{"name", "auth", "instance", "id", "active"})
 		},
 	}
+}
+
+// profileSummary is one row of "profile list".
+type profileSummary struct {
+	Name     string `json:"name"`
+	Auth     string `json:"auth"`
+	Instance string `json:"instance"`
+	ID       string `json:"id"`
+	Active   bool   `json:"active"`
+}
+
+func summarize(f *iniFile, name, active string) profileSummary {
+	s := profileSummary{Name: name, Active: name == active}
+	s.Instance, _ = f.get(name, keyInstance)
+	if id, ok := f.get(name, keyClientID); ok && id != "" {
+		s.Auth, s.ID = "oauth", id
+	} else if id, ok := f.get(name, keyID); ok && id != "" {
+		s.Auth, s.ID = "token", id
+	} else {
+		s.Auth = "none"
+	}
+	return s
+}
+
+// resolvedProfileName is the profile "profile list" marks active: the profile chosen with
+// "profile use", else MCD_DEFAULT_PROFILE, else "default" when that section exists in f. This
+// mirrors clientOptions' own precedence, but purely for display; it does not decide which
+// credentials a command actually runs with.
+func resolvedProfileName(dir string, f *iniFile) (string, error) {
+	active, err := activeProfile(dir)
+	if err != nil {
+		return "", err
+	}
+	if active != "" {
+		return active, nil
+	}
+	if env := os.Getenv("MCD_DEFAULT_PROFILE"); env != "" {
+		return env, nil
+	}
+	if f.hasSection("default") {
+		return "default", nil
+	}
+	return "", nil
 }

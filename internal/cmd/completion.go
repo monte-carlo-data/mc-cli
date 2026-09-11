@@ -21,10 +21,13 @@ func completionRequest(args []string) bool {
 // come before the global ones, then asks the shell to keep that order. Cobra lists inherited
 // flags first and lets the shell sort, which buries `--name` among the credential flags.
 func executeCompletion(ctx context.Context, out io.Writer) int {
+	// Only stdout is captured: cobra prints a debug line about the directive on stderr, which
+	// the shell ignores and which would otherwise land after the directive here.
+	prevOut := rootCmd.OutOrStdout()
 	var buf bytes.Buffer
 	rootCmd.SetOut(&buf)
 	err := rootCmd.ExecuteContext(ctx)
-	rootCmd.SetOut(nil)
+	rootCmd.SetOut(prevOut)
 	if err != nil {
 		fmt.Fprint(out, buf.String())
 		return 1
@@ -97,7 +100,8 @@ func profileCompletion(cmd *cobra.Command, _ []string, _ string) ([]cobra.Comple
 	return f.sections(), cobra.ShellCompDirectiveNoFileComp
 }
 
-// registerRootCompletions runs from root.go's init, after the persistent flags exist. Go runs
+// registerRootCompletions runs from root.go's init. The persistent flags exist by then, since
+// rootCmd's var initializer registers them before any init runs. Go runs
 // init functions in file-name order, so an init here would see no flags to register on.
 func registerRootCompletions() {
 	if err := rootCmd.RegisterFlagCompletionFunc("output", cobra.FixedCompletions([]cobra.Completion{"table", "wide", "json"}, cobra.ShellCompDirectiveNoFileComp)); err != nil {

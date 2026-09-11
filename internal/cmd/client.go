@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -27,7 +28,8 @@ func apiClient(cmd *cobra.Command) (*sdk.APIClient, context.Context, error) {
 //
 // The SDK owns the precedence between flags, environment and profile. The CLI adds two things
 // the SDK does not know: the profile chosen with "profile use", consulted only when neither
-// --profile nor MCD_DEFAULT_PROFILE names one, and the default endpoint.
+// --profile nor MCD_DEFAULT_PROFILE names one and no credential mechanism is otherwise supplied,
+// and the default endpoint.
 func clientOptions(cmd *cobra.Command) (sdk.Options, error) {
 	dir, err := configDir(cmd)
 	if err != nil {
@@ -37,32 +39,74 @@ func clientOptions(cmd *cobra.Command) (sdk.Options, error) {
 		v, _ := cmd.Flags().GetString(name)
 		return v
 	}
+	clientSecret, err := flagSecret(cmd, "client-secret")
+	if err != nil {
+		return sdk.Options{}, err
+	}
+	apiToken, err := flagSecret(cmd, "api-token")
+	if err != nil {
+		return sdk.Options{}, err
+	}
 	opts := sdk.Options{
 		Endpoint:     str("endpoint"),
 		ClientID:     str("client-id"),
-		ClientSecret: str("client-secret"),
+		ClientSecret: clientSecret,
 		Instance:     str("instance"),
 		TokenID:      str("api-id"),
-		TokenSecret:  str("api-token"),
+		TokenSecret:  apiToken,
 		Profile:      str("profile"),
 		ConfigDir:    dir,
 		UserAgent:    binaryName + "/" + version,
 	}
-	if opts.Profile == "" && os.Getenv("MCD_DEFAULT_PROFILE") == "" {
+
+	// The active profile set with "profile use" is a CLI-only fallback, layered in only when
+	// nothing else names a profile or already supplies a complete credential mechanism. Once
+	// adopted, a failure to resolve it needs to say where the profile came from: it did not
+	// come from a flag or the environment, so a bare SDK error would leave the caller looking
+	// in the wrong place.
+	adoptedActive := false
+	if opts.Profile == "" && os.Getenv("MCD_DEFAULT_PROFILE") == "" && !hasCredentialMechanism(opts) {
 		active, err := activeProfile(dir)
 		if err != nil {
 			return sdk.Options{}, err
 		}
-		opts.Profile = active
+		if active != "" {
+			opts.Profile = active
+			adoptedActive = true
+		}
 	}
+
 	resolved, err := opts.Resolve()
 	if err != nil {
+		if adoptedActive {
+			return sdk.Options{}, fmt.Errorf("active profile %q (from %s): %w; run %q", opts.Profile, cliPath(dir), err, binaryName+" profile use")
+		}
 		return sdk.Options{}, err
 	}
 	if resolved.Endpoint == "" {
 		resolved.Endpoint = defaultEndpoint
 	}
 	return resolved, nil
+}
+
+// hasCredentialMechanism reports whether opts, or the environment variables the SDK falls back
+// to, already supply a complete credential mechanism: an OAuth client id and secret, or an API
+// token id and secret. It mirrors sdk.Options.Resolve's own notion of "complete" so the CLI's
+// active-profile fallback only ever fills a gap Resolve would otherwise fill from a profile.
+func hasCredentialMechanism(opts sdk.Options) bool {
+	if opts.ClientID != "" && opts.ClientSecret != "" {
+		return true
+	}
+	if opts.TokenID != "" && opts.TokenSecret != "" {
+		return true
+	}
+	if os.Getenv("MCD_DEFAULT_OAUTH_CLIENT_ID") != "" && os.Getenv("MCD_DEFAULT_OAUTH_CLIENT_SECRET") != "" {
+		return true
+	}
+	if os.Getenv("MCD_DEFAULT_API_ID") != "" && os.Getenv("MCD_DEFAULT_API_TOKEN") != "" {
+		return true
+	}
+	return false
 }
 
 // configDir is --config-dir, else ~/.mcd.

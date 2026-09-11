@@ -5,6 +5,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
@@ -77,6 +78,67 @@ func TestRenderListWideAddsColumnsTheRowsCarry(t *testing.T) {
 	}
 }
 
+func TestOutputFormatDefaultsToJSONWhenStdoutIsNotATerminal(t *testing.T) {
+	cmd, out := outputCmd(t, "")
+	if err := render(cmd, widget{ID: "1"}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(out.String(), "{\n") {
+		t.Fatalf("got:\n%s", out.String())
+	}
+}
+
+func TestOutputFormatDefaultsToTableOnATerminal(t *testing.T) {
+	cmd, _ := outputCmd(t, "")
+	prev := isTerminal
+	isTerminal = func(*os.File) bool { return true }
+	t.Cleanup(func() { isTerminal = prev })
+
+	f, err := os.CreateTemp(t.TempDir(), "out")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { f.Close() })
+	cmd.SetOut(f)
+
+	if err := render(cmd, widget{ID: "1"}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(f.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.HasPrefix(string(data), "{") || !strings.Contains(string(data), "id") {
+		t.Fatalf("got:\n%s", data)
+	}
+}
+
+func TestRenderErrorsOnAnUnknownField(t *testing.T) {
+	cmd, _ := outputCmd(t, "table")
+	err := render(cmd, widget{ID: "1"}, "bogus")
+	if err == nil || err.Error() != `unknown field "bogus" in the response` {
+		t.Fatalf("err %v", err)
+	}
+}
+
+func TestRenderWideIgnoresAnUnknownField(t *testing.T) {
+	cmd, out := outputCmd(t, "wide")
+	if err := render(cmd, widget{ID: "1"}, "bogus"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "bogus") {
+		t.Fatalf("got:\n%s", out.String())
+	}
+}
+
+func TestRenderListErrorsOnAnUnknownColumn(t *testing.T) {
+	cmd, _ := outputCmd(t, "table")
+	err := renderList(cmd, []widget{{ID: "1"}}, []string{"bogus"})
+	if err == nil || err.Error() != `unknown field "bogus" in the response` {
+		t.Fatalf("err %v", err)
+	}
+}
+
 func TestRenderJSONIgnoresTheFieldList(t *testing.T) {
 	cmd, out := outputCmd(t, "json")
 	if err := render(cmd, widget{ID: "1", Enabled: true}, "name"); err != nil {
@@ -87,7 +149,7 @@ func TestRenderJSONIgnoresTheFieldList(t *testing.T) {
 	}
 }
 
-func TestRenderJSON(t *testing.T) {
+func TestRenderJSONIndentsWithTwoSpaces(t *testing.T) {
 	cmd, out := outputCmd(t, "json")
 	if err := render(cmd, widget{ID: "1"}); err != nil {
 		t.Fatal(err)
@@ -185,7 +247,7 @@ func TestApiErrPassesOtherErrorsThrough(t *testing.T) {
 	}
 }
 
-func TestBodyMessage(t *testing.T) {
+func TestBodyMessagePrefersTheMessageKeyElseTheRawBody(t *testing.T) {
 	cases := map[string]string{
 		`{"message":"Unauthorized"}`: "Unauthorized",
 		`{"Message":"Denied"}`:       "Denied",

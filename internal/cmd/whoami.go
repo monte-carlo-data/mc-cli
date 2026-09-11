@@ -18,7 +18,7 @@ func init() {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			// The table leaves out account_frozen; the JSON output carries it.
+			// account_frozen is deliberately off the field list; JSON and --output wide still show it.
 			return render(cmd, out,
 				"email", "first_name", "last_name", "identity_type", "auth_groups",
 				"account_name", "account_id", "user_id")

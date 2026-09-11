@@ -3,12 +3,28 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"strconv"
 	"strings"
 	"testing"
 
 	sdk "github.com/monte-carlo-data/mc-sdk-go/montecarlo"
 	"github.com/spf13/cobra"
 )
+
+// fixtureCmd adds a throwaway command to rootCmd with a plain flag, --name, and an
+// enum-completed one, --type, removed once the test ends.
+func fixtureCmd(t *testing.T) *cobra.Command {
+	t.Helper()
+	cmd := &cobra.Command{Use: "fixture-create", Run: func(*cobra.Command, []string) {}}
+	cmd.Flags().String("name", "", "Display name.")
+	cmd.Flags().String("type", "", "Kind of thing.")
+	if err := cmd.RegisterFlagCompletionFunc("type", enumCompletion([]string{"AWS", "GCP"})); err != nil {
+		t.Fatal(err)
+	}
+	rootCmd.AddCommand(cmd)
+	t.Cleanup(func() { rootCmd.RemoveCommand(cmd) })
+	return cmd
+}
 
 func TestEnumCompletionListsTheSDKValues(t *testing.T) {
 	values, directive := enumCompletion(sdk.AllowedDeploymentTypeEnumValues)(nil, nil, "")
@@ -50,19 +66,36 @@ func TestReorderCompletionsPutsOwnFlagsFirstAndKeepsOrder(t *testing.T) {
 
 func TestExecuteCompletionListsTheCommandsFlagsFirst(t *testing.T) {
 	isolateEnv(t)
+	fixtureCmd(t)
 	resetFlags(rootCmd)
-	rootCmd.SetArgs([]string{cobra.ShellCompRequestCmd, "deployments", "create", "--type", "COLLECTION_AGENT", "--runtime-platform", "GENERIC", "--"})
+	rootCmd.SetArgs([]string{cobra.ShellCompRequestCmd, "fixture-create", "--type", "AWS", "--"})
 	var out bytes.Buffer
 	if code := executeCompletion(context.Background(), &out); code != 0 {
 		t.Fatalf("exit %d:\n%s", code, out.String())
 	}
 	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
-	if !strings.HasPrefix(lines[0], "--name\t") || lines[len(lines)-1] != ":36" {
+	wantDirective := ":" + strconv.Itoa(int(cobra.ShellCompDirectiveNoFileComp|cobra.ShellCompDirectiveKeepOrder))
+	if !strings.HasPrefix(lines[0], "--name\t") || lines[len(lines)-1] != wantDirective {
 		t.Fatalf("got:\n%s", out.String())
 	}
 }
 
 func TestCompletionCommandOffersEnumValues(t *testing.T) {
+	fixtureCmd(t)
+	out, err := execute(t, cobra.ShellCompRequestCmd, "fixture-create", "--type", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"AWS", "GCP"} {
+		if !strings.Contains(out, want+"\n") {
+			t.Fatalf("missing %s in:\n%s", want, out)
+		}
+	}
+}
+
+// TestSmokeCompletionOffersEnumValuesOnAGeneratedCommand is a labelled smoke test over the
+// real generated command tree; the mechanism itself is covered by the fixture command above.
+func TestSmokeCompletionOffersEnumValuesOnAGeneratedCommand(t *testing.T) {
 	out, err := execute(t, cobra.ShellCompRequestCmd, "deployments", "create", "--runtime-platform", "")
 	if err != nil {
 		t.Fatal(err)

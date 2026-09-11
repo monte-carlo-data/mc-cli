@@ -1,6 +1,10 @@
 package cmd
 
 import (
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -95,5 +99,70 @@ func TestAnActiveProfileThatNoLongerExistsIsAnError(t *testing.T) {
 	}
 	if _, err := clientOptions(rootCmd); err == nil {
 		t.Fatal("a missing active profile resolved silently")
+	}
+}
+
+// TestFullFlagCredentialsIgnoreAStaleActiveProfile is F4: a complete credential mechanism passed
+// on the command line must never trigger a lookup of the "profile use" active profile, so a
+// stale or deleted active profile cannot break a caller who already supplied everything needed.
+func TestFullFlagCredentialsIgnoreAStaleActiveProfile(t *testing.T) {
+	isolateEnv(t)
+	dir := writeProfiles(t, precedenceProfiles)
+	if err := setActiveProfile(dir, "gone"); err != nil {
+		t.Fatal(err)
+	}
+
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"user_id":"u1","email":"a@example.com","identity_type":"user","account_id":"a1","account_frozen":false}`)
+	}))
+	defer srv.Close()
+
+	resetFlags(rootCmd)
+	if err := rootCmd.ParseFlags([]string{
+		"--config-dir", dir,
+		"--endpoint", srv.URL,
+		"--api-id", "flag-id",
+		"--api-token", "flag-token",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	api, ctx, err := apiClient(rootCmd)
+	if err != nil {
+		t.Fatalf("a stale active profile should not have been consulted: %v", err)
+	}
+	if _, _, err := api.UsersAPI.GetCurrentUser(ctx).Execute(); err != nil {
+		t.Fatalf("request did not reach the server: %v", err)
+	}
+	if gotPath != "/api/v2/users/me" {
+		t.Fatalf("unexpected request path: %s", gotPath)
+	}
+}
+
+// TestAnAdoptedActiveProfileNamesWhereItCameFrom is F4: when no flag, environment variable, or
+// profile name resolves a mechanism on its own, and the CLI falls back to the "profile use"
+// active profile, a resolution failure has to say the failure came from that profile and from
+// cli.ini specifically, not from a flag or MCD_DEFAULT_PROFILE the caller might go looking at.
+func TestAnAdoptedActiveProfileNamesWhereItCameFrom(t *testing.T) {
+	isolateEnv(t)
+	dir := writeProfiles(t, precedenceProfiles)
+	if err := setActiveProfile(dir, "gone"); err != nil {
+		t.Fatal(err)
+	}
+	resetFlags(rootCmd)
+	if err := rootCmd.ParseFlags([]string{"--config-dir", dir}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := clientOptions(rootCmd)
+	if err == nil {
+		t.Fatal("a missing active profile resolved silently")
+	}
+	if !strings.Contains(err.Error(), "cli.ini") {
+		t.Fatalf("error does not name cli.ini: %v", err)
+	}
+	if !strings.Contains(err.Error(), "profile use") {
+		t.Fatalf("error does not hint at %q: %v", "profile use", err)
 	}
 }

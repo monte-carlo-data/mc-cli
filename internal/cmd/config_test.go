@@ -3,6 +3,7 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -103,6 +104,55 @@ func TestINISaveCreatesTheDirectoryWithTheGivenMode(t *testing.T) {
 	}
 }
 
+func TestSaveTightensModesLeftByAnotherTool(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("file permission bits are not meaningful on Windows")
+	}
+	parent := t.TempDir()
+	dir := filepath.Join(parent, ".mcd")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := profilesPath(dir)
+	if err := os.WriteFile(path, []byte("[default]\nmcd_id = old\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	f, err := loadINI(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.set("default", keyID, "new")
+	if err := f.save(credentialsMode); err != nil {
+		t.Fatal(err)
+	}
+
+	fileInfo, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fileInfo.Mode().Perm() != credentialsMode {
+		t.Fatalf("file mode = %o, want %o", fileInfo.Mode().Perm(), credentialsMode)
+	}
+	dirInfo, err := os.Stat(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dirInfo.Mode().Perm() != configDirMode {
+		t.Fatalf("dir mode = %o, want %o", dirInfo.Mode().Perm(), configDirMode)
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), ".profiles-") {
+			t.Fatalf("save left a temp file behind: %s", e.Name())
+		}
+	}
+}
+
 func TestActiveProfileRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	if name, err := activeProfile(dir); err != nil || name != "" {
@@ -118,6 +168,97 @@ func TestActiveProfileRoundTrip(t *testing.T) {
 	got, _ := os.ReadFile(cliPath(dir))
 	if !strings.Contains(string(got), "[defaults]\nprofile = dev") {
 		t.Fatalf("cli.ini:\n%s", got)
+	}
+}
+
+func TestSetCollapsesDuplicateKeysAndUnsetRemovesAll(t *testing.T) {
+	dir := writeProfiles(t, "[default]\nmcd_token = first\nmcd_id = kept\nmcd_token = second\n")
+	f, err := loadINI(profilesPath(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	f.set("default", keyToken, "new")
+	tokenLines := 0
+	for _, line := range f.lines {
+		if keyOf(line) == keyToken {
+			tokenLines++
+			if valueOf(line) != "new" {
+				t.Fatalf("token line: %q", line)
+			}
+		}
+	}
+	if tokenLines != 1 {
+		t.Fatalf("%d lines for mcd_token after set, want 1", tokenLines)
+	}
+
+	f.unset("default", keyToken)
+	for _, line := range f.lines {
+		if keyOf(line) == keyToken {
+			t.Fatalf("mcd_token line survived unset: %q", line)
+		}
+	}
+	if v, ok := f.get("default", keyID); !ok || v != "kept" {
+		t.Fatalf("unrelated key: %q, %v", v, ok)
+	}
+}
+
+func TestSaveRoundTripsCRLFLineEndingsOnUntouchedLines(t *testing.T) {
+	dir := writeProfiles(t, "[default]\r\nmcd_id = old\r\nmcd_agent_image_host = docker.io\r\n")
+	f, err := loadINI(profilesPath(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.set("default", keyID, "new")
+	if err := f.save(credentialsMode); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(profilesPath(dir))
+	want := "[default]\r\nmcd_id = new\nmcd_agent_image_host = docker.io\r\n"
+	if string(got) != want {
+		t.Fatalf("got:\n%q\nwant:\n%q", got, want)
+	}
+}
+
+func TestValueKeepsAnInlineSemicolonVerbatim(t *testing.T) {
+	dir := writeProfiles(t, "[p]\nmcd_id = abc ; not a comment here\n")
+	f, err := loadINI(profilesPath(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v, ok := f.get("p", keyID); !ok || v != "abc ; not a comment here" {
+		t.Fatalf("got %q, %v", v, ok)
+	}
+}
+
+func TestProfileNotFoundEmptyFileMessage(t *testing.T) {
+	dir := t.TempDir()
+	f, err := loadINI(profilesPath(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = profileNotFound(f, "dev")
+	if err == nil || !strings.Contains(err.Error(), "has no profiles yet") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestProfileListWithNoProfilesFile(t *testing.T) {
+	dir := t.TempDir()
+	out, err := execute(t, "profile", "list", "--config-dir", dir, "--output", "table")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "NAME  AUTH  INSTANCE  ID  ACTIVE\n"; out != want {
+		t.Fatalf("table:\n%q\nwant:\n%q", out, want)
+	}
+
+	out, err = execute(t, "profile", "list", "--config-dir", dir, "--output", "json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(out) != "[]" {
+		t.Fatalf("json: %q", out)
 	}
 }
 

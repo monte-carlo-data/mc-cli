@@ -7,8 +7,12 @@ The command-line interface for the Monte Carlo REST API.
 Until the first release, build from source with a Go toolchain:
 
 ```bash
-go install github.com/monte-carlo-data/mc-cli/cmd/montecarlo@latest
+git clone https://github.com/monte-carlo-data/mc-cli.git
+cd mc-cli
+go build -o . ./cmd/montecarlo
 ```
+
+Once released, `go install github.com/monte-carlo-data/mc-cli/cmd/montecarlo@latest` will work too.
 
 ## Credentials
 
@@ -35,7 +39,7 @@ montecarlo deployments get <deployment_id> --output json
 montecarlo collection-agents register aws --deployment-id <id> --lambda-function-arn <arn> --role-arn <arn>
 ```
 
-A delete asks `Delete deployment <id>? [y/N]` first; `--yes` answers for you, and is required when there is no terminal. Output is a table on a terminal and JSON otherwise; `--output json` or `--output table` forces one. Every string flag accepts `@<path>` to read its value from a file. A secret flag has a `--<name>-prompt` companion that reads it from a hidden prompt.
+A destructive command asks first, `Delete deployment <id>? [y/N]`; `--yes` answers for you, and is required when there is no terminal. `--output table`, `--output wide` (the table with every field) or `--output json` forces one; the default is a table on a terminal and JSON otherwise. A secret flag accepts `@<path>` to read its value from a file, and has a `--<name>-prompt` companion. A transient 503 or 429 is retried for up to five minutes, with progress on stderr; Ctrl-C ends the wait.
 
 `montecarlo --help` lists the commands; each API resource is a group, each operation a command under its verb.
 

@@ -11,13 +11,10 @@ import (
 	"golang.org/x/term"
 )
 
-// flagString is the flag's value, read from a file when it starts with @.
+// flagString is the flag's value, taken literally. A leading @ is not expanded; only
+// flagSecret and flagStringMap treat @<path> as a file reference.
 func flagString(cmd *cobra.Command, name string) (string, error) {
-	v, err := cmd.Flags().GetString(name)
-	if err != nil {
-		return "", err
-	}
-	return expandValue(v)
+	return cmd.Flags().GetString(name)
 }
 
 func flagInt(cmd *cobra.Command, name string) (int32, error) {
@@ -60,28 +57,35 @@ func flagStringMap(cmd *cobra.Command, name string) (map[string]string, error) {
 	return out, nil
 }
 
-// flagSecret is the flag's value, or a hidden terminal prompt when --<name>-prompt is set.
+// flagSecret is the flag's value, expanding @<path>, or a hidden terminal prompt when
+// --<name>-prompt is true.
 func flagSecret(cmd *cobra.Command, name string) (string, error) {
 	prompt := name + "-prompt"
-	if cmd.Flags().Lookup(prompt) == nil || !changed(cmd, prompt) {
-		return flagString(cmd, name)
+	if cmd.Flags().Lookup(prompt) != nil {
+		if wants, _ := cmd.Flags().GetBool(prompt); wants {
+			if changed(cmd, name) {
+				return "", fmt.Errorf("pass --%s or --%s, not both", name, prompt)
+			}
+			return readSecret(cmd, name)
+		}
 	}
-	if changed(cmd, name) {
-		return "", fmt.Errorf("pass --%s or --%s, not both", name, prompt)
+	v, err := cmd.Flags().GetString(name)
+	if err != nil {
+		return "", err
 	}
-	return readSecret(name)
+	return expandValue(v)
 }
 
 // readSecret prompts on the terminal with echo off. Without a terminal there is nothing to
 // prompt on, and the caller is told to use @<path> instead.
-func readSecret(name string) (string, error) {
-	fd := int(os.Stdin.Fd())
-	if !term.IsTerminal(fd) {
+func readSecret(cmd *cobra.Command, name string) (string, error) {
+	if !stdinIsTerminal(cmd) {
 		return "", fmt.Errorf("--%s-prompt needs a terminal; pass --%s @<path> instead", name, name)
 	}
-	fmt.Fprintf(os.Stderr, "%s: ", name)
-	secret, err := term.ReadPassword(fd)
-	fmt.Fprintln(os.Stderr)
+	fmt.Fprintf(cmd.ErrOrStderr(), "%s: ", name)
+	f := cmd.InOrStdin().(*os.File)
+	secret, err := term.ReadPassword(int(f.Fd()))
+	fmt.Fprintln(cmd.ErrOrStderr())
 	if err != nil {
 		return "", err
 	}

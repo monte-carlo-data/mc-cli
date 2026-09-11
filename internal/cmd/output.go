@@ -6,14 +6,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"sort"
 	"strings"
 	"text/tabwriter"
 
 	sdk "github.com/monte-carlo-data/mc-sdk-go/montecarlo"
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
 )
 
 // outputFormat is --output, else table on a terminal and json otherwise.
@@ -21,7 +19,7 @@ func outputFormat(cmd *cobra.Command) (string, error) {
 	format, _ := cmd.Flags().GetString("output")
 	switch format {
 	case "":
-		if term.IsTerminal(int(os.Stdout.Fd())) {
+		if stdoutIsTerminal(cmd) {
 			return "table", nil
 		}
 		return "json", nil
@@ -49,6 +47,8 @@ func render(cmd *cobra.Command, v any, fields ...string) error {
 	keys := fields
 	if format == "wide" || len(keys) == 0 {
 		keys = withRemaining(fields, []map[string]any{values})
+	} else if err := checkKnownFields(keys, []map[string]any{values}); err != nil {
+		return err
 	}
 	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
 	for _, k := range keys {
@@ -73,6 +73,8 @@ func renderList(cmd *cobra.Command, v any, columns []string) error {
 	}
 	if format == "wide" {
 		columns = withRemaining(columns, rows)
+	} else if err := checkKnownFields(columns, rows); err != nil {
+		return err
 	}
 	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
 	header := make([]string, len(columns))
@@ -108,6 +110,26 @@ func withRemaining(first []string, rows []map[string]any) []string {
 	}
 	sort.Strings(rest)
 	return append(out, rest...)
+}
+
+// checkKnownFields errors naming the first of fields that is not a key of any row. An empty
+// result has no keys to check against.
+func checkKnownFields(fields []string, rows []map[string]any) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	known := make(map[string]bool)
+	for _, row := range rows {
+		for k := range row {
+			known[k] = true
+		}
+	}
+	for _, f := range fields {
+		if !known[f] {
+			return fmt.Errorf("unknown field %q in the response", f)
+		}
+	}
+	return nil
 }
 
 func writeJSON(w io.Writer, v any) error {
@@ -187,7 +209,7 @@ func apiErr(resp *http.Response, err error) error {
 		}
 		return errors.New(body)
 	}
-	msg := fmt.Sprintf("%s %s: %s", resp.Request.Method, resp.Request.URL, resp.Status)
+	msg := fmt.Sprintf("%s %s: %s", resp.Request.Method, resp.Request.URL.Redacted(), resp.Status)
 	if body != "" {
 		msg += ": " + body
 	}

@@ -1,4 +1,4 @@
-// The montecarlo command. The directory name is the binary's name under `go install`.
+// Command montecarlo is the command-line interface for the Monte Carlo REST API.
 package main
 
 import (

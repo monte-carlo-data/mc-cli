@@ -39,15 +39,28 @@ func resetFlags(cmd *cobra.Command) {
 	}
 }
 
-// execute runs the root command with args and returns what it wrote to stdout.
-func execute(t *testing.T, args ...string) (string, error) {
+// executeStreams runs the root command with args and returns what it wrote to stdout and to
+// stderr separately.
+func executeStreams(t *testing.T, args ...string) (stdout, stderr string, err error) {
 	t.Helper()
 	isolateEnv(t)
 	resetFlags(rootCmd)
-	var out bytes.Buffer
-	rootCmd.SetOut(&out)
-	rootCmd.SetErr(&out)
+	var outBuf, errBuf bytes.Buffer
+	rootCmd.SetOut(&outBuf)
+	rootCmd.SetErr(&errBuf)
+	t.Cleanup(func() {
+		rootCmd.SetOut(nil)
+		rootCmd.SetErr(nil)
+	})
 	rootCmd.SetArgs(args)
-	err := rootCmd.Execute()
-	return out.String(), err
+	err = rootCmd.Execute()
+	return outBuf.String(), errBuf.String(), err
+}
+
+// execute runs the root command with args and returns what it wrote to stdout and stderr
+// merged into one string.
+func execute(t *testing.T, args ...string) (string, error) {
+	t.Helper()
+	stdout, stderr, err := executeStreams(t, args...)
+	return stdout + stderr, err
 }
