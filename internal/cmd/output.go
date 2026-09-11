@@ -25,15 +25,15 @@ func outputFormat(cmd *cobra.Command) (string, error) {
 			return "table", nil
 		}
 		return "json", nil
-	case "table", "json":
+	case "table", "wide", "json":
 		return format, nil
 	}
-	return "", fmt.Errorf("--output must be table or json, not %q", format)
+	return "", fmt.Errorf("--output must be table, wide or json, not %q", format)
 }
 
 // render prints one object: as JSON, or as a two-column table of its fields. The table shows
-// `fields` in that order, or every field sorted by name when none are given. JSON is always
-// the whole object.
+// `fields` in that order; wide, or no fields, shows every field. JSON is always the whole
+// object.
 func render(cmd *cobra.Command, v any, fields ...string) error {
 	format, err := outputFormat(cmd)
 	if err != nil {
@@ -47,12 +47,8 @@ func render(cmd *cobra.Command, v any, fields ...string) error {
 		return err
 	}
 	keys := fields
-	if len(keys) == 0 {
-		keys = make([]string, 0, len(values))
-		for k := range values {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
+	if format == "wide" || len(keys) == 0 {
+		keys = withRemaining(fields, []map[string]any{values})
 	}
 	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
 	for _, k := range keys {
@@ -61,7 +57,8 @@ func render(cmd *cobra.Command, v any, fields ...string) error {
 	return w.Flush()
 }
 
-// renderList prints a list: as JSON, or as a table with one column per named field.
+// renderList prints a list: as JSON, or as a table with one column per named field. Wide adds
+// every other field the rows carry.
 func renderList(cmd *cobra.Command, v any, columns []string) error {
 	format, err := outputFormat(cmd)
 	if err != nil {
@@ -73,6 +70,9 @@ func renderList(cmd *cobra.Command, v any, columns []string) error {
 	rows, err := asRows(v)
 	if err != nil {
 		return err
+	}
+	if format == "wide" {
+		columns = withRemaining(columns, rows)
 	}
 	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
 	header := make([]string, len(columns))
@@ -88,6 +88,26 @@ func renderList(cmd *cobra.Command, v any, columns []string) error {
 		fmt.Fprintln(w, strings.Join(cells, "\t"))
 	}
 	return w.Flush()
+}
+
+// withRemaining is `first`, then every other key the rows carry, sorted.
+func withRemaining(first []string, rows []map[string]any) []string {
+	seen := make(map[string]bool, len(first))
+	out := append([]string{}, first...)
+	for _, k := range first {
+		seen[k] = true
+	}
+	var rest []string
+	for _, row := range rows {
+		for k := range row {
+			if !seen[k] {
+				seen[k] = true
+				rest = append(rest, k)
+			}
+		}
+	}
+	sort.Strings(rest)
+	return append(out, rest...)
 }
 
 func writeJSON(w io.Writer, v any) error {

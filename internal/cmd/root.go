@@ -41,7 +41,7 @@ func Execute() int {
 func init() {
 	f := rootCmd.PersistentFlags()
 	f.String("profile", "", `Profile in profiles.ini. Defaults to MCD_DEFAULT_PROFILE, then the profile chosen with "profile use", then "default".`)
-	f.StringP("output", "o", "", "Output format, table or json. Defaults to table on a terminal and json otherwise.")
+	f.StringP("output", "o", "", "Output format: table, wide or json. Defaults to table on a terminal and json otherwise; wide is the table with every field.")
 	f.String("config-dir", "", "Directory holding profiles.ini. Defaults to ~/.mcd.")
 	f.String("endpoint", "", "API base URL. Defaults to the profile's, then "+defaultEndpoint+".")
 	f.String("client-id", "", "OAuth client id. Defaults to MCD_DEFAULT_OAUTH_CLIENT_ID, then the profile's.")

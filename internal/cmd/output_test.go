@@ -55,6 +55,28 @@ func TestRenderTableShowsTheGivenFieldsInOrder(t *testing.T) {
 	}
 }
 
+func TestRenderWideAddsTheRemainingFieldsAfterTheGivenOnes(t *testing.T) {
+	cmd, out := outputCmd(t, "wide")
+	if err := render(cmd, widget{ID: "1", Name: "w", Enabled: true}, "name", "id"); err != nil {
+		t.Fatal(err)
+	}
+	want := "name     w\nid       1\ncount    0\nenabled  true\nowner    \ntags     \n"
+	if out.String() != want {
+		t.Fatalf("got:\n%s\nwant:\n%s", out.String(), want)
+	}
+}
+
+func TestRenderListWideAddsColumnsTheRowsCarry(t *testing.T) {
+	cmd, out := outputCmd(t, "wide")
+	rows := []widget{{ID: "1", Name: "a"}}
+	if err := renderList(cmd, rows, []string{"id"}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(out.String(), "ID  COUNT  ENABLED  NAME  OWNER  TAGS\n") {
+		t.Fatalf("got:\n%s", out.String())
+	}
+}
+
 func TestRenderJSONIgnoresTheFieldList(t *testing.T) {
 	cmd, out := outputCmd(t, "json")
 	if err := render(cmd, widget{ID: "1", Enabled: true}, "name"); err != nil {
