@@ -37,14 +37,6 @@ func newDeploymentsCreateCmd() *cobra.Command {
 				return err
 			}
 			req := api.DeploymentsAPI.CreateDeployment(ctx)
-			runtimePlatformValue, err := flagString(cmd, "runtime-platform")
-			if err != nil {
-				return err
-			}
-			runtimePlatform, err := sdk.NewRuntimePlatformFromValue(runtimePlatformValue)
-			if err != nil {
-				return err
-			}
 			typeValue, err := flagString(cmd, "type")
 			if err != nil {
 				return err
@@ -53,7 +45,15 @@ func newDeploymentsCreateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			body := sdk.NewDeploymentIn(*runtimePlatform, *type_)
+			runtimePlatformValue, err := flagString(cmd, "runtime-platform")
+			if err != nil {
+				return err
+			}
+			runtimePlatform, err := sdk.NewRuntimePlatformFromValue(runtimePlatformValue)
+			if err != nil {
+				return err
+			}
+			body := sdk.NewDeploymentIn(*type_, *runtimePlatform)
 			if changed(cmd, "name") {
 				name, err := flagString(cmd, "name")
 				if err != nil {
@@ -66,15 +66,15 @@ func newDeploymentsCreateCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "aws_external_id", "created_time", "enabled", "id", "last_updated_time", "name", "runtime_platform", "type")
+			return render(cmd, out, "id", "name", "type", "runtime_platform", "enabled", "created_time", "last_updated_time", "aws_external_id")
 		},
 	}
-	cmd.Flags().String("runtime-platform", "", "Where the deployment's collection agent or data store will run. Either can be provisioned on AWS, AZURE or GCP, and a collection agent also on GENERIC. Any other combination is rejected.")
-	_ = cmd.RegisterFlagCompletionFunc("runtime-platform", enumCompletion(sdk.AllowedRuntimePlatformEnumValues))
-	_ = cmd.MarkFlagRequired("runtime-platform")
 	cmd.Flags().String("type", "", "What the deployment will host. Only COLLECTION_AGENT and COLLECTION_DATA_STORE can be provisioned today. Any other value is rejected.")
 	_ = cmd.RegisterFlagCompletionFunc("type", enumCompletion(sdk.AllowedDeploymentTypeEnumValues))
 	_ = cmd.MarkFlagRequired("type")
+	cmd.Flags().String("runtime-platform", "", "Where the deployment's collection agent or data store will run. Either can be provisioned on AWS, AZURE or GCP, and a collection agent also on GENERIC. Any other combination is rejected.")
+	_ = cmd.RegisterFlagCompletionFunc("runtime-platform", enumCompletion(sdk.AllowedRuntimePlatformEnumValues))
+	_ = cmd.MarkFlagRequired("runtime-platform")
 	cmd.Flags().String("name", "", "Display name for the deployment. Monte Carlo generates one if you leave it out.")
 	return cmd
 }
@@ -116,7 +116,7 @@ func newDeploymentsGetCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "aws_external_id", "created_time", "enabled", "id", "last_updated_time", "name", "runtime_platform", "type")
+			return render(cmd, out, "id", "name", "type", "runtime_platform", "enabled", "aws_external_id")
 		},
 	}
 	return cmd
@@ -156,14 +156,6 @@ func newDeploymentsReprovisionCmd() *cobra.Command {
 				return err
 			}
 			req := api.DeploymentsAPI.ReprovisionDeployment(ctx, args[0])
-			runtimePlatformValue, err := flagString(cmd, "runtime-platform")
-			if err != nil {
-				return err
-			}
-			runtimePlatform, err := sdk.NewRuntimePlatformFromValue(runtimePlatformValue)
-			if err != nil {
-				return err
-			}
 			typeValue, err := flagString(cmd, "type")
 			if err != nil {
 				return err
@@ -172,7 +164,15 @@ func newDeploymentsReprovisionCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			body := sdk.NewDeploymentIn(*runtimePlatform, *type_)
+			runtimePlatformValue, err := flagString(cmd, "runtime-platform")
+			if err != nil {
+				return err
+			}
+			runtimePlatform, err := sdk.NewRuntimePlatformFromValue(runtimePlatformValue)
+			if err != nil {
+				return err
+			}
+			body := sdk.NewDeploymentIn(*type_, *runtimePlatform)
 			if changed(cmd, "name") {
 				name, err := flagString(cmd, "name")
 				if err != nil {
@@ -185,15 +185,15 @@ func newDeploymentsReprovisionCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "aws_external_id", "created_time", "enabled", "id", "last_updated_time", "name", "runtime_platform", "type")
+			return render(cmd, out, "id", "name", "type", "runtime_platform", "enabled", "created_time", "last_updated_time", "aws_external_id")
 		},
 	}
-	cmd.Flags().String("runtime-platform", "", "Where the deployment's collection agent or data store will run. Either can be provisioned on AWS, AZURE or GCP, and a collection agent also on GENERIC. Any other combination is rejected.")
-	_ = cmd.RegisterFlagCompletionFunc("runtime-platform", enumCompletion(sdk.AllowedRuntimePlatformEnumValues))
-	_ = cmd.MarkFlagRequired("runtime-platform")
 	cmd.Flags().String("type", "", "What the deployment will host. Only COLLECTION_AGENT and COLLECTION_DATA_STORE can be provisioned today. Any other value is rejected.")
 	_ = cmd.RegisterFlagCompletionFunc("type", enumCompletion(sdk.AllowedDeploymentTypeEnumValues))
 	_ = cmd.MarkFlagRequired("type")
+	cmd.Flags().String("runtime-platform", "", "Where the deployment's collection agent or data store will run. Either can be provisioned on AWS, AZURE or GCP, and a collection agent also on GENERIC. Any other combination is rejected.")
+	_ = cmd.RegisterFlagCompletionFunc("runtime-platform", enumCompletion(sdk.AllowedRuntimePlatformEnumValues))
+	_ = cmd.MarkFlagRequired("runtime-platform")
 	cmd.Flags().String("name", "", "Display name for the deployment. Monte Carlo generates one if you leave it out.")
 	return cmd
 }
@@ -223,7 +223,7 @@ func newDeploymentsUpdateCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "aws_external_id", "created_time", "enabled", "id", "last_updated_time", "name", "runtime_platform", "type")
+			return render(cmd, out, "id", "name", "type", "runtime_platform", "enabled", "created_time", "last_updated_time", "aws_external_id")
 		},
 	}
 	cmd.Flags().String("name", "", "New display name for the deployment. Left out, the name is unchanged.")

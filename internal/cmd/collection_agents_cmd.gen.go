@@ -71,7 +71,7 @@ func newCollectionAgentsCreateGenericOauthClientCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "client_id", "client_secret", "created_time", "deployment_id", "description", "expiration_time", "id", "scopes", "secret_id", "type")
+			return render(cmd, out, "id", "deployment_id", "type", "description", "created_time", "client_id", "scopes", "expiration_time", "client_secret", "secret_id")
 		},
 	}
 	cmd.Flags().String("deployment-id", "", "Deployment whose generic collection agent will present this credential. It must have been provisioned for a generic collection agent.")
@@ -110,7 +110,7 @@ func newCollectionAgentsCreateGenericTokenCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "created_time", "deployment_id", "description", "id", "mcd_id", "mcd_token", "type")
+			return render(cmd, out, "id", "deployment_id", "type", "description", "created_time", "mcd_id", "mcd_token")
 		},
 	}
 	cmd.Flags().String("deployment-id", "", "Deployment whose generic collection agent will present this credential. It must have been provisioned for a generic collection agent.")
@@ -289,7 +289,7 @@ func newCollectionAgentsGetAwsCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "authentication_type", "created_time", "deployment_id", "enabled", "external_id", "id", "image_build", "image_version", "is_remote_upgradeable", "lambda_function_arn", "last_updated_time", "name")
+			return render(cmd, out, "id", "name", "deployment_id", "authentication_type", "enabled", "created_time", "last_updated_time", "image_build", "image_version", "is_remote_upgradeable", "lambda_function_arn", "external_id")
 		},
 	}
 	return cmd
@@ -311,7 +311,7 @@ func newCollectionAgentsGetAzureCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "authentication_type", "created_time", "deployment_id", "enabled", "function_app_url", "id", "image_build", "image_version", "is_remote_upgradeable", "last_updated_time", "name")
+			return render(cmd, out, "id", "name", "deployment_id", "authentication_type", "enabled", "created_time", "last_updated_time", "image_build", "image_version", "is_remote_upgradeable", "function_app_url")
 		},
 	}
 	return cmd
@@ -333,7 +333,7 @@ func newCollectionAgentsGetGcpCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "authentication_type", "cloud_run_url", "created_time", "deployment_id", "enabled", "id", "image_build", "image_version", "is_remote_upgradeable", "last_updated_time", "name")
+			return render(cmd, out, "id", "name", "deployment_id", "authentication_type", "enabled", "created_time", "last_updated_time", "image_build", "image_version", "is_remote_upgradeable", "cloud_run_url")
 		},
 	}
 	return cmd
@@ -355,7 +355,7 @@ func newCollectionAgentsGetGenericCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "authentication_type", "created_time", "deployment_id", "enabled", "id", "image_build", "image_version", "is_remote_upgradeable", "last_updated_time", "name")
+			return render(cmd, out, "id", "name", "deployment_id", "authentication_type", "enabled", "created_time", "last_updated_time", "image_build", "image_version", "is_remote_upgradeable")
 		},
 	}
 	return cmd
@@ -377,7 +377,7 @@ func newCollectionAgentsGetGenericOauthClientCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "client_id", "created_time", "deployment_id", "description", "expiration_time", "id", "scopes", "type")
+			return render(cmd, out, "id", "deployment_id", "type", "description", "created_time", "client_id", "scopes", "expiration_time")
 		},
 	}
 	return cmd
@@ -399,7 +399,7 @@ func newCollectionAgentsGetGenericTokenCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "created_time", "deployment_id", "description", "id", "mcd_id", "type")
+			return render(cmd, out, "id", "deployment_id", "type", "description", "created_time", "mcd_id")
 		},
 	}
 	return cmd
@@ -507,7 +507,7 @@ func newCollectionAgentsRegisterAwsCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "authentication_type", "created_time", "deployment_id", "enabled", "external_id", "id", "image_build", "image_version", "is_remote_upgradeable", "lambda_function_arn", "last_updated_time", "name")
+			return render(cmd, out, "id", "name", "deployment_id", "authentication_type", "enabled", "created_time", "last_updated_time", "image_build", "image_version", "is_remote_upgradeable", "lambda_function_arn", "external_id")
 		},
 	}
 	cmd.Flags().String("deployment-id", "", "Deployment to register the collection agent on. It must already hold an unregistered AWS collection agent.")
@@ -567,11 +567,11 @@ func newCollectionAgentsRegisterAzureCmd() *cobra.Command {
 				nested := sdk.NewFunctionAppKeyCredentialsIn(functionAppKeyAppKey)
 				body.SetFunctionAppKey(*nested)
 			}
-			if changed(cmd, "service-principal-audience", "service-principal-client-id", "service-principal-client-secret", "service-principal-client-secret-prompt", "service-principal-tenant-id") {
-				if err := requireAny(cmd, "service-principal-audience"); err != nil {
+			if changed(cmd, "service-principal-tenant-id", "service-principal-client-id", "service-principal-client-secret", "service-principal-client-secret-prompt", "service-principal-audience") {
+				if err := requireAny(cmd, "service-principal-tenant-id"); err != nil {
 					return err
 				}
-				servicePrincipalAudience, err := flagString(cmd, "service-principal-audience")
+				servicePrincipalTenantId, err := flagString(cmd, "service-principal-tenant-id")
 				if err != nil {
 					return err
 				}
@@ -589,14 +589,14 @@ func newCollectionAgentsRegisterAzureCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				if err := requireAny(cmd, "service-principal-tenant-id"); err != nil {
+				if err := requireAny(cmd, "service-principal-audience"); err != nil {
 					return err
 				}
-				servicePrincipalTenantId, err := flagString(cmd, "service-principal-tenant-id")
+				servicePrincipalAudience, err := flagString(cmd, "service-principal-audience")
 				if err != nil {
 					return err
 				}
-				nested := sdk.NewServicePrincipalCredentialsIn(servicePrincipalAudience, servicePrincipalClientId, servicePrincipalClientSecret, servicePrincipalTenantId)
+				nested := sdk.NewServicePrincipalCredentialsIn(servicePrincipalTenantId, servicePrincipalClientId, servicePrincipalClientSecret, servicePrincipalAudience)
 				body.SetServicePrincipal(*nested)
 			}
 			req = req.AzureCollectionAgentIn(*body)
@@ -604,7 +604,7 @@ func newCollectionAgentsRegisterAzureCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "authentication_type", "created_time", "deployment_id", "enabled", "function_app_url", "id", "image_build", "image_version", "is_remote_upgradeable", "last_updated_time", "name")
+			return render(cmd, out, "id", "name", "deployment_id", "authentication_type", "enabled", "created_time", "last_updated_time", "image_build", "image_version", "is_remote_upgradeable", "function_app_url")
 		},
 	}
 	cmd.Flags().String("authentication-type", "", "How Monte Carlo authenticates when it calls the agent. Send it together with the matching credentials object.")
@@ -617,11 +617,11 @@ func newCollectionAgentsRegisterAzureCmd() *cobra.Command {
 	cmd.Flags().String("name", "", "Display name for the collection agent. Replaces the name it currently has.")
 	cmd.Flags().String("function-app-key-app-key", "", "Function app key Monte Carlo presents when it calls the agent.")
 	cmd.Flags().Bool("function-app-key-app-key-prompt", false, "Read --function-app-key-app-key from a hidden prompt instead of the command line.")
-	cmd.Flags().String("service-principal-audience", "", "Audience the issued token is for, usually the function app's application id.")
+	cmd.Flags().String("service-principal-tenant-id", "", "Directory (tenant) id the service principal lives in.")
 	cmd.Flags().String("service-principal-client-id", "", "Application (client) id of the service principal.")
 	cmd.Flags().String("service-principal-client-secret", "", "Client secret of the service principal.")
 	cmd.Flags().Bool("service-principal-client-secret-prompt", false, "Read --service-principal-client-secret from a hidden prompt instead of the command line.")
-	cmd.Flags().String("service-principal-tenant-id", "", "Directory (tenant) id the service principal lives in.")
+	cmd.Flags().String("service-principal-audience", "", "Audience the issued token is for, usually the function app's application id.")
 	return cmd
 }
 
@@ -645,15 +645,15 @@ func newCollectionAgentsRegisterGcpCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			cloudRunUrl, err := flagString(cmd, "cloud-run-url")
-			if err != nil {
-				return err
-			}
 			deploymentId, err := flagString(cmd, "deployment-id")
 			if err != nil {
 				return err
 			}
-			body := sdk.NewGcpCollectionAgentIn(*authenticationType, cloudRunUrl, deploymentId)
+			cloudRunUrl, err := flagString(cmd, "cloud-run-url")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewGcpCollectionAgentIn(*authenticationType, deploymentId, cloudRunUrl)
 			if changed(cmd, "name") {
 				name, err := flagString(cmd, "name")
 				if err != nil {
@@ -684,16 +684,16 @@ func newCollectionAgentsRegisterGcpCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "authentication_type", "cloud_run_url", "created_time", "deployment_id", "enabled", "id", "image_build", "image_version", "is_remote_upgradeable", "last_updated_time", "name")
+			return render(cmd, out, "id", "name", "deployment_id", "authentication_type", "enabled", "created_time", "last_updated_time", "image_build", "image_version", "is_remote_upgradeable", "cloud_run_url")
 		},
 	}
 	cmd.Flags().String("authentication-type", "", "How Monte Carlo authenticates when it calls the agent. Send it together with the matching credentials.")
 	_ = cmd.RegisterFlagCompletionFunc("authentication-type", enumCompletion(sdk.AllowedGcpAgentAuthenticationTypeEnumValues))
 	_ = cmd.MarkFlagRequired("authentication-type")
-	cmd.Flags().String("cloud-run-url", "", "URL of the Cloud Run service Monte Carlo should call.")
-	_ = cmd.MarkFlagRequired("cloud-run-url")
 	cmd.Flags().String("deployment-id", "", "Deployment to register the collection agent on. It must already hold an unregistered GCP collection agent.")
 	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("cloud-run-url", "", "URL of the Cloud Run service Monte Carlo should call.")
+	_ = cmd.MarkFlagRequired("cloud-run-url")
 	cmd.Flags().String("name", "", "Display name for the collection agent. Replaces the name it currently has.")
 	cmd.Flags().String("service-account-key", "", "Credentials for GCP_JSON_SERVICE_ACCOUNT_KEY, as the contents of the JSON key file Google issued for the service account. Send this or auth_headers, never both. It replaces the stored credentials rather than merging into them.")
 	cmd.Flags().Bool("service-account-key-prompt", false, "Read --service-account-key from a hidden prompt instead of the command line.")
@@ -730,7 +730,7 @@ func newCollectionAgentsRegisterGenericCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "authentication_type", "created_time", "deployment_id", "enabled", "id", "image_build", "image_version", "is_remote_upgradeable", "last_updated_time", "name")
+			return render(cmd, out, "id", "name", "deployment_id", "authentication_type", "enabled", "created_time", "last_updated_time", "image_build", "image_version", "is_remote_upgradeable")
 		},
 	}
 	cmd.Flags().String("deployment-id", "", "Deployment whose generic collection agent to enable. It must have been provisioned for one, and the agent must be running with a credential created for this deployment.")
@@ -790,7 +790,7 @@ func newCollectionAgentsUpdateAwsCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "authentication_type", "created_time", "deployment_id", "enabled", "external_id", "id", "image_build", "image_version", "is_remote_upgradeable", "lambda_function_arn", "last_updated_time", "name")
+			return render(cmd, out, "id", "name", "deployment_id", "authentication_type", "enabled", "created_time", "last_updated_time", "image_build", "image_version", "is_remote_upgradeable", "lambda_function_arn", "external_id")
 		},
 	}
 	cmd.Flags().String("lambda-function-arn", "", "ARN of the Lambda function Monte Carlo should invoke.")
@@ -848,11 +848,11 @@ func newCollectionAgentsUpdateAzureCmd() *cobra.Command {
 				nested := sdk.NewFunctionAppKeyCredentialsIn(functionAppKeyAppKey)
 				body.SetFunctionAppKey(*nested)
 			}
-			if changed(cmd, "service-principal-audience", "service-principal-client-id", "service-principal-client-secret", "service-principal-client-secret-prompt", "service-principal-tenant-id") {
-				if err := requireAny(cmd, "service-principal-audience"); err != nil {
+			if changed(cmd, "service-principal-tenant-id", "service-principal-client-id", "service-principal-client-secret", "service-principal-client-secret-prompt", "service-principal-audience") {
+				if err := requireAny(cmd, "service-principal-tenant-id"); err != nil {
 					return err
 				}
-				servicePrincipalAudience, err := flagString(cmd, "service-principal-audience")
+				servicePrincipalTenantId, err := flagString(cmd, "service-principal-tenant-id")
 				if err != nil {
 					return err
 				}
@@ -870,14 +870,14 @@ func newCollectionAgentsUpdateAzureCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				if err := requireAny(cmd, "service-principal-tenant-id"); err != nil {
+				if err := requireAny(cmd, "service-principal-audience"); err != nil {
 					return err
 				}
-				servicePrincipalTenantId, err := flagString(cmd, "service-principal-tenant-id")
+				servicePrincipalAudience, err := flagString(cmd, "service-principal-audience")
 				if err != nil {
 					return err
 				}
-				nested := sdk.NewServicePrincipalCredentialsIn(servicePrincipalAudience, servicePrincipalClientId, servicePrincipalClientSecret, servicePrincipalTenantId)
+				nested := sdk.NewServicePrincipalCredentialsIn(servicePrincipalTenantId, servicePrincipalClientId, servicePrincipalClientSecret, servicePrincipalAudience)
 				body.SetServicePrincipal(*nested)
 			}
 			req = req.AzureCollectionAgentPatch(*body)
@@ -885,7 +885,7 @@ func newCollectionAgentsUpdateAzureCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "authentication_type", "created_time", "deployment_id", "enabled", "function_app_url", "id", "image_build", "image_version", "is_remote_upgradeable", "last_updated_time", "name")
+			return render(cmd, out, "id", "name", "deployment_id", "authentication_type", "enabled", "created_time", "last_updated_time", "image_build", "image_version", "is_remote_upgradeable", "function_app_url")
 		},
 	}
 	cmd.Flags().String("authentication-type", "", "How Monte Carlo authenticates when it calls the agent. Send it together with the matching credentials object.")
@@ -894,11 +894,11 @@ func newCollectionAgentsUpdateAzureCmd() *cobra.Command {
 	cmd.Flags().String("name", "", "Display name for the collection agent. Replaces the name it currently has.")
 	cmd.Flags().String("function-app-key-app-key", "", "Function app key Monte Carlo presents when it calls the agent.")
 	cmd.Flags().Bool("function-app-key-app-key-prompt", false, "Read --function-app-key-app-key from a hidden prompt instead of the command line.")
-	cmd.Flags().String("service-principal-audience", "", "Audience the issued token is for, usually the function app's application id.")
+	cmd.Flags().String("service-principal-tenant-id", "", "Directory (tenant) id the service principal lives in.")
 	cmd.Flags().String("service-principal-client-id", "", "Application (client) id of the service principal.")
 	cmd.Flags().String("service-principal-client-secret", "", "Client secret of the service principal.")
 	cmd.Flags().Bool("service-principal-client-secret-prompt", false, "Read --service-principal-client-secret from a hidden prompt instead of the command line.")
-	cmd.Flags().String("service-principal-tenant-id", "", "Directory (tenant) id the service principal lives in.")
+	cmd.Flags().String("service-principal-audience", "", "Audience the issued token is for, usually the function app's application id.")
 	return cmd
 }
 
@@ -963,7 +963,7 @@ func newCollectionAgentsUpdateGcpCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "authentication_type", "cloud_run_url", "created_time", "deployment_id", "enabled", "id", "image_build", "image_version", "is_remote_upgradeable", "last_updated_time", "name")
+			return render(cmd, out, "id", "name", "deployment_id", "authentication_type", "enabled", "created_time", "last_updated_time", "image_build", "image_version", "is_remote_upgradeable", "cloud_run_url")
 		},
 	}
 	cmd.Flags().String("authentication-type", "", "How Monte Carlo authenticates when it calls the agent. Send it together with the matching credentials.")
@@ -1001,7 +1001,7 @@ func newCollectionAgentsUpdateGenericCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "authentication_type", "created_time", "deployment_id", "enabled", "id", "image_build", "image_version", "is_remote_upgradeable", "last_updated_time", "name")
+			return render(cmd, out, "id", "name", "deployment_id", "authentication_type", "enabled", "created_time", "last_updated_time", "image_build", "image_version", "is_remote_upgradeable")
 		},
 	}
 	cmd.Flags().String("name", "", "Display name for the collection agent. Replaces the name it currently has.")

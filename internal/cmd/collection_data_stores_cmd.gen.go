@@ -125,7 +125,7 @@ func newCollectionDataStoresGetAwsCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "authentication_type", "bucket_name", "created_time", "deployment_id", "enabled", "external_id", "id", "last_updated_time", "name", "storage_type")
+			return render(cmd, out, "id", "name", "deployment_id", "storage_type", "authentication_type", "enabled", "created_time", "last_updated_time", "bucket_name", "external_id")
 		},
 	}
 	return cmd
@@ -147,7 +147,7 @@ func newCollectionDataStoresGetAzureCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "authentication_type", "container_name", "created_time", "deployment_id", "enabled", "id", "last_updated_time", "name", "storage_type")
+			return render(cmd, out, "id", "name", "deployment_id", "storage_type", "authentication_type", "enabled", "created_time", "last_updated_time", "container_name")
 		},
 	}
 	return cmd
@@ -169,7 +169,7 @@ func newCollectionDataStoresGetGcpCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "authentication_type", "bucket_name", "created_time", "deployment_id", "enabled", "id", "last_updated_time", "name", "storage_type")
+			return render(cmd, out, "id", "name", "deployment_id", "storage_type", "authentication_type", "enabled", "created_time", "last_updated_time", "bucket_name")
 		},
 	}
 	return cmd
@@ -220,11 +220,11 @@ func newCollectionDataStoresRegisterAwsCmd() *cobra.Command {
 				return err
 			}
 			req := api.CollectionDataStoresAPI.RegisterAwsCollectionDataStore(ctx)
-			bucketName, err := flagString(cmd, "bucket-name")
+			deploymentId, err := flagString(cmd, "deployment-id")
 			if err != nil {
 				return err
 			}
-			deploymentId, err := flagString(cmd, "deployment-id")
+			bucketName, err := flagString(cmd, "bucket-name")
 			if err != nil {
 				return err
 			}
@@ -232,7 +232,7 @@ func newCollectionDataStoresRegisterAwsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			body := sdk.NewAwsCollectionDataStoreIn(bucketName, deploymentId, roleArn)
+			body := sdk.NewAwsCollectionDataStoreIn(deploymentId, bucketName, roleArn)
 			if changed(cmd, "name") {
 				name, err := flagString(cmd, "name")
 				if err != nil {
@@ -245,13 +245,13 @@ func newCollectionDataStoresRegisterAwsCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "authentication_type", "bucket_name", "created_time", "deployment_id", "enabled", "external_id", "id", "last_updated_time", "name", "storage_type")
+			return render(cmd, out, "id", "name", "deployment_id", "storage_type", "authentication_type", "enabled", "created_time", "last_updated_time", "bucket_name", "external_id")
 		},
 	}
-	cmd.Flags().String("bucket-name", "", "Name of the S3 bucket Monte Carlo should use.")
-	_ = cmd.MarkFlagRequired("bucket-name")
 	cmd.Flags().String("deployment-id", "", "Deployment to register the data store on. It must already hold an unregistered S3 data store.")
 	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("bucket-name", "", "Name of the S3 bucket Monte Carlo should use.")
+	_ = cmd.MarkFlagRequired("bucket-name")
 	cmd.Flags().String("role-arn", "", "ARN of the role Monte Carlo assumes to access the bucket. Its trust policy must already carry the deployment's external id.")
 	_ = cmd.MarkFlagRequired("role-arn")
 	cmd.Flags().String("name", "", "Display name for the data store. Replaces the name its deployment gave it.")
@@ -278,15 +278,15 @@ func newCollectionDataStoresRegisterAzureCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			containerName, err := flagString(cmd, "container-name")
-			if err != nil {
-				return err
-			}
 			deploymentId, err := flagString(cmd, "deployment-id")
 			if err != nil {
 				return err
 			}
-			body := sdk.NewAzureCollectionDataStoreIn(*authenticationType, containerName, deploymentId)
+			containerName, err := flagString(cmd, "container-name")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewAzureCollectionDataStoreIn(*authenticationType, deploymentId, containerName)
 			if changed(cmd, "name") {
 				name, err := flagString(cmd, "name")
 				if err != nil {
@@ -294,11 +294,11 @@ func newCollectionDataStoresRegisterAzureCmd() *cobra.Command {
 				}
 				body.SetName(name)
 			}
-			if changed(cmd, "service-principal-account-url", "service-principal-client-id", "service-principal-client-secret", "service-principal-client-secret-prompt", "service-principal-tenant-id", "service-principal-account-name") {
-				if err := requireAny(cmd, "service-principal-account-url"); err != nil {
+			if changed(cmd, "service-principal-tenant-id", "service-principal-client-id", "service-principal-client-secret", "service-principal-client-secret-prompt", "service-principal-account-url", "service-principal-account-name") {
+				if err := requireAny(cmd, "service-principal-tenant-id"); err != nil {
 					return err
 				}
-				servicePrincipalAccountUrl, err := flagString(cmd, "service-principal-account-url")
+				servicePrincipalTenantId, err := flagString(cmd, "service-principal-tenant-id")
 				if err != nil {
 					return err
 				}
@@ -316,14 +316,14 @@ func newCollectionDataStoresRegisterAzureCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				if err := requireAny(cmd, "service-principal-tenant-id"); err != nil {
+				if err := requireAny(cmd, "service-principal-account-url"); err != nil {
 					return err
 				}
-				servicePrincipalTenantId, err := flagString(cmd, "service-principal-tenant-id")
+				servicePrincipalAccountUrl, err := flagString(cmd, "service-principal-account-url")
 				if err != nil {
 					return err
 				}
-				nested := sdk.NewStorageServicePrincipalCredentialsIn(servicePrincipalAccountUrl, servicePrincipalClientId, servicePrincipalClientSecret, servicePrincipalTenantId)
+				nested := sdk.NewStorageServicePrincipalCredentialsIn(servicePrincipalTenantId, servicePrincipalClientId, servicePrincipalClientSecret, servicePrincipalAccountUrl)
 				if changed(cmd, "service-principal-account-name") {
 					servicePrincipalAccountName, err := flagString(cmd, "service-principal-account-name")
 					if err != nil {
@@ -349,22 +349,22 @@ func newCollectionDataStoresRegisterAzureCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "authentication_type", "container_name", "created_time", "deployment_id", "enabled", "id", "last_updated_time", "name", "storage_type")
+			return render(cmd, out, "id", "name", "deployment_id", "storage_type", "authentication_type", "enabled", "created_time", "last_updated_time", "container_name")
 		},
 	}
 	cmd.Flags().String("authentication-type", "", "How Monte Carlo authenticates to the storage account. Send it together with the matching credentials object.")
 	_ = cmd.RegisterFlagCompletionFunc("authentication-type", enumCompletion(sdk.AllowedAzureDataStoreAuthenticationTypeEnumValues))
 	_ = cmd.MarkFlagRequired("authentication-type")
-	cmd.Flags().String("container-name", "", "Name of the blob container Monte Carlo should use.")
-	_ = cmd.MarkFlagRequired("container-name")
 	cmd.Flags().String("deployment-id", "", "Deployment to register the data store on. It must already hold an unregistered Azure data store.")
 	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("container-name", "", "Name of the blob container Monte Carlo should use.")
+	_ = cmd.MarkFlagRequired("container-name")
 	cmd.Flags().String("name", "", "Display name for the data store. Replaces the name its deployment gave it.")
-	cmd.Flags().String("service-principal-account-url", "", "URL of the storage account Monte Carlo sends requests to. A private endpoint or a custom host works, so this is not required to be under blob.core.windows.net.")
+	cmd.Flags().String("service-principal-tenant-id", "", "Directory (tenant) id the service principal lives in.")
 	cmd.Flags().String("service-principal-client-id", "", "Application (client) id of the service principal.")
 	cmd.Flags().String("service-principal-client-secret", "", "Client secret of the service principal.")
 	cmd.Flags().Bool("service-principal-client-secret-prompt", false, "Read --service-principal-client-secret from a hidden prompt instead of the command line.")
-	cmd.Flags().String("service-principal-tenant-id", "", "Directory (tenant) id the service principal lives in.")
+	cmd.Flags().String("service-principal-account-url", "", "URL of the storage account Monte Carlo sends requests to. A private endpoint or a custom host works, so this is not required to be under blob.core.windows.net.")
 	cmd.Flags().String("service-principal-account-name", "", "Name of the storage account, needed only when account_url does not start with it. Monte Carlo takes the first label of the host otherwise, which is right for a standard or private-link URL but not for a custom ingress host.")
 	cmd.Flags().String("storage-account-keys-connection-string", "", "Connection string for the storage account holding the container. It carries the account key, so treat it as a secret.")
 	cmd.Flags().Bool("storage-account-keys-connection-string-prompt", false, "Read --storage-account-keys-connection-string from a hidden prompt instead of the command line.")
@@ -386,11 +386,11 @@ func newCollectionDataStoresRegisterGcpCmd() *cobra.Command {
 				return err
 			}
 			req := api.CollectionDataStoresAPI.RegisterGcpCollectionDataStore(ctx)
-			bucketName, err := flagString(cmd, "bucket-name")
+			deploymentId, err := flagString(cmd, "deployment-id")
 			if err != nil {
 				return err
 			}
-			deploymentId, err := flagString(cmd, "deployment-id")
+			bucketName, err := flagString(cmd, "bucket-name")
 			if err != nil {
 				return err
 			}
@@ -398,7 +398,7 @@ func newCollectionDataStoresRegisterGcpCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			body := sdk.NewGcpCollectionDataStoreIn(bucketName, deploymentId, serviceAccountKey)
+			body := sdk.NewGcpCollectionDataStoreIn(deploymentId, bucketName, serviceAccountKey)
 			if changed(cmd, "name") {
 				name, err := flagString(cmd, "name")
 				if err != nil {
@@ -411,13 +411,13 @@ func newCollectionDataStoresRegisterGcpCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "authentication_type", "bucket_name", "created_time", "deployment_id", "enabled", "id", "last_updated_time", "name", "storage_type")
+			return render(cmd, out, "id", "name", "deployment_id", "storage_type", "authentication_type", "enabled", "created_time", "last_updated_time", "bucket_name")
 		},
 	}
-	cmd.Flags().String("bucket-name", "", "Name of the Cloud Storage bucket Monte Carlo should use.")
-	_ = cmd.MarkFlagRequired("bucket-name")
 	cmd.Flags().String("deployment-id", "", "Deployment to register the data store on. It must already hold an unregistered Cloud Storage data store.")
 	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("bucket-name", "", "Name of the Cloud Storage bucket Monte Carlo should use.")
+	_ = cmd.MarkFlagRequired("bucket-name")
 	cmd.Flags().String("service-account-key", "", "Service account key Monte Carlo reaches the bucket with, as the contents of the JSON key file Google issued for it. It replaces the stored key rather than merging into it.")
 	cmd.Flags().Bool("service-account-key-prompt", false, "Read --service-account-key from a hidden prompt instead of the command line.")
 	cmd.Flags().String("name", "", "Display name for the data store. Replaces the name its deployment gave it.")
@@ -474,7 +474,7 @@ func newCollectionDataStoresUpdateAwsCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "authentication_type", "bucket_name", "created_time", "deployment_id", "enabled", "external_id", "id", "last_updated_time", "name", "storage_type")
+			return render(cmd, out, "id", "name", "deployment_id", "storage_type", "authentication_type", "enabled", "created_time", "last_updated_time", "bucket_name", "external_id")
 		},
 	}
 	cmd.Flags().String("bucket-name", "", "Name of the S3 bucket Monte Carlo should use.")
@@ -521,11 +521,11 @@ func newCollectionDataStoresUpdateAzureCmd() *cobra.Command {
 				}
 				body.SetName(name)
 			}
-			if changed(cmd, "service-principal-account-url", "service-principal-client-id", "service-principal-client-secret", "service-principal-client-secret-prompt", "service-principal-tenant-id", "service-principal-account-name") {
-				if err := requireAny(cmd, "service-principal-account-url"); err != nil {
+			if changed(cmd, "service-principal-tenant-id", "service-principal-client-id", "service-principal-client-secret", "service-principal-client-secret-prompt", "service-principal-account-url", "service-principal-account-name") {
+				if err := requireAny(cmd, "service-principal-tenant-id"); err != nil {
 					return err
 				}
-				servicePrincipalAccountUrl, err := flagString(cmd, "service-principal-account-url")
+				servicePrincipalTenantId, err := flagString(cmd, "service-principal-tenant-id")
 				if err != nil {
 					return err
 				}
@@ -543,14 +543,14 @@ func newCollectionDataStoresUpdateAzureCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				if err := requireAny(cmd, "service-principal-tenant-id"); err != nil {
+				if err := requireAny(cmd, "service-principal-account-url"); err != nil {
 					return err
 				}
-				servicePrincipalTenantId, err := flagString(cmd, "service-principal-tenant-id")
+				servicePrincipalAccountUrl, err := flagString(cmd, "service-principal-account-url")
 				if err != nil {
 					return err
 				}
-				nested := sdk.NewStorageServicePrincipalCredentialsIn(servicePrincipalAccountUrl, servicePrincipalClientId, servicePrincipalClientSecret, servicePrincipalTenantId)
+				nested := sdk.NewStorageServicePrincipalCredentialsIn(servicePrincipalTenantId, servicePrincipalClientId, servicePrincipalClientSecret, servicePrincipalAccountUrl)
 				if changed(cmd, "service-principal-account-name") {
 					servicePrincipalAccountName, err := flagString(cmd, "service-principal-account-name")
 					if err != nil {
@@ -576,18 +576,18 @@ func newCollectionDataStoresUpdateAzureCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "authentication_type", "container_name", "created_time", "deployment_id", "enabled", "id", "last_updated_time", "name", "storage_type")
+			return render(cmd, out, "id", "name", "deployment_id", "storage_type", "authentication_type", "enabled", "created_time", "last_updated_time", "container_name")
 		},
 	}
 	cmd.Flags().String("authentication-type", "", "How Monte Carlo authenticates to the storage account. Send it together with the matching credentials object.")
 	_ = cmd.RegisterFlagCompletionFunc("authentication-type", enumCompletion(sdk.AllowedAzureDataStoreAuthenticationTypeEnumValues))
 	cmd.Flags().String("container-name", "", "Name of the blob container Monte Carlo should use.")
 	cmd.Flags().String("name", "", "Display name for the data store. Replaces the name its deployment gave it.")
-	cmd.Flags().String("service-principal-account-url", "", "URL of the storage account Monte Carlo sends requests to. A private endpoint or a custom host works, so this is not required to be under blob.core.windows.net.")
+	cmd.Flags().String("service-principal-tenant-id", "", "Directory (tenant) id the service principal lives in.")
 	cmd.Flags().String("service-principal-client-id", "", "Application (client) id of the service principal.")
 	cmd.Flags().String("service-principal-client-secret", "", "Client secret of the service principal.")
 	cmd.Flags().Bool("service-principal-client-secret-prompt", false, "Read --service-principal-client-secret from a hidden prompt instead of the command line.")
-	cmd.Flags().String("service-principal-tenant-id", "", "Directory (tenant) id the service principal lives in.")
+	cmd.Flags().String("service-principal-account-url", "", "URL of the storage account Monte Carlo sends requests to. A private endpoint or a custom host works, so this is not required to be under blob.core.windows.net.")
 	cmd.Flags().String("service-principal-account-name", "", "Name of the storage account, needed only when account_url does not start with it. Monte Carlo takes the first label of the host otherwise, which is right for a standard or private-link URL but not for a custom ingress host.")
 	cmd.Flags().String("storage-account-keys-connection-string", "", "Connection string for the storage account holding the container. It carries the account key, so treat it as a secret.")
 	cmd.Flags().Bool("storage-account-keys-connection-string-prompt", false, "Read --storage-account-keys-connection-string from a hidden prompt instead of the command line.")
@@ -633,7 +633,7 @@ func newCollectionDataStoresUpdateGcpCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "authentication_type", "bucket_name", "created_time", "deployment_id", "enabled", "id", "last_updated_time", "name", "storage_type")
+			return render(cmd, out, "id", "name", "deployment_id", "storage_type", "authentication_type", "enabled", "created_time", "last_updated_time", "bucket_name")
 		},
 	}
 	cmd.Flags().String("bucket-name", "", "Name of the Cloud Storage bucket Monte Carlo should use.")
