@@ -1,0 +1,20 @@
+# Built binaries
+/montecarlo
+/montecarlo.exe
+/dist/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Claude Code local settings (machine-specific)
+.claude/settings.local.json
+
+# .work temp directories
+.work/**/tmp/
+
+# Environment / secrets
+.env
+.envrc
+*.pem
