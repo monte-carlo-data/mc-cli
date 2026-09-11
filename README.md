@@ -35,7 +35,7 @@ montecarlo deployments get <deployment_id> --output json
 montecarlo collection-agents register aws --deployment-id <id> --lambda-function-arn <arn> --role-arn <arn>
 ```
 
-Output is a table on a terminal and JSON otherwise; `--output json` or `--output table` forces one. Every string flag accepts `@<path>` to read its value from a file. A secret flag has a `--<name>-prompt` companion that reads it from a hidden prompt.
+A delete asks `Delete deployment <id>? [y/N]` first; `--yes` answers for you, and is required when there is no terminal. Output is a table on a terminal and JSON otherwise; `--output json` or `--output table` forces one. Every string flag accepts `@<path>` to read its value from a file. A secret flag has a `--<name>-prompt` companion that reads it from a hidden prompt.
 
 `montecarlo --help` lists the commands; each API resource is a group, each operation a command under its verb.
 

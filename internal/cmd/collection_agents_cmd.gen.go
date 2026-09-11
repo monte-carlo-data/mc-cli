@@ -140,6 +140,9 @@ func newCollectionAgentsDeleteAwsCmd() *cobra.Command {
 		Long:  "Deregister an AWS collection agent.\n\nIts deployment is left without an agent. Reprovision that deployment before registering\nanother agent on it.\n\nAn agent cannot be deleted while its deployment still has a connection running through\nit. Delete or move those connections first.\n\nAn id that names an agent on another platform, or no agent in your account, returns 404.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete aws collection agent "+args[0]); err != nil {
+				return err
+			}
 			api, ctx, err := apiClient(cmd)
 			if err != nil {
 				return err
@@ -161,6 +164,9 @@ func newCollectionAgentsDeleteAzureCmd() *cobra.Command {
 		Long:  "Deregister an Azure collection agent.\n\nIts deployment is left without an agent. Reprovision that deployment before registering\nanother agent on it.\n\nAn agent cannot be deleted while its deployment still has a connection running through it.\nDelete or move those connections first.\n\nAn id that names an agent on another platform, or no agent in your account, returns 404.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete azure collection agent "+args[0]); err != nil {
+				return err
+			}
 			api, ctx, err := apiClient(cmd)
 			if err != nil {
 				return err
@@ -182,6 +188,9 @@ func newCollectionAgentsDeleteGcpCmd() *cobra.Command {
 		Long:  "Deregister a GCP collection agent.\n\nIts deployment is left without an agent. Reprovision that deployment before registering\nanother agent on it.\n\nAn agent cannot be deleted while its deployment still has a connection running through it.\nDelete or move those connections first.\n\nAn id that names an agent on another platform, or no agent in your account, returns 404.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete gcp collection agent "+args[0]); err != nil {
+				return err
+			}
 			api, ctx, err := apiClient(cmd)
 			if err != nil {
 				return err
@@ -203,6 +212,9 @@ func newCollectionAgentsDeleteGenericCmd() *cobra.Command {
 		Long:  "Deregister a generic collection agent.\n\nEvery credential created for its deployment is deleted with it, so a running agent stops\nbeing able to connect. Its deployment is left without an agent. Reprovision that deployment\nbefore registering another agent on it.\n\nAn agent cannot be deleted while its deployment still has a connection running through it.\nDelete or move those connections first.\n\nAn id that names an agent on another platform, or no agent in your account, returns 404.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete generic collection agent "+args[0]); err != nil {
+				return err
+			}
 			api, ctx, err := apiClient(cmd)
 			if err != nil {
 				return err
@@ -224,6 +236,9 @@ func newCollectionAgentsDeleteGenericOauthClientCmd() *cobra.Command {
 		Long:  "Delete an OAuth client.\n\nAn agent still running with it stops being able to get new access tokens. Access tokens it\nalready holds stay valid until they expire.\n\nDeleting an id your account does not hold, or has already deleted, also returns 204.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete generic-oauth-client collection agent "+args[0]); err != nil {
+				return err
+			}
 			api, ctx, err := apiClient(cmd)
 			if err != nil {
 				return err
@@ -245,6 +260,9 @@ func newCollectionAgentsDeleteGenericTokenCmd() *cobra.Command {
 		Long:  "Delete a token. An agent still running with it stops being able to connect.\n\nDeleting an id your account does not hold, or has already deleted, also returns 204.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete generic-token collection agent "+args[0]); err != nil {
+				return err
+			}
 			api, ctx, err := apiClient(cmd)
 			if err != nil {
 				return err

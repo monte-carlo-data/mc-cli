@@ -42,6 +42,9 @@ func newCollectionDataStoresDeleteAwsCmd() *cobra.Command {
 		Long:  "Deregister an S3 data store.\n\nIts deployment is left without one. Reprovision that deployment before registering another.\n\nThe bucket itself is yours and is not deleted.\n\nA data store cannot be deleted while its deployment still has a connection running through\nit. Delete or move those connections first.\n\nAn id that names a data store on another platform, or no data store in your account,\nreturns 404.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete aws collection data store "+args[0]); err != nil {
+				return err
+			}
 			api, ctx, err := apiClient(cmd)
 			if err != nil {
 				return err
@@ -63,6 +66,9 @@ func newCollectionDataStoresDeleteAzureCmd() *cobra.Command {
 		Long:  "Deregister a data store held in Azure Blob Storage.\n\nIts deployment is left without one. Reprovision that deployment before registering another.\n\nThe container itself is yours and is not deleted.\n\nA data store cannot be deleted while its deployment still has a connection running through\nit. Delete or move those connections first.\n\nAn id that names a data store on another platform, or no data store in your account,\nreturns 404.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete azure collection data store "+args[0]); err != nil {
+				return err
+			}
 			api, ctx, err := apiClient(cmd)
 			if err != nil {
 				return err
@@ -84,6 +90,9 @@ func newCollectionDataStoresDeleteGcpCmd() *cobra.Command {
 		Long:  "Deregister a data store held in Google Cloud Storage.\n\nIts deployment is left without one. Reprovision that deployment before registering another.\n\nThe bucket itself is yours and is not deleted.\n\nA data store cannot be deleted while its deployment still has a connection running through\nit. Delete or move those connections first.\n\nAn id that names a data store on another platform, or no data store in your account,\nreturns 404.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete gcp collection data store "+args[0]); err != nil {
+				return err
+			}
 			api, ctx, err := apiClient(cmd)
 			if err != nil {
 				return err

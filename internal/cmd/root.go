@@ -55,5 +55,6 @@ func init() {
 	f.String("instance", "", "Monte Carlo instance the OAuth client belongs to, for example us1. Defaults to MCD_DEFAULT_INSTANCE_ID, then the profile's.")
 	f.String("api-id", "", "API token id. Defaults to MCD_DEFAULT_API_ID, then the profile's.")
 	f.String("api-token", "", "API token secret. Defaults to MCD_DEFAULT_API_TOKEN, then the profile's.")
+	f.BoolP("yes", "y", false, "Answer yes to every confirmation. Required for a delete without a terminal.")
 	registerRootCompletions()
 }
