@@ -38,3 +38,11 @@ montecarlo collection-agents register aws --deployment-id <id> --lambda-function
 Output is a table on a terminal and JSON otherwise; `--output json` or `--output table` forces one. Every string flag accepts `@<path>` to read its value from a file. A secret flag has a `--<name>-prompt` companion that reads it from a hidden prompt.
 
 `montecarlo --help` lists the commands; each API resource is a group, each operation a command under its verb.
+
+## Shell completion
+
+```bash
+source <(montecarlo completion zsh)   # or bash, fish, powershell
+```
+
+`montecarlo completion --help` shows how to install it permanently. Completion covers commands, flags, enum values, profile names and output formats.

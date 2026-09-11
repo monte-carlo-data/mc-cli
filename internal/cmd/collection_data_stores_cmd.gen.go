@@ -353,6 +353,7 @@ func newCollectionDataStoresRegisterAzureCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("authentication-type", "", "How Monte Carlo authenticates to the storage account. Send it together with the matching credentials object.")
+	_ = cmd.RegisterFlagCompletionFunc("authentication-type", enumCompletion(sdk.AllowedAzureDataStoreAuthenticationTypeEnumValues))
 	_ = cmd.MarkFlagRequired("authentication-type")
 	cmd.Flags().String("container-name", "", "Name of the blob container Monte Carlo should use.")
 	_ = cmd.MarkFlagRequired("container-name")
@@ -579,6 +580,7 @@ func newCollectionDataStoresUpdateAzureCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("authentication-type", "", "How Monte Carlo authenticates to the storage account. Send it together with the matching credentials object.")
+	_ = cmd.RegisterFlagCompletionFunc("authentication-type", enumCompletion(sdk.AllowedAzureDataStoreAuthenticationTypeEnumValues))
 	cmd.Flags().String("container-name", "", "Name of the blob container Monte Carlo should use.")
 	cmd.Flags().String("name", "", "Display name for the data store. Replaces the name its deployment gave it.")
 	cmd.Flags().String("service-principal-account-url", "", "URL of the storage account Monte Carlo sends requests to. A private endpoint or a custom host works, so this is not required to be under blob.core.windows.net.")

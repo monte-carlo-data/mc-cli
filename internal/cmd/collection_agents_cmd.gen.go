@@ -608,6 +608,7 @@ func newCollectionAgentsRegisterAzureCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("authentication-type", "", "How Monte Carlo authenticates when it calls the agent. Send it together with the matching credentials object.")
+	_ = cmd.RegisterFlagCompletionFunc("authentication-type", enumCompletion(sdk.AllowedAzureAgentAuthenticationTypeEnumValues))
 	_ = cmd.MarkFlagRequired("authentication-type")
 	cmd.Flags().String("deployment-id", "", "Deployment to register the collection agent on. It must already hold an unregistered Azure collection agent.")
 	_ = cmd.MarkFlagRequired("deployment-id")
@@ -687,6 +688,7 @@ func newCollectionAgentsRegisterGcpCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("authentication-type", "", "How Monte Carlo authenticates when it calls the agent. Send it together with the matching credentials.")
+	_ = cmd.RegisterFlagCompletionFunc("authentication-type", enumCompletion(sdk.AllowedGcpAgentAuthenticationTypeEnumValues))
 	_ = cmd.MarkFlagRequired("authentication-type")
 	cmd.Flags().String("cloud-run-url", "", "URL of the Cloud Run service Monte Carlo should call.")
 	_ = cmd.MarkFlagRequired("cloud-run-url")
@@ -887,6 +889,7 @@ func newCollectionAgentsUpdateAzureCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("authentication-type", "", "How Monte Carlo authenticates when it calls the agent. Send it together with the matching credentials object.")
+	_ = cmd.RegisterFlagCompletionFunc("authentication-type", enumCompletion(sdk.AllowedAzureAgentAuthenticationTypeEnumValues))
 	cmd.Flags().String("function-app-url", "", "URL of the function app Monte Carlo should call.")
 	cmd.Flags().String("name", "", "Display name for the collection agent. Replaces the name it currently has.")
 	cmd.Flags().String("function-app-key-app-key", "", "Function app key Monte Carlo presents when it calls the agent.")
@@ -964,6 +967,7 @@ func newCollectionAgentsUpdateGcpCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("authentication-type", "", "How Monte Carlo authenticates when it calls the agent. Send it together with the matching credentials.")
+	_ = cmd.RegisterFlagCompletionFunc("authentication-type", enumCompletion(sdk.AllowedGcpAgentAuthenticationTypeEnumValues))
 	cmd.Flags().String("cloud-run-url", "", "URL of the Cloud Run service Monte Carlo should call.")
 	cmd.Flags().String("name", "", "Display name for the collection agent. Replaces the name it currently has.")
 	cmd.Flags().String("service-account-key", "", "Credentials for GCP_JSON_SERVICE_ACCOUNT_KEY, as the contents of the JSON key file Google issued for the service account. Send this or auth_headers, never both. It replaces the stored credentials rather than merging into them.")

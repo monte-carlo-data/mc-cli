@@ -70,8 +70,10 @@ func newDeploymentsCreateCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("runtime-platform", "", "Where the deployment's collection agent or data store will run. Either can be provisioned on AWS, AZURE or GCP, and a collection agent also on GENERIC. Any other combination is rejected.")
+	_ = cmd.RegisterFlagCompletionFunc("runtime-platform", enumCompletion(sdk.AllowedRuntimePlatformEnumValues))
 	_ = cmd.MarkFlagRequired("runtime-platform")
 	cmd.Flags().String("type", "", "What the deployment will host. Only COLLECTION_AGENT and COLLECTION_DATA_STORE can be provisioned today. Any other value is rejected.")
+	_ = cmd.RegisterFlagCompletionFunc("type", enumCompletion(sdk.AllowedDeploymentTypeEnumValues))
 	_ = cmd.MarkFlagRequired("type")
 	cmd.Flags().String("name", "", "Display name for the deployment. Monte Carlo generates one if you leave it out.")
 	return cmd
@@ -187,8 +189,10 @@ func newDeploymentsReprovisionCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("runtime-platform", "", "Where the deployment's collection agent or data store will run. Either can be provisioned on AWS, AZURE or GCP, and a collection agent also on GENERIC. Any other combination is rejected.")
+	_ = cmd.RegisterFlagCompletionFunc("runtime-platform", enumCompletion(sdk.AllowedRuntimePlatformEnumValues))
 	_ = cmd.MarkFlagRequired("runtime-platform")
 	cmd.Flags().String("type", "", "What the deployment will host. Only COLLECTION_AGENT and COLLECTION_DATA_STORE can be provisioned today. Any other value is rejected.")
+	_ = cmd.RegisterFlagCompletionFunc("type", enumCompletion(sdk.AllowedDeploymentTypeEnumValues))
 	_ = cmd.MarkFlagRequired("type")
 	cmd.Flags().String("name", "", "Display name for the deployment. Monte Carlo generates one if you leave it out.")
 	return cmd

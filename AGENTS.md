@@ -55,7 +55,8 @@ The generated files call these by bare name, all defined in the hand-written fil
 | `changed(cmd, names...)` | Whether any of the flags was passed. |
 | `requireAny(cmd, names...)` | An error naming the flags unless one was passed. |
 | `flagString`, `flagInt`, `flagBool`, `flagStringSlice`, `flagStringMap`, `flagSecret` | Typed flag readers. Strings accept `@<path>`; maps take `key=value` pairs or `@<path>` holding JSON; a secret honours its `--<name>-prompt` companion. |
-| `render(cmd, v)`, `renderList(cmd, v, columns)` | One object, or a list with the named columns, as a table or JSON. |
+| `render(cmd, v, fields...)`, `renderList(cmd, v, columns)` | One object, or a list with the named columns, as a table or JSON. |
+| `enumCompletion(values)` | Shell completion for an enum flag, from the values the SDK exports. |
 
 Renaming or removing one is a change to the generator's template as well, landed as a pair.
 
