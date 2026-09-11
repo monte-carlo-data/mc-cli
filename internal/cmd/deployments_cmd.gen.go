@@ -66,7 +66,7 @@ func newDeploymentsCreateCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out)
+			return render(cmd, out, "aws_external_id", "created_time", "enabled", "id", "last_updated_time", "name", "runtime_platform", "type")
 		},
 	}
 	cmd.Flags().String("runtime-platform", "", "Where the deployment's collection agent or data store will run. Either can be provisioned on AWS, AZURE or GCP, and a collection agent also on GENERIC. Any other combination is rejected.")
@@ -116,7 +116,7 @@ func newDeploymentsGetCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out)
+			return render(cmd, out, "aws_external_id", "created_time", "enabled", "id", "last_updated_time", "name", "runtime_platform", "type")
 		},
 	}
 	return cmd
@@ -185,7 +185,7 @@ func newDeploymentsReprovisionCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out)
+			return render(cmd, out, "aws_external_id", "created_time", "enabled", "id", "last_updated_time", "name", "runtime_platform", "type")
 		},
 	}
 	cmd.Flags().String("runtime-platform", "", "Where the deployment's collection agent or data store will run. Either can be provisioned on AWS, AZURE or GCP, and a collection agent also on GENERIC. Any other combination is rejected.")
@@ -223,7 +223,7 @@ func newDeploymentsUpdateCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out)
+			return render(cmd, out, "aws_external_id", "created_time", "enabled", "id", "last_updated_time", "name", "runtime_platform", "type")
 		},
 	}
 	cmd.Flags().String("name", "", "New display name for the deployment. Left out, the name is unchanged.")

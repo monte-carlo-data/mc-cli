@@ -71,7 +71,7 @@ func newCollectionAgentsCreateGenericOauthClientCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out)
+			return render(cmd, out, "client_id", "client_secret", "created_time", "deployment_id", "description", "expiration_time", "id", "scopes", "secret_id", "type")
 		},
 	}
 	cmd.Flags().String("deployment-id", "", "Deployment whose generic collection agent will present this credential. It must have been provisioned for a generic collection agent.")
@@ -110,7 +110,7 @@ func newCollectionAgentsCreateGenericTokenCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out)
+			return render(cmd, out, "created_time", "deployment_id", "description", "id", "mcd_id", "mcd_token", "type")
 		},
 	}
 	cmd.Flags().String("deployment-id", "", "Deployment whose generic collection agent will present this credential. It must have been provisioned for a generic collection agent.")
@@ -289,7 +289,7 @@ func newCollectionAgentsGetAwsCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out)
+			return render(cmd, out, "authentication_type", "created_time", "deployment_id", "enabled", "external_id", "id", "image_build", "image_version", "is_remote_upgradeable", "lambda_function_arn", "last_updated_time", "name")
 		},
 	}
 	return cmd
@@ -311,7 +311,7 @@ func newCollectionAgentsGetAzureCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out)
+			return render(cmd, out, "authentication_type", "created_time", "deployment_id", "enabled", "function_app_url", "id", "image_build", "image_version", "is_remote_upgradeable", "last_updated_time", "name")
 		},
 	}
 	return cmd
@@ -333,7 +333,7 @@ func newCollectionAgentsGetGcpCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out)
+			return render(cmd, out, "authentication_type", "cloud_run_url", "created_time", "deployment_id", "enabled", "id", "image_build", "image_version", "is_remote_upgradeable", "last_updated_time", "name")
 		},
 	}
 	return cmd
@@ -355,7 +355,7 @@ func newCollectionAgentsGetGenericCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out)
+			return render(cmd, out, "authentication_type", "created_time", "deployment_id", "enabled", "id", "image_build", "image_version", "is_remote_upgradeable", "last_updated_time", "name")
 		},
 	}
 	return cmd
@@ -377,7 +377,7 @@ func newCollectionAgentsGetGenericOauthClientCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out)
+			return render(cmd, out, "client_id", "created_time", "deployment_id", "description", "expiration_time", "id", "scopes", "type")
 		},
 	}
 	return cmd
@@ -399,7 +399,7 @@ func newCollectionAgentsGetGenericTokenCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out)
+			return render(cmd, out, "created_time", "deployment_id", "description", "id", "mcd_id", "type")
 		},
 	}
 	return cmd
@@ -507,7 +507,7 @@ func newCollectionAgentsRegisterAwsCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out)
+			return render(cmd, out, "authentication_type", "created_time", "deployment_id", "enabled", "external_id", "id", "image_build", "image_version", "is_remote_upgradeable", "lambda_function_arn", "last_updated_time", "name")
 		},
 	}
 	cmd.Flags().String("deployment-id", "", "Deployment to register the collection agent on. It must already hold an unregistered AWS collection agent.")
@@ -604,7 +604,7 @@ func newCollectionAgentsRegisterAzureCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out)
+			return render(cmd, out, "authentication_type", "created_time", "deployment_id", "enabled", "function_app_url", "id", "image_build", "image_version", "is_remote_upgradeable", "last_updated_time", "name")
 		},
 	}
 	cmd.Flags().String("authentication-type", "", "How Monte Carlo authenticates when it calls the agent. Send it together with the matching credentials object.")
@@ -684,7 +684,7 @@ func newCollectionAgentsRegisterGcpCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out)
+			return render(cmd, out, "authentication_type", "cloud_run_url", "created_time", "deployment_id", "enabled", "id", "image_build", "image_version", "is_remote_upgradeable", "last_updated_time", "name")
 		},
 	}
 	cmd.Flags().String("authentication-type", "", "How Monte Carlo authenticates when it calls the agent. Send it together with the matching credentials.")
@@ -730,7 +730,7 @@ func newCollectionAgentsRegisterGenericCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out)
+			return render(cmd, out, "authentication_type", "created_time", "deployment_id", "enabled", "id", "image_build", "image_version", "is_remote_upgradeable", "last_updated_time", "name")
 		},
 	}
 	cmd.Flags().String("deployment-id", "", "Deployment whose generic collection agent to enable. It must have been provisioned for one, and the agent must be running with a credential created for this deployment.")
@@ -790,7 +790,7 @@ func newCollectionAgentsUpdateAwsCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out)
+			return render(cmd, out, "authentication_type", "created_time", "deployment_id", "enabled", "external_id", "id", "image_build", "image_version", "is_remote_upgradeable", "lambda_function_arn", "last_updated_time", "name")
 		},
 	}
 	cmd.Flags().String("lambda-function-arn", "", "ARN of the Lambda function Monte Carlo should invoke.")
@@ -885,7 +885,7 @@ func newCollectionAgentsUpdateAzureCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out)
+			return render(cmd, out, "authentication_type", "created_time", "deployment_id", "enabled", "function_app_url", "id", "image_build", "image_version", "is_remote_upgradeable", "last_updated_time", "name")
 		},
 	}
 	cmd.Flags().String("authentication-type", "", "How Monte Carlo authenticates when it calls the agent. Send it together with the matching credentials object.")
@@ -963,7 +963,7 @@ func newCollectionAgentsUpdateGcpCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out)
+			return render(cmd, out, "authentication_type", "cloud_run_url", "created_time", "deployment_id", "enabled", "id", "image_build", "image_version", "is_remote_upgradeable", "last_updated_time", "name")
 		},
 	}
 	cmd.Flags().String("authentication-type", "", "How Monte Carlo authenticates when it calls the agent. Send it together with the matching credentials.")
@@ -1001,7 +1001,7 @@ func newCollectionAgentsUpdateGenericCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out)
+			return render(cmd, out, "authentication_type", "created_time", "deployment_id", "enabled", "id", "image_build", "image_version", "is_remote_upgradeable", "last_updated_time", "name")
 		},
 	}
 	cmd.Flags().String("name", "", "Display name for the collection agent. Replaces the name it currently has.")

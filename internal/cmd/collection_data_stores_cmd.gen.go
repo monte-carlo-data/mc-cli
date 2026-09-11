@@ -125,7 +125,7 @@ func newCollectionDataStoresGetAwsCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out)
+			return render(cmd, out, "authentication_type", "bucket_name", "created_time", "deployment_id", "enabled", "external_id", "id", "last_updated_time", "name", "storage_type")
 		},
 	}
 	return cmd
@@ -147,7 +147,7 @@ func newCollectionDataStoresGetAzureCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out)
+			return render(cmd, out, "authentication_type", "container_name", "created_time", "deployment_id", "enabled", "id", "last_updated_time", "name", "storage_type")
 		},
 	}
 	return cmd
@@ -169,7 +169,7 @@ func newCollectionDataStoresGetGcpCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out)
+			return render(cmd, out, "authentication_type", "bucket_name", "created_time", "deployment_id", "enabled", "id", "last_updated_time", "name", "storage_type")
 		},
 	}
 	return cmd
@@ -245,7 +245,7 @@ func newCollectionDataStoresRegisterAwsCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out)
+			return render(cmd, out, "authentication_type", "bucket_name", "created_time", "deployment_id", "enabled", "external_id", "id", "last_updated_time", "name", "storage_type")
 		},
 	}
 	cmd.Flags().String("bucket-name", "", "Name of the S3 bucket Monte Carlo should use.")
@@ -349,7 +349,7 @@ func newCollectionDataStoresRegisterAzureCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out)
+			return render(cmd, out, "authentication_type", "container_name", "created_time", "deployment_id", "enabled", "id", "last_updated_time", "name", "storage_type")
 		},
 	}
 	cmd.Flags().String("authentication-type", "", "How Monte Carlo authenticates to the storage account. Send it together with the matching credentials object.")
@@ -411,7 +411,7 @@ func newCollectionDataStoresRegisterGcpCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out)
+			return render(cmd, out, "authentication_type", "bucket_name", "created_time", "deployment_id", "enabled", "id", "last_updated_time", "name", "storage_type")
 		},
 	}
 	cmd.Flags().String("bucket-name", "", "Name of the Cloud Storage bucket Monte Carlo should use.")
@@ -474,7 +474,7 @@ func newCollectionDataStoresUpdateAwsCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out)
+			return render(cmd, out, "authentication_type", "bucket_name", "created_time", "deployment_id", "enabled", "external_id", "id", "last_updated_time", "name", "storage_type")
 		},
 	}
 	cmd.Flags().String("bucket-name", "", "Name of the S3 bucket Monte Carlo should use.")
@@ -576,7 +576,7 @@ func newCollectionDataStoresUpdateAzureCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out)
+			return render(cmd, out, "authentication_type", "container_name", "created_time", "deployment_id", "enabled", "id", "last_updated_time", "name", "storage_type")
 		},
 	}
 	cmd.Flags().String("authentication-type", "", "How Monte Carlo authenticates to the storage account. Send it together with the matching credentials object.")
@@ -633,7 +633,7 @@ func newCollectionDataStoresUpdateGcpCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out)
+			return render(cmd, out, "authentication_type", "bucket_name", "created_time", "deployment_id", "enabled", "id", "last_updated_time", "name", "storage_type")
 		},
 	}
 	cmd.Flags().String("bucket-name", "", "Name of the Cloud Storage bucket Monte Carlo should use.")
