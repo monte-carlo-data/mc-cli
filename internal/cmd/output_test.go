@@ -171,6 +171,132 @@ func TestRenderListTableUsesTheColumns(t *testing.T) {
 	}
 }
 
+type widgetPage struct {
+	Items      []widget `json:"items"`
+	NextCursor *string  `json:"next_cursor"`
+	HasMore    bool     `json:"has_more"`
+	Count      *int     `json:"count"`
+}
+
+func cursor(s string) *string { return &s }
+
+func TestRenderPageTableEndsWithTheNextCursorWhenThereIsMore(t *testing.T) {
+	cmd, out := outputCmd(t, "table")
+	p := widgetPage{Items: []widget{{ID: "1", Name: "a"}}, NextCursor: cursor("c2"), HasMore: true}
+	if err := renderPage(cmd, p, []string{"id", "name"}); err != nil {
+		t.Fatal(err)
+	}
+	want := "ID  NAME\n1   a\nNext page: --cursor c2\n"
+	if out.String() != want {
+		t.Fatalf("got:\n%s\nwant:\n%s", out.String(), want)
+	}
+}
+
+func TestRenderPageTableOnTheLastPageHasNoCursorLine(t *testing.T) {
+	cmd, out := outputCmd(t, "table")
+	p := widgetPage{Items: []widget{{ID: "1", Name: "a"}}, HasMore: false}
+	if err := renderPage(cmd, p, []string{"id"}); err != nil {
+		t.Fatal(err)
+	}
+	if out.String() != "ID\n1\n" {
+		t.Fatalf("got:\n%s", out.String())
+	}
+}
+
+func TestRenderPageJSONIsTheWholeEnvelope(t *testing.T) {
+	cmd, out := outputCmd(t, "json")
+	p := widgetPage{Items: []widget{{ID: "1"}}, NextCursor: cursor("c2"), HasMore: true}
+	if err := renderPage(cmd, p, []string{"id"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`"items": [`, `"next_cursor": "c2"`, `"has_more": true`} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("missing %s in:\n%s", want, out.String())
+		}
+	}
+}
+
+func TestRenderPageRefusesAValueThatIsNotAPage(t *testing.T) {
+	cmd, _ := outputCmd(t, "table")
+	err := renderPage(cmd, widget{ID: "1"}, []string{"id"})
+	if err == nil || !strings.HasPrefix(err.Error(), "cannot render cmd.widget as a page") {
+		t.Fatalf("err %v", err)
+	}
+}
+
+// pagedWidgets answers three pages of one widget each, recording the cursors asked for.
+func pagedWidgets(asked *[]string) func(string) (any, *http.Response, error) {
+	pages := map[string]widgetPage{
+		"":   {Items: []widget{{ID: "1", Count: 1000000}}, NextCursor: cursor("c2"), HasMore: true},
+		"c2": {Items: []widget{{ID: "2"}}, NextCursor: cursor("c3"), HasMore: true},
+		"c3": {Items: []widget{{ID: "3"}}, HasMore: false},
+	}
+	return func(c string) (any, *http.Response, error) {
+		*asked = append(*asked, c)
+		return pages[c], nil, nil
+	}
+}
+
+func TestRenderPagesFollowsTheCursorToTheEnd(t *testing.T) {
+	cmd, out := outputCmd(t, "table")
+	var asked []string
+	if err := renderPages(cmd, []string{"id", "count"}, pagedWidgets(&asked)); err != nil {
+		t.Fatal(err)
+	}
+	want := "ID  COUNT\n1   1000000\n2   0\n3   0\n"
+	if out.String() != want {
+		t.Fatalf("got:\n%s\nwant:\n%s", out.String(), want)
+	}
+	if strings.Join(asked, ",") != ",c2,c3" {
+		t.Fatalf("asked for cursors %q", asked)
+	}
+}
+
+func TestRenderPagesJSONIsTheArrayOfEveryItem(t *testing.T) {
+	cmd, out := outputCmd(t, "json")
+	var asked []string
+	if err := renderPages(cmd, []string{"id"}, pagedWidgets(&asked)); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	if !strings.HasPrefix(got, "[\n") || strings.Count(got, `"id": `) != 3 || strings.Contains(got, "has_more") {
+		t.Fatalf("got:\n%s", got)
+	}
+	if !strings.Contains(got, `"count": 1000000`) {
+		t.Fatalf("the number was not kept as written:\n%s", got)
+	}
+}
+
+func TestRenderPagesOnAnEmptyListPrintsAnEmptyArray(t *testing.T) {
+	cmd, out := outputCmd(t, "json")
+	fetch := func(string) (any, *http.Response, error) {
+		return widgetPage{Items: []widget{}}, nil, nil
+	}
+	if err := renderPages(cmd, []string{"id"}, fetch); err != nil {
+		t.Fatal(err)
+	}
+	if out.String() != "[]\n" {
+		t.Fatalf("got:\n%s", out.String())
+	}
+}
+
+func TestRenderPagesReturnsTheErrorOfTheFailingPage(t *testing.T) {
+	cmd, out := outputCmd(t, "table")
+	fetch := func(c string) (any, *http.Response, error) {
+		if c == "" {
+			return widgetPage{Items: []widget{{ID: "1"}}, NextCursor: cursor("c2"), HasMore: true}, nil, nil
+		}
+		return nil, nil, context.Canceled
+	}
+	err := renderPages(cmd, []string{"id"}, fetch)
+	if err != context.Canceled {
+		t.Fatalf("err %v", err)
+	}
+	if out.String() != "" {
+		t.Fatalf("a partial list was printed:\n%s", out.String())
+	}
+}
+
 func TestOutputFormatRejectsOtherValues(t *testing.T) {
 	cmd, _ := outputCmd(t, "yaml")
 	if _, err := outputFormat(cmd); err == nil {

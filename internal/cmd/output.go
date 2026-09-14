@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -90,6 +91,74 @@ func renderList(cmd *cobra.Command, v any, columns []string) error {
 		fmt.Fprintln(w, strings.Join(cells, "\t"))
 	}
 	return w.Flush()
+}
+
+// page is the envelope a paged list answers with, read through JSON so every SDK page type
+// fits. Numbers stay as written so the items re-encode exactly.
+type page struct {
+	Items      []map[string]any `json:"items"`
+	NextCursor *string          `json:"next_cursor"`
+	HasMore    bool             `json:"has_more"`
+}
+
+// renderPage prints one page of a list: as JSON, the whole envelope; as a table, its items,
+// then the cursor that fetches the next page when there is one.
+func renderPage(cmd *cobra.Command, v any, columns []string) error {
+	format, err := outputFormat(cmd)
+	if err != nil {
+		return err
+	}
+	if format == "json" {
+		return writeJSON(cmd.OutOrStdout(), v)
+	}
+	p, err := asPage(v)
+	if err != nil {
+		return err
+	}
+	if err := renderList(cmd, p.Items, columns); err != nil {
+		return err
+	}
+	if p.HasMore && p.NextCursor != nil {
+		fmt.Fprintf(cmd.OutOrStdout(), "Next page: --cursor %s\n", *p.NextCursor)
+	}
+	return nil
+}
+
+// renderPages prints a whole list by following its cursor. fetch answers the page at a cursor,
+// the empty cursor being the first; the pages' items render as one list, as JSON an array. A
+// page that fails ends the list with its API error, and nothing is printed.
+func renderPages(cmd *cobra.Command, columns []string, fetch func(cursor string) (any, *http.Response, error)) error {
+	items := []map[string]any{}
+	cursor := ""
+	for {
+		out, resp, err := fetch(cursor)
+		if err != nil {
+			return apiErr(resp, err)
+		}
+		p, err := asPage(out)
+		if err != nil {
+			return err
+		}
+		items = append(items, p.Items...)
+		if !p.HasMore || p.NextCursor == nil || *p.NextCursor == "" {
+			return renderList(cmd, items, columns)
+		}
+		cursor = *p.NextCursor
+	}
+}
+
+func asPage(v any) (page, error) {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return page{}, err
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var p page
+	if err := dec.Decode(&p); err != nil || p.Items == nil {
+		return page{}, fmt.Errorf("cannot render %T as a page of results; use --output json", v)
+	}
+	return p, nil
 }
 
 // withRemaining is `first`, then every other key the rows carry, sorted.

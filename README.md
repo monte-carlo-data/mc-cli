@@ -39,7 +39,7 @@ montecarlo deployments get <deployment_id> --output json
 montecarlo collection-agents register aws --deployment-id <id> --lambda-function-arn <arn> --role-arn <arn>
 ```
 
-A destructive command asks first, `Delete deployment <id>? [y/N]`; `--yes` answers for you, and is required when there is no terminal. `--output table`, `--output wide` (the table with every field) or `--output json` forces one; the default is a table on a terminal and JSON otherwise. A secret flag accepts `@<path>` to read its value from a file, and has a `--<name>-prompt` companion. A transient 503 or 429 is retried for up to five minutes, with progress on stderr; Ctrl-C ends the wait.
+A destructive command asks first, `Delete deployment <id>? [y/N]`; `--yes` answers for you, and is required when there is no terminal. `--output table`, `--output wide` (the table with every field) or `--output json` forces one; the default is a table on a terminal and JSON otherwise. A secret flag accepts `@<path>` to read its value from a file, and has a `--<name>-prompt` companion. A transient 503 or 429 is retried for up to five minutes, with progress on stderr; Ctrl-C ends the wait. A list the API serves in pages is fetched to the end and shown whole; pass `--limit` or `--cursor` to see one page, and the table ends with the `--cursor` for the next.
 
 `montecarlo --help` lists the commands; each API resource is a group, each operation a command under its verb.
 
