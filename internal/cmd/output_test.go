@@ -186,7 +186,7 @@ func TestRenderPageTableEndsWithTheNextCursorWhenThereIsMore(t *testing.T) {
 	if err := renderPage(cmd, p, []string{"id", "name"}); err != nil {
 		t.Fatal(err)
 	}
-	want := "ID  NAME\n1   a\nNext page: --cursor c2\n"
+	want := "ID  NAME\n1   a\nNext page: --cursor \"c2\"\n"
 	if out.String() != want {
 		t.Fatalf("got:\n%s\nwant:\n%s", out.String(), want)
 	}
@@ -199,6 +199,18 @@ func TestRenderPageTableOnTheLastPageHasNoCursorLine(t *testing.T) {
 		t.Fatal(err)
 	}
 	if out.String() != "ID\n1\n" {
+		t.Fatalf("got:\n%s", out.String())
+	}
+}
+
+func TestRenderPageTableEndsWithTheTotalWhenCounted(t *testing.T) {
+	cmd, out := outputCmd(t, "table")
+	total := 3
+	p := widgetPage{Items: []widget{{ID: "1"}}, HasMore: false, Count: &total}
+	if err := renderPage(cmd, p, []string{"id"}); err != nil {
+		t.Fatal(err)
+	}
+	if out.String() != "ID\n1\nTotal: 3\n" {
 		t.Fatalf("got:\n%s", out.String())
 	}
 }
@@ -219,21 +231,39 @@ func TestRenderPageJSONIsTheWholeEnvelope(t *testing.T) {
 func TestRenderPageRefusesAValueThatIsNotAPage(t *testing.T) {
 	cmd, _ := outputCmd(t, "table")
 	err := renderPage(cmd, widget{ID: "1"}, []string{"id"})
-	if err == nil || !strings.HasPrefix(err.Error(), "cannot render cmd.widget as a page") {
+	if err == nil || !strings.HasPrefix(err.Error(), "cannot render cmd.widget as a page of results") {
 		t.Fatalf("err %v", err)
 	}
 }
 
-// pagedWidgets answers three pages of one widget each, recording the cursors asked for.
-func pagedWidgets(asked *[]string) func(string) (any, *http.Response, error) {
-	pages := map[string]widgetPage{
-		"":   {Items: []widget{{ID: "1", Count: 1000000}}, NextCursor: cursor("c2"), HasMore: true},
-		"c2": {Items: []widget{{ID: "2"}}, NextCursor: cursor("c3"), HasMore: true},
-		"c3": {Items: []widget{{ID: "3"}}, HasMore: false},
+func TestRenderPageWarnsWhenMoreIsReportedWithoutACursor(t *testing.T) {
+	cmd, out := outputCmd(t, "table")
+	var errBuf bytes.Buffer
+	cmd.SetErr(&errBuf)
+	p := widgetPage{Items: []widget{{ID: "1"}}, HasMore: true}
+	if err := renderPage(cmd, p, []string{"id"}); err != nil {
+		t.Fatal(err)
 	}
-	return func(c string) (any, *http.Response, error) {
-		*asked = append(*asked, c)
-		return pages[c], nil, nil
+	if out.String() != "ID\n1\n" {
+		t.Fatalf("got:\n%s", out.String())
+	}
+	if !strings.Contains(errBuf.String(), "returned no cursor") {
+		t.Fatalf("stderr:\n%s", errBuf.String())
+	}
+}
+
+func TestRenderPagesRejectsAnUnknownOutputBeforeFetching(t *testing.T) {
+	cmd, _ := outputCmd(t, "yaml")
+	calls := 0
+	fetch := func(string) (any, *http.Response, error) {
+		calls++
+		return widgetPage{}, nil, nil
+	}
+	if err := renderPages(cmd, []string{"id"}, fetch); err == nil {
+		t.Fatal("yaml was accepted")
+	}
+	if calls != 0 {
+		t.Fatalf("fetch was called %d times", calls)
 	}
 }
 

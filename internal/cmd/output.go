@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -93,16 +92,9 @@ func renderList(cmd *cobra.Command, v any, columns []string) error {
 	return w.Flush()
 }
 
-// page is the envelope a paged list answers with, read through JSON so every SDK page type
-// fits. Numbers stay as written so the items re-encode exactly.
-type page struct {
-	Items      []map[string]any `json:"items"`
-	NextCursor *string          `json:"next_cursor"`
-	HasMore    bool             `json:"has_more"`
-}
-
 // renderPage prints one page of a list: as JSON, the whole envelope; as a table, its items,
-// then the cursor that fetches the next page when there is one.
+// the total when the API counted one, then the cursor that fetches the next page when there
+// is one.
 func renderPage(cmd *cobra.Command, v any, columns []string) error {
 	format, err := outputFormat(cmd)
 	if err != nil {
@@ -118,47 +110,29 @@ func renderPage(cmd *cobra.Command, v any, columns []string) error {
 	if err := renderList(cmd, p.Items, columns); err != nil {
 		return err
 	}
-	if p.HasMore && p.NextCursor != nil {
-		fmt.Fprintf(cmd.OutOrStdout(), "Next page: --cursor %s\n", *p.NextCursor)
+	if p.Count != nil {
+		fmt.Fprintf(cmd.OutOrStdout(), "Total: %s\n", p.Count)
+	}
+	if cursor, more := p.next(); more {
+		fmt.Fprintf(cmd.OutOrStdout(), "Next page: --cursor %q\n", cursor)
+	} else if p.HasMore {
+		fmt.Fprintln(cmd.ErrOrStderr(), "the API reported more items but returned no cursor")
 	}
 	return nil
 }
 
 // renderPages prints a whole list by following its cursor. fetch answers the page at a cursor,
-// the empty cursor being the first; the pages' items render as one list, as JSON an array. A
-// page that fails ends the list with its API error, and nothing is printed.
+// the empty cursor being the first. The pages' items render as one list, as JSON an array.
+// A page that fails returns its API error, and nothing is printed.
 func renderPages(cmd *cobra.Command, columns []string, fetch func(cursor string) (any, *http.Response, error)) error {
-	items := []map[string]any{}
-	cursor := ""
-	for {
-		out, resp, err := fetch(cursor)
-		if err != nil {
-			return apiErr(resp, err)
-		}
-		p, err := asPage(out)
-		if err != nil {
-			return err
-		}
-		items = append(items, p.Items...)
-		if !p.HasMore || p.NextCursor == nil || *p.NextCursor == "" {
-			return renderList(cmd, items, columns)
-		}
-		cursor = *p.NextCursor
+	if _, err := outputFormat(cmd); err != nil {
+		return err
 	}
-}
-
-func asPage(v any) (page, error) {
-	raw, err := json.Marshal(v)
+	items, err := allPages(fetch)
 	if err != nil {
-		return page{}, err
+		return err
 	}
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	dec.UseNumber()
-	var p page
-	if err := dec.Decode(&p); err != nil || p.Items == nil {
-		return page{}, fmt.Errorf("cannot render %T as a page of results; use --output json", v)
-	}
-	return p, nil
+	return renderList(cmd, items, columns)
 }
 
 // withRemaining is `first`, then every other key the rows carry, sorted.
