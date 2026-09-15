@@ -92,6 +92,49 @@ func renderList(cmd *cobra.Command, v any, columns []string) error {
 	return w.Flush()
 }
 
+// renderPage prints one page of a list: as JSON, the whole envelope; as a table, its items,
+// the total when the API counted one, then the cursor that fetches the next page when there
+// is one.
+func renderPage(cmd *cobra.Command, v any, columns []string) error {
+	format, err := outputFormat(cmd)
+	if err != nil {
+		return err
+	}
+	if format == "json" {
+		return writeJSON(cmd.OutOrStdout(), v)
+	}
+	p, err := asPage(v)
+	if err != nil {
+		return err
+	}
+	if err := renderList(cmd, p.Items, columns); err != nil {
+		return err
+	}
+	if p.Count != nil {
+		fmt.Fprintf(cmd.OutOrStdout(), "Total: %s\n", p.Count)
+	}
+	if cursor, more := p.next(); more {
+		fmt.Fprintf(cmd.OutOrStdout(), "Next page: --cursor %q\n", cursor)
+	} else if p.HasMore {
+		fmt.Fprintln(cmd.ErrOrStderr(), "the API reported more items but returned no cursor")
+	}
+	return nil
+}
+
+// renderPages prints a whole list by following its cursor. fetch answers the page at a cursor,
+// the empty cursor being the first. The pages' items render as one list, as JSON an array.
+// A page that fails returns its API error, and nothing is printed.
+func renderPages(cmd *cobra.Command, columns []string, fetch func(cursor string) (any, *http.Response, error)) error {
+	if _, err := outputFormat(cmd); err != nil {
+		return err
+	}
+	items, err := allPages(fetch)
+	if err != nil {
+		return err
+	}
+	return renderList(cmd, items, columns)
+}
+
 // withRemaining is `first`, then every other key the rows carry, sorted.
 func withRemaining(first []string, rows []map[string]any) []string {
 	seen := make(map[string]bool, len(first))
