@@ -111,3 +111,32 @@ jobs:
               echo "$f says it is generated but its name is outside the generated pattern"; exit 1
             fi
           done
+
+  bot-dependency-diff:
+    name: The bot's dependency change stays narrow
+    # go.mod and go.sum carry no code owner, so that a generated pull request requests no review.
+    # That is only safe while the bot's dependency change is the SDK pin and nothing else, which
+    # is what this asserts. Only the generated branch is unowned, so only it is checked.
+    if: github.head_ref == 'api-codegen/spec-update'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+
+      - name: Only the mc-sdk-go lines may change
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          git fetch -q --no-tags origin "$BASE_REF"
+          changed=$(git diff "origin/$BASE_REF...HEAD" -- go.mod go.sum | grep -E '^[+-][^+-]' || true)
+          stray=$(printf '%s\n' "$changed" | grep -v 'monte-carlo-data/mc-sdk-go' | grep -v '^$' || true)
+          if [ -n "$stray" ]; then
+            echo "This pull request changes dependencies beyond the SDK pin:"
+            printf '%s\n' "$stray"
+            echo
+            echo "These files carry no code owner, so nobody is asked to review them."
+            echo "A change beyond the mc-sdk-go lines needs a person to look at it."
+            exit 1
+          fi
+          echo "Only the mc-sdk-go lines changed."
