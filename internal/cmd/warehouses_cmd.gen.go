@@ -31,7 +31,7 @@ func newWarehousesCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create a warehouse",
-		Long:  "Create an empty warehouse.\n\nThe warehouse holds no connections until you add some. Its type is fixed at creation and\ndecides which connections it accepts. The deployment has to be one the deployments list\nreturns; any other id returns 404.\n\nTwo warehouses of the same type cannot share a name.",
+		Long:  "Create an empty warehouse.\n\nThe warehouse holds no connections until you add some. Its type is fixed at creation and\ndecides which connections it accepts. The deployment has to be one the deployments list\nreturns; any other id returns 404.\n\nName the type one of two ways, and send exactly one of them. Use `type` when you know\nwhich kind of warehouse you want. Use `connection_type` when you know what you are\nconnecting but not where it lives. A Databricks SQL warehouse connection, for one,\nbelongs on a `data-lake` warehouse. Either way the chosen type comes back as `type`.\n\nTwo warehouses of the same type cannot share a name.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			api, ctx, err := apiClient(cmd)
@@ -43,19 +43,29 @@ func newWarehousesCreateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			typeValue, err := flagString(cmd, "type")
-			if err != nil {
-				return err
-			}
-			type_, err := sdk.NewWarehouseTypeFromValue(typeValue)
-			if err != nil {
-				return err
-			}
 			deploymentId, err := flagString(cmd, "deployment-id")
 			if err != nil {
 				return err
 			}
-			body := sdk.NewWarehouseIn(name, *type_, deploymentId)
+			body := sdk.NewWarehouseIn(name, deploymentId)
+			if changed(cmd, "connection-type") {
+				connectionType, err := flagString(cmd, "connection-type")
+				if err != nil {
+					return err
+				}
+				body.SetConnectionType(connectionType)
+			}
+			if changed(cmd, "type") {
+				typeValue, err := flagString(cmd, "type")
+				if err != nil {
+					return err
+				}
+				type_, err := sdk.NewWarehouseTypeFromValue(typeValue)
+				if err != nil {
+					return err
+				}
+				body.SetType(*type_)
+			}
 			req = req.WarehouseIn(*body)
 			out, resp, err := retryOnTransient(cmd, req.Execute)
 			if err != nil {
@@ -66,11 +76,11 @@ func newWarehousesCreateCmd() *cobra.Command {
 	}
 	cmd.Flags().String("name", "", "Display name for the warehouse. Unique among your warehouses of the same type.")
 	_ = cmd.MarkFlagRequired("name")
-	cmd.Flags().String("type", "", "The kind of data platform the warehouse represents. Every connection added to it has to fit. Cannot be changed after the warehouse is created.")
-	_ = cmd.RegisterFlagCompletionFunc("type", enumCompletion(sdk.AllowedWarehouseTypeEnumValues))
-	_ = cmd.MarkFlagRequired("type")
 	cmd.Flags().String("deployment-id", "", "The deployment the warehouse's connections will run through. Pick one from the deployments list. Only a deployment on Monte Carlo's current collection platform is accepted.")
 	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("connection-type", "", "The type of the first connection you plan to add. The warehouse type is taken from it and returned as type. Send this or type, not both. A connection type no warehouse type can be taken from is refused, custom connectors included. So is one this account does not have.")
+	cmd.Flags().String("type", "", "The kind of data platform the warehouse represents. Every connection added to it has to fit. Cannot be changed after the warehouse is created. Send this or connection_type, not both.")
+	_ = cmd.RegisterFlagCompletionFunc("type", enumCompletion(sdk.AllowedWarehouseTypeEnumValues))
 	return cmd
 }
 
