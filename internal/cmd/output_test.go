@@ -418,3 +418,16 @@ func TestBodyMessagePrefersTheMessageKeyElseTheRawBody(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderIfJSONPrintsOnlyForJSON(t *testing.T) {
+	for format, want := range map[string]string{"json": "{\n  \"id\": \"w1\"\n}\n", "table": "", "wide": ""} {
+		cmd, out := outputCmd(t, format)
+		if err := renderIfJSON(cmd, map[string]string{"id": "w1"}); err != nil || out.String() != want {
+			t.Errorf("%s: out %q, err %v", format, out, err)
+		}
+	}
+	cmd, _ := outputCmd(t, "yaml")
+	if err := renderIfJSON(cmd, map[string]string{}); err == nil {
+		t.Error("an unknown format was accepted")
+	}
+}
