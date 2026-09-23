@@ -117,6 +117,39 @@ func requireAny(cmd *cobra.Command, names ...string) error {
 	return fmt.Errorf("one of %s or %s is required", strings.Join(quoted[:len(quoted)-1], ", "), quoted[len(quoted)-1])
 }
 
+// flagGroup names a set of flags that are passed together, as one of several alternatives.
+type flagGroup struct {
+	name  string
+	flags []string
+}
+
+// requireOneGroup returns the name of the one group any of whose flags was passed. Passing
+// flags from no group, or from more than one, is an error naming the groups.
+func requireOneGroup(cmd *cobra.Command, groups ...flagGroup) (string, error) {
+	var selected string
+	var given []string
+	for _, g := range groups {
+		for _, flag := range g.flags {
+			if changed(cmd, flag) {
+				selected = g.name
+				given = append(given, fmt.Sprintf("--%s (%s)", flag, g.name))
+				break
+			}
+		}
+	}
+	switch len(given) {
+	case 1:
+		return selected, nil
+	case 0:
+		names := make([]string, len(groups))
+		for i, g := range groups {
+			names[i] = g.name
+		}
+		return "", fmt.Errorf("pass the flags of one of: %s", strings.Join(names, ", "))
+	}
+	return "", fmt.Errorf("%s belong to different alternatives; pass the flags of one", strings.Join(given, ", "))
+}
+
 // expandValue reads the file a @<path> value names; any other value passes through.
 func expandValue(v string) (string, error) {
 	if !strings.HasPrefix(v, "@") {
