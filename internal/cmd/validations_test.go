@@ -163,13 +163,14 @@ func TestPollAfterHonoursRetryAfter(t *testing.T) {
 func TestTheLiveViewRedrawsInPlaceAndMarksUnfinishedRows(t *testing.T) {
 	var out bytes.Buffer
 	view := &validationView{w: &out, live: true}
-	r, _ := asValidationRun(run("running", row("connect", "completed", true), row("tables", "running", nil)))
+	r, _ := asValidationRun(run("running", row("connect", "completed", true), row("tables", "running", nil), row("views", "pending", nil)))
 
 	view.draw(r, "⠋")
 	view.draw(r, "⠙")
 
-	want := "\x1b[2K  ✓ Check connect\n\x1b[2K  ⠋ Check tables\n" +
-		"\x1b[2A\x1b[2K  ✓ Check connect\n\x1b[2K  ⠙ Check tables\n"
+	// Only the running validation spins; the one waiting for its turn is a dot.
+	want := "\x1b[2K  ✓ Check connect\n\x1b[2K  ⠋ Check tables\n\x1b[2K  · Check views\n" +
+		"\x1b[3A\x1b[2K  ✓ Check connect\n\x1b[2K  ⠙ Check tables\n\x1b[2K  · Check views\n"
 	if out.String() != want {
 		t.Fatalf("got %q\nwant %q", out.String(), want)
 	}

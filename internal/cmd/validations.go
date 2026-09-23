@@ -129,9 +129,11 @@ func (v validationRow) label() string {
 }
 
 // mark is the row's symbol and the note after its label. spin stands in for a validation that
-// has not finished.
+// is running; one still waiting for its turn is a dot.
 func (v validationRow) mark(spin string) (symbol, note string) {
 	switch {
+	case v.Status == "pending":
+		return "·", ""
 	case !v.finished():
 		return spin, ""
 	case v.passed() && len(v.Warnings) > 0:
@@ -216,7 +218,7 @@ func (v *validationView) paint(symbol string) string {
 	if !v.color {
 		return symbol
 	}
-	code := map[string]string{"✓": "32", "✗": "31", "⚠": "33", "-": "2"}[symbol]
+	code := map[string]string{"✓": "32", "✗": "31", "⚠": "33", "-": "2", "·": "2"}[symbol]
 	if code == "" {
 		return symbol
 	}
