@@ -24,6 +24,7 @@ func newConnectionsCmd() *cobra.Command {
 	cmd.AddCommand(newConnectionsGetCmd())
 	cmd.AddCommand(newConnectionsListCmd())
 	cmd.AddCommand(newConnectionsUpdateCmd())
+	cmd.AddCommand(newConnectionsValidateConnectionCmd())
 	return cmd
 }
 
@@ -215,5 +216,27 @@ func newConnectionsUpdateCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("name", "", "New display name for the connection. Omit it to leave the name unchanged. An explicit null is ignored, the same as omitting the field.")
+	return cmd
+}
+
+func newConnectionsValidateConnectionCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "validate-connection <connection_id>",
+		Short: "Validate a connection",
+		Long:  "Check a connection against the system it reads from.\n\nTests the connection as it stands, with the credentials it already uses. Nothing is\nchanged, and you send no credentials.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.\n\nAn id that does not exist or belongs to another account returns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.ConnectionsAPI.ValidateConnection(ctx, args[0])
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "status", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
 	return cmd
 }

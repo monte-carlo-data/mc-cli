@@ -24,6 +24,12 @@ func newCredentialsCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsGetCmd())
 	cmd.AddCommand(newCredentialsListCmd())
 	cmd.AddCommand(newCredentialsUpdateCmd())
+	cmd.AddCommand(newCredentialsValidateAwsSecretsManagerCredentialsCmd())
+	cmd.AddCommand(newCredentialsValidateAzureKeyVaultCredentialsCmd())
+	cmd.AddCommand(newCredentialsValidateEnvVarCredentialsCmd())
+	cmd.AddCommand(newCredentialsValidateFileCredentialsCmd())
+	cmd.AddCommand(newCredentialsValidateGcpSecretManagerCredentialsCmd())
+	cmd.AddCommand(newCredentialsValidateSnowflakeCredentialsCmd())
 	return cmd
 }
 
@@ -1135,5 +1141,411 @@ func newCredentialsUpdateSnowflakeCmd() *cobra.Command {
 	cmd.Flags().Bool("private-key-passphrase-prompt", false, "Read --private-key-passphrase from a hidden prompt instead of the command line.")
 	cmd.Flags().String("user", "", "New Snowflake user.")
 	cmd.Flags().String("warehouse", "", "New Snowflake virtual warehouse. An explicit null clears it; queries then run in the user's default.")
+	return cmd
+}
+
+func newCredentialsValidateAwsSecretsManagerCredentialsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "validate-aws-secrets-manager-credentials",
+		Short: "Validate AWS Secrets Manager credentials",
+		Long:  "Check candidate AWS Secrets Manager credentials against the system they are for.\n\nNo credentials are created. Send the values you would create the credentials with, and\na deployment to run them from, and the checks run against that system.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateAwsSecretsManagerCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			connectionType, err := flagString(cmd, "connection-type")
+			if err != nil {
+				return err
+			}
+			awsSecret, err := flagString(cmd, "aws-secret")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewAwsSecretsManagerCredentialsValidateIn(deploymentId, connectionType, awsSecret)
+			if changed(cmd, "assumable-role") {
+				assumableRole, err := flagString(cmd, "assumable-role")
+				if err != nil {
+					return err
+				}
+				body.SetAssumableRole(assumableRole)
+			}
+			if changed(cmd, "aws-region") {
+				awsRegion, err := flagString(cmd, "aws-region")
+				if err != nil {
+					return err
+				}
+				body.SetAwsRegion(awsRegion)
+			}
+			if changed(cmd, "bq-project-id") {
+				bqProjectId, err := flagString(cmd, "bq-project-id")
+				if err != nil {
+					return err
+				}
+				body.SetBqProjectId(bqProjectId)
+			}
+			if changed(cmd, "databricks-warehouse-id") {
+				databricksWarehouseId, err := flagString(cmd, "databricks-warehouse-id")
+				if err != nil {
+					return err
+				}
+				body.SetDatabricksWarehouseId(databricksWarehouseId)
+			}
+			if changed(cmd, "external-id") {
+				externalId, err := flagString(cmd, "external-id")
+				if err != nil {
+					return err
+				}
+				body.SetExternalId(externalId)
+			}
+			req = req.AwsSecretsManagerCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "status", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("connection-type", "", "What the credentials are for, hyphenated, such as snowflake or bigquery. Decides which checks run.")
+	_ = cmd.MarkFlagRequired("connection-type")
+	cmd.Flags().String("aws-secret", "", "Name or ARN of the AWS Secrets Manager secret holding the connection's credentials.")
+	_ = cmd.MarkFlagRequired("aws-secret")
+	cmd.Flags().String("assumable-role", "", "ARN of a role the deployment assumes to read the secret. Omit it to read as itself.")
+	cmd.Flags().String("aws-region", "", "AWS region of the secret. Omit it to use the deployment's own region.")
+	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
+	cmd.Flags().String("databricks-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
+	cmd.Flags().String("external-id", "", "External id the assumed role's trust policy requires, if it requires one.")
+	return cmd
+}
+
+func newCredentialsValidateAzureKeyVaultCredentialsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "validate-azure-key-vault-credentials",
+		Short: "Validate Azure Key Vault credentials",
+		Long:  "Check candidate Azure Key Vault credentials against the system they are for.\n\nNo credentials are created. Send the values you would create the credentials with, and\na deployment to run them from, and the checks run against that system.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateAzureKeyVaultCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			connectionType, err := flagString(cmd, "connection-type")
+			if err != nil {
+				return err
+			}
+			akvSecret, err := flagString(cmd, "akv-secret")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewAzureKeyVaultCredentialsValidateIn(deploymentId, connectionType, akvSecret)
+			if changed(cmd, "akv-vault-name") {
+				akvVaultName, err := flagString(cmd, "akv-vault-name")
+				if err != nil {
+					return err
+				}
+				body.SetAkvVaultName(akvVaultName)
+			}
+			if changed(cmd, "akv-vault-url") {
+				akvVaultUrl, err := flagString(cmd, "akv-vault-url")
+				if err != nil {
+					return err
+				}
+				body.SetAkvVaultUrl(akvVaultUrl)
+			}
+			if changed(cmd, "bq-project-id") {
+				bqProjectId, err := flagString(cmd, "bq-project-id")
+				if err != nil {
+					return err
+				}
+				body.SetBqProjectId(bqProjectId)
+			}
+			if changed(cmd, "databricks-warehouse-id") {
+				databricksWarehouseId, err := flagString(cmd, "databricks-warehouse-id")
+				if err != nil {
+					return err
+				}
+				body.SetDatabricksWarehouseId(databricksWarehouseId)
+			}
+			req = req.AzureKeyVaultCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "status", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("connection-type", "", "What the credentials are for, hyphenated, such as snowflake or bigquery. Decides which checks run.")
+	_ = cmd.MarkFlagRequired("connection-type")
+	cmd.Flags().String("akv-secret", "", "Name of the Azure Key Vault secret holding the connection's credentials.")
+	_ = cmd.MarkFlagRequired("akv-secret")
+	cmd.Flags().String("akv-vault-name", "", "Name of the key vault. Send this, akv_vault_url, or both.")
+	cmd.Flags().String("akv-vault-url", "", "URL of the key vault. Send this, akv_vault_name, or both.")
+	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
+	cmd.Flags().String("databricks-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
+	return cmd
+}
+
+func newCredentialsValidateEnvVarCredentialsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "validate-env-var-credentials",
+		Short: "Validate environment variable credentials",
+		Long:  "Check candidate environment variable credentials against the system they are for.\n\nNo credentials are created. Send the values you would create the credentials with, and\na deployment to run them from, and the checks run against that system.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateEnvVarCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			connectionType, err := flagString(cmd, "connection-type")
+			if err != nil {
+				return err
+			}
+			envVarName, err := flagString(cmd, "env-var-name")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewEnvVarCredentialsValidateIn(deploymentId, connectionType, envVarName)
+			if changed(cmd, "bq-project-id") {
+				bqProjectId, err := flagString(cmd, "bq-project-id")
+				if err != nil {
+					return err
+				}
+				body.SetBqProjectId(bqProjectId)
+			}
+			if changed(cmd, "databricks-warehouse-id") {
+				databricksWarehouseId, err := flagString(cmd, "databricks-warehouse-id")
+				if err != nil {
+					return err
+				}
+				body.SetDatabricksWarehouseId(databricksWarehouseId)
+			}
+			if changed(cmd, "kms-key-id") {
+				kmsKeyId, err := flagString(cmd, "kms-key-id")
+				if err != nil {
+					return err
+				}
+				body.SetKmsKeyId(kmsKeyId)
+			}
+			req = req.EnvVarCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "status", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("connection-type", "", "What the credentials are for, hyphenated, such as snowflake or bigquery. Decides which checks run.")
+	_ = cmd.MarkFlagRequired("connection-type")
+	cmd.Flags().String("env-var-name", "", "Name of the environment variable on the deployment that holds the connection's credentials. Must start with MCD_.")
+	_ = cmd.MarkFlagRequired("env-var-name")
+	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
+	cmd.Flags().String("databricks-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
+	cmd.Flags().String("kms-key-id", "", "AWS KMS key the variable's value is encrypted with. Omit it for a value stored in the clear.")
+	return cmd
+}
+
+func newCredentialsValidateFileCredentialsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "validate-file-credentials",
+		Short: "Validate file credentials",
+		Long:  "Check candidate file credentials against the system they are for.\n\nNo credentials are created. Send the values you would create the credentials with, and\na deployment to run them from, and the checks run against that system.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateFileCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			connectionType, err := flagString(cmd, "connection-type")
+			if err != nil {
+				return err
+			}
+			filePath, err := flagString(cmd, "file-path")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewFileCredentialsValidateIn(deploymentId, connectionType, filePath)
+			if changed(cmd, "bq-project-id") {
+				bqProjectId, err := flagString(cmd, "bq-project-id")
+				if err != nil {
+					return err
+				}
+				body.SetBqProjectId(bqProjectId)
+			}
+			if changed(cmd, "databricks-warehouse-id") {
+				databricksWarehouseId, err := flagString(cmd, "databricks-warehouse-id")
+				if err != nil {
+					return err
+				}
+				body.SetDatabricksWarehouseId(databricksWarehouseId)
+			}
+			req = req.FileCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "status", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("connection-type", "", "What the credentials are for, hyphenated, such as snowflake or bigquery. Decides which checks run.")
+	_ = cmd.MarkFlagRequired("connection-type")
+	cmd.Flags().String("file-path", "", "Path of the file on the deployment that holds the connection's credentials.")
+	_ = cmd.MarkFlagRequired("file-path")
+	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
+	cmd.Flags().String("databricks-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
+	return cmd
+}
+
+func newCredentialsValidateGcpSecretManagerCredentialsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "validate-gcp-secret-manager-credentials",
+		Short: "Validate GCP Secret Manager credentials",
+		Long:  "Check candidate GCP Secret Manager credentials against the system they are for.\n\nNo credentials are created. Send the values you would create the credentials with, and\na deployment to run them from, and the checks run against that system.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateGcpSecretManagerCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			connectionType, err := flagString(cmd, "connection-type")
+			if err != nil {
+				return err
+			}
+			gcpSecret, err := flagString(cmd, "gcp-secret")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewGcpSecretManagerCredentialsValidateIn(deploymentId, connectionType, gcpSecret)
+			if changed(cmd, "bq-project-id") {
+				bqProjectId, err := flagString(cmd, "bq-project-id")
+				if err != nil {
+					return err
+				}
+				body.SetBqProjectId(bqProjectId)
+			}
+			if changed(cmd, "databricks-warehouse-id") {
+				databricksWarehouseId, err := flagString(cmd, "databricks-warehouse-id")
+				if err != nil {
+					return err
+				}
+				body.SetDatabricksWarehouseId(databricksWarehouseId)
+			}
+			req = req.GcpSecretManagerCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "status", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("connection-type", "", "What the credentials are for, hyphenated, such as snowflake or bigquery. Decides which checks run.")
+	_ = cmd.MarkFlagRequired("connection-type")
+	cmd.Flags().String("gcp-secret", "", "Name of the GCP Secret Manager secret holding the connection's credentials.")
+	_ = cmd.MarkFlagRequired("gcp-secret")
+	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
+	cmd.Flags().String("databricks-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
+	return cmd
+}
+
+func newCredentialsValidateSnowflakeCredentialsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "validate-snowflake-credentials",
+		Short: "Validate Snowflake credentials",
+		Long:  "Check a candidate Snowflake key pair against Snowflake.\n\nNo credentials are created. Send the values you would create the credentials with, and\na deployment to run them from, and the checks run against your Snowflake account.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "private-key", "private-key-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateSnowflakeCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			account, err := flagString(cmd, "account")
+			if err != nil {
+				return err
+			}
+			user, err := flagString(cmd, "user")
+			if err != nil {
+				return err
+			}
+			privateKey, err := flagSecret(cmd, "private-key")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewSnowflakeCredentialsValidateIn(deploymentId, account, user, privateKey)
+			if changed(cmd, "private-key-passphrase", "private-key-passphrase-prompt") {
+				privateKeyPassphrase, err := flagSecret(cmd, "private-key-passphrase")
+				if err != nil {
+					return err
+				}
+				body.SetPrivateKeyPassphrase(privateKeyPassphrase)
+			}
+			if changed(cmd, "warehouse") {
+				warehouse, err := flagString(cmd, "warehouse")
+				if err != nil {
+					return err
+				}
+				body.SetWarehouse(warehouse)
+			}
+			req = req.SnowflakeCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "status", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("account", "", "Snowflake account identifier, such as xy12345.us-east-1. Without the .snowflakecomputing.com suffix.")
+	_ = cmd.MarkFlagRequired("account")
+	cmd.Flags().String("user", "", "Snowflake user the key pair belongs to.")
+	_ = cmd.MarkFlagRequired("user")
+	cmd.Flags().String("private-key", "", "The private key of the pair, as PEM text including its BEGIN and END lines. Used for this check and not kept. Visible in the process list; --private-key-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("private-key-prompt", false, "Read --private-key from a hidden prompt instead of the command line.")
+	cmd.Flags().String("private-key-passphrase", "", "Passphrase the private key is encrypted with. Omit it for an unencrypted key. Never returned. Visible in the process list; --private-key-passphrase-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("private-key-passphrase-prompt", false, "Read --private-key-passphrase from a hidden prompt instead of the command line.")
+	cmd.Flags().String("warehouse", "", "Snowflake virtual warehouse to run queries in. Omit it to use the user's default.")
 	return cmd
 }
