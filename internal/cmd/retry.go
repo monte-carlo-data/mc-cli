@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -21,6 +23,11 @@ var (
 // saying so on stderr before each wait. Any other outcome, or the budget running out, returns
 // the last result. Ctrl-C cancels the wait through the command's context.
 func retryOnTransient[T any](cmd *cobra.Command, call func() (T, *http.Response, error)) (T, *http.Response, error) {
+	return retryWithin(cmd.Context(), cmd.ErrOrStderr(), call)
+}
+
+// retryWithin is retryOnTransient waiting on ctx rather than the command's context.
+func retryWithin[T any](ctx context.Context, stderr io.Writer, call func() (T, *http.Response, error)) (T, *http.Response, error) {
 	deadline := time.Now().Add(transientRetryTimeout)
 	for {
 		out, resp, err := call()
@@ -29,14 +36,14 @@ func retryOnTransient[T any](cmd *cobra.Command, call func() (T, *http.Response,
 		}
 		wait := retryAfter(resp)
 		if time.Until(deadline) <= wait {
-			fmt.Fprintf(cmd.ErrOrStderr(), "%s\ngiving up after %s.\n", firstLine(apiErr(resp, err)), transientRetryTimeout)
+			fmt.Fprintf(stderr, "%s\ngiving up after %s.\n", firstLine(apiErr(resp, err)), transientRetryTimeout)
 			return out, resp, err
 		}
-		fmt.Fprintf(cmd.ErrOrStderr(), "%s\nRetrying in %s.\n", firstLine(apiErr(resp, err)), wait)
+		fmt.Fprintf(stderr, "%s\nRetrying in %s.\n", firstLine(apiErr(resp, err)), wait)
 		select {
-		case <-cmd.Context().Done():
+		case <-ctx.Done():
 			var zero T
-			return zero, resp, cmd.Context().Err()
+			return zero, resp, ctx.Err()
 		case <-time.After(wait):
 		}
 	}
