@@ -51,7 +51,8 @@ type validationProblem struct {
 // retried like retryOnTransient. runCmd is the command, without the binary name, that reads a
 // run by id; the id is appended to it, mirroring how the undo helper's record takes deleteCmd
 // from the caller. Progress goes to stderr: a table redrawn in place on a terminal, else one
-// line per validation as it finishes. The problems behind each verdict are printed at the end.
+// line per validation as it finishes. The problems behind each verdict are printed at the end,
+// then a summary naming the run.
 // Ctrl-C stops the wait.
 func waitForValidations(cmd *cobra.Command, first any, fetch func() (any, *http.Response, error), runCmd string) (bool, error) {
 	run, err := asValidationRun(first)
@@ -95,7 +96,7 @@ func waitForValidations(cmd *cobra.Command, first any, fetch func() (any, *http.
 			passed++
 		}
 	}
-	fmt.Fprintf(w, "%d of %d validations passed.\n", passed, len(run.Validations))
+	fmt.Fprintf(w, "%d of %d validations passed (run %s).\n", passed, len(run.Validations), run.ID)
 	return passed == len(run.Validations), nil
 }
 

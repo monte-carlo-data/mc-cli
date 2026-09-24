@@ -77,7 +77,7 @@ func TestWaitForValidationsFollowsTheRunAndPrintsEachValidationAsItFinishes(t *t
 	if *calls != 2 {
 		t.Errorf("fetched %d times", *calls)
 	}
-	want := "Running 2 validations:\n  ✓ Check connect\n  ⚠ Check tables\n\nCheck tables:\n  Two tables were not readable.\n    Grant SELECT on them.\n2 of 2 validations passed.\n"
+	want := "Running 2 validations:\n  ✓ Check connect\n  ⚠ Check tables\n\nCheck tables:\n  Two tables were not readable.\n    Grant SELECT on them.\n2 of 2 validations passed (run run-1).\n"
 	if stderr.String() != want {
 		t.Fatalf("stderr =\n%s\nwant\n%s", stderr, want)
 	}
@@ -104,7 +104,7 @@ func TestWaitForValidationsFailsUnlessEveryValidationPassed(t *testing.T) {
 			if err != nil || passed {
 				t.Fatalf("passed %v, err %v", passed, err)
 			}
-			if !strings.Contains(stderr.String(), tc.says) || !strings.Contains(stderr.String(), "1 of 2 validations passed.") {
+			if !strings.Contains(stderr.String(), tc.says) || !strings.Contains(stderr.String(), "1 of 2 validations passed (run run-1).") {
 				t.Fatalf("stderr =\n%s", stderr)
 			}
 		})
