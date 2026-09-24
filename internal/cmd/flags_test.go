@@ -249,3 +249,42 @@ func TestRequireAnyNamesTheFlags(t *testing.T) {
 		t.Fatalf("count = %d", n)
 	}
 }
+
+func TestRequireOneGroupReturnsTheGroupWhoseFlagsWerePassed(t *testing.T) {
+	groups := []flagGroup{
+		{"key", []string{"secret", "secret-prompt", "name"}},
+		{"counter", []string{"count", "verbose"}},
+	}
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"--secret", "s", "--name", "n"}, "key"},
+		// A prompt flag alone selects its group, and so does an optional one; the command
+		// checks that group's required flags afterwards.
+		{[]string{"--secret-prompt"}, "key"},
+		{[]string{"--name", "n"}, "key"},
+		{[]string{"--verbose"}, "counter"},
+	} {
+		got, err := requireOneGroup(flagsCmd(t, tc.args...), groups...)
+		if err != nil || got != tc.want {
+			t.Errorf("%v: got %q, %v; want %q", tc.args, got, err, tc.want)
+		}
+	}
+}
+
+func TestRequireOneGroupNamesTheGroupsWhenNoneOrSeveralArePassed(t *testing.T) {
+	groups := []flagGroup{
+		{"key", []string{"secret", "secret-prompt"}},
+		{"counter", []string{"count", "verbose"}},
+	}
+	_, err := requireOneGroup(flagsCmd(t, "--name", "n"), groups...)
+	if err == nil || err.Error() != "pass the flags of one of: key, counter" {
+		t.Fatalf("none: err = %v", err)
+	}
+	_, err = requireOneGroup(flagsCmd(t, "--secret-prompt", "--count", "1", "--verbose"), groups...)
+	want := "--secret-prompt (key), --count (counter) belong to different alternatives; pass the flags of one"
+	if err == nil || err.Error() != want {
+		t.Fatalf("several: err = %v", err)
+	}
+}

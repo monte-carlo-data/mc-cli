@@ -22,3 +22,22 @@ func stdoutIsTerminal(cmd *cobra.Command) bool {
 	f, ok := cmd.OutOrStdout().(*os.File)
 	return ok && isTerminal(f)
 }
+
+// stderrIsTerminal is stdoutIsTerminal for the command's error stream.
+func stderrIsTerminal(cmd *cobra.Command) bool {
+	f, ok := cmd.ErrOrStderr().(*os.File)
+	return ok && isTerminal(f)
+}
+
+// stderrWidth is the terminal's width, or 0 when stderr is not one.
+func stderrWidth(cmd *cobra.Command) int {
+	f, ok := cmd.ErrOrStderr().(*os.File)
+	if !ok || !isTerminal(f) {
+		return 0
+	}
+	width, _, err := term.GetSize(int(f.Fd()))
+	if err != nil {
+		return 0
+	}
+	return width
+}

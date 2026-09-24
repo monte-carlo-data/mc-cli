@@ -57,6 +57,16 @@ func render(cmd *cobra.Command, v any, fields ...string) error {
 	return w.Flush()
 }
 
+// renderIfJSON prints v as JSON when that is the output format, and nothing otherwise: for a
+// result whose progress stderr has already shown in full.
+func renderIfJSON(cmd *cobra.Command, v any) error {
+	format, err := outputFormat(cmd)
+	if err != nil || format != "json" {
+		return err
+	}
+	return writeJSON(cmd.OutOrStdout(), v)
+}
+
 // renderList prints a list: as JSON, or as a table with one column per named field. Wide adds
 // every other field the rows carry.
 func renderList(cmd *cobra.Command, v any, columns []string) error {

@@ -173,6 +173,29 @@ func TestRetryOnTransientCancelsARequestInFlight(t *testing.T) {
 	}
 }
 
+func TestRetryOnTransientGivesUpWhenCtxDeadlineIsSooner(t *testing.T) {
+	srv, _ := flakyServer(t, 1000, http.StatusTooManyRequests, "120")
+	cmd, stderr, call := retryFixture(t, srv, 5*time.Minute, 20*time.Millisecond, 10*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	cmd.SetContext(ctx)
+
+	start := time.Now()
+	_, resp, err := retryOnTransient(cmd, call)
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("took %s; ctx's short deadline should have won", elapsed)
+	}
+	if err == nil || resp == nil || resp.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("err %v, resp %v", err, resp)
+	}
+	if strings.Contains(stderr.String(), "Retrying in 2m0s.") {
+		t.Fatalf("should give up rather than promise a 2-minute wait; stderr:\n%s", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "giving up") {
+		t.Fatalf("no giving-up line in stderr:\n%s", stderr.String())
+	}
+}
+
 func TestRetryAfter(t *testing.T) {
 	prevInterval, prevFloor := transientRetryInterval, retryAfterFloor
 	transientRetryInterval, retryAfterFloor = 15*time.Second, time.Second
