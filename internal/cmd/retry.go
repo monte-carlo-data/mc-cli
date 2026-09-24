@@ -26,9 +26,15 @@ func retryOnTransient[T any](cmd *cobra.Command, call func() (T, *http.Response,
 	return retryWithin(cmd.Context(), cmd.ErrOrStderr(), call)
 }
 
-// retryWithin is retryOnTransient waiting on ctx rather than the command's context.
+// retryWithin is retryOnTransient waiting on ctx rather than the command's context. The retry
+// budget is also bounded by ctx's own deadline, if it has one and it is sooner.
 func retryWithin[T any](ctx context.Context, stderr io.Writer, call func() (T, *http.Response, error)) (T, *http.Response, error) {
 	deadline := time.Now().Add(transientRetryTimeout)
+	boundByCtx := false
+	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
+		deadline = d
+		boundByCtx = true
+	}
 	for {
 		out, resp, err := call()
 		if err == nil || resp == nil || !retryableStatus(resp.StatusCode) {
@@ -36,7 +42,11 @@ func retryWithin[T any](ctx context.Context, stderr io.Writer, call func() (T, *
 		}
 		wait := retryAfter(resp)
 		if time.Until(deadline) <= wait {
-			fmt.Fprintf(stderr, "%s\ngiving up after %s.\n", firstLine(apiErr(resp, err)), transientRetryTimeout)
+			if boundByCtx {
+				fmt.Fprintf(stderr, "%s\ngiving up: the wait would outlast the time left.\n", firstLine(apiErr(resp, err)))
+			} else {
+				fmt.Fprintf(stderr, "%s\ngiving up after %s.\n", firstLine(apiErr(resp, err)), transientRetryTimeout)
+			}
 			return out, resp, err
 		}
 		fmt.Fprintf(stderr, "%s\nRetrying in %s.\n", firstLine(apiErr(resp, err)), wait)

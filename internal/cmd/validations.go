@@ -12,7 +12,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
 )
 
 // The polling budget. Variables so a test can shrink them; nothing writes them at runtime.
@@ -28,6 +27,7 @@ type validationRun struct {
 	ID          string          `json:"id"`
 	Status      string          `json:"status"`
 	Validations []validationRow `json:"validations"`
+	Total       int             `json:"validations_total"`
 }
 
 type validationRow struct {
@@ -48,10 +48,12 @@ type validationProblem struct {
 // it passed: reached a verdict, and found no blocking problem. Warnings do not fail it.
 //
 // first is the run as the validate call returned it; fetch reads its current state, and is
-// retried like retryOnTransient. Progress goes to stderr: a table redrawn in place on a
-// terminal, else one line per validation as it finishes. The problems behind each verdict are
-// printed at the end. Ctrl-C stops the wait.
-func waitForValidations(cmd *cobra.Command, first any, fetch func() (any, *http.Response, error)) (bool, error) {
+// retried like retryOnTransient. runCmd is the command, without the binary name, that reads a
+// run by id; the id is appended to it, mirroring how the undo helper's record takes deleteCmd
+// from the caller. Progress goes to stderr: a table redrawn in place on a terminal, else one
+// line per validation as it finishes. The problems behind each verdict are printed at the end.
+// Ctrl-C stops the wait.
+func waitForValidations(cmd *cobra.Command, first any, fetch func() (any, *http.Response, error), runCmd string) (bool, error) {
 	run, err := asValidationRun(first)
 	if err != nil {
 		return false, err
@@ -65,12 +67,12 @@ func waitForValidations(cmd *cobra.Command, first any, fetch func() (any, *http.
 	for run.Status != "completed" {
 		if time.Now().Add(wait).After(deadline) {
 			view.draw(run, "")
-			return false, fmt.Errorf("stopped waiting after %s; the run is %s, readable with %s validations get run %s", validationPollTimeout, run.ID, binaryName, run.ID)
+			return false, fmt.Errorf("stopped waiting after %s; the run is %s, readable with %s %s %s", validationPollTimeout, run.ID, binaryName, runCmd, run.ID)
 		}
 		if err := view.animate(cmd, run, wait); err != nil {
 			return false, err
 		}
-		out, resp, err := retryWithin(cmd.Context(), w, fetch)
+		out, resp, err := retryWithin(cmd.Context(), view, fetch)
 		if err != nil {
 			return false, apiErr(resp, err)
 		}
@@ -80,6 +82,12 @@ func waitForValidations(cmd *cobra.Command, first any, fetch func() (any, *http.
 		wait = pollAfter(resp)
 	}
 	view.draw(run, "")
+	if len(run.Validations) != run.Total {
+		return false, fmt.Errorf("cannot read the validation run: it lists %d of %d validations", len(run.Validations), run.Total)
+	}
+	if run.Total == 0 {
+		return false, fmt.Errorf("the validation run has no validations")
+	}
 	view.problems(run)
 	passed := 0
 	for _, v := range run.Validations {
@@ -159,6 +167,18 @@ type validationView struct {
 	width   int
 	drawn   int
 	printed map[string]bool
+}
+
+// Write passes p through to the underlying stream. A message written mid-poll — a retry
+// notice — lands below the last drawn frame, so the redraw must not try to move back over it:
+// resetting drawn makes the next frame draw fresh, below the message, rather than a cursor-up
+// that would overwrite and duplicate rows.
+func (v *validationView) Write(p []byte) (int, error) {
+	n, err := v.w.Write(p)
+	if v.live {
+		v.drawn = 0
+	}
+	return n, err
 }
 
 var spinner = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
@@ -241,23 +261,4 @@ func (v *validationView) problems(run validationRun) {
 			}
 		}
 	}
-}
-
-// stderrIsTerminal is stdoutIsTerminal for the command's error stream.
-func stderrIsTerminal(cmd *cobra.Command) bool {
-	f, ok := cmd.ErrOrStderr().(*os.File)
-	return ok && isTerminal(f)
-}
-
-// stderrWidth is the terminal's width, or 0 when stderr is not one.
-func stderrWidth(cmd *cobra.Command) int {
-	f, ok := cmd.ErrOrStderr().(*os.File)
-	if !ok || !isTerminal(f) {
-		return 0
-	}
-	width, _, err := term.GetSize(int(f.Fd()))
-	if err != nil {
-		return 0
-	}
-	return width
 }

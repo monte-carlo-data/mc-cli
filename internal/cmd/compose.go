@@ -45,7 +45,8 @@ func (u *unwind) record(kind, id, deleteCmd string, del func(ctx context.Context
 // fail handles a failed step: it deletes everything recorded, newest first, and returns the
 // step's error followed by one line per resource. uncertain, when not empty, is added when the
 // response leaves the step's own outcome unknown: none arrived, or the API answered with a
-// server error, so the resource may have been created with an id this run never saw.
+// server error other than 503, so the resource may have been created with an id this run
+// never saw.
 //
 // The returned error unwraps to the step's error. Nothing from a request body goes into it.
 func (u *unwind) fail(resp *http.Response, err error, uncertain string) error {

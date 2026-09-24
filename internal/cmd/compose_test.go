@@ -100,22 +100,27 @@ func TestUnwindDeletesWhatWasCreatedNewestFirst(t *testing.T) {
 	}
 }
 
+// TestUnwindStillDeletesAfterTheCommandIsCancelled also proves a delete that needs a retry still
+// gets one after Ctrl-C: if undo passed the command's own (cancelled) context to retryWithin, the
+// retry would see a done context and give up instead of succeeding on the second try.
 func TestUnwindStillDeletesAfterTheCommandIsCancelled(t *testing.T) {
 	u, _, cancel, _, _ := unwindFixture(t)
 	var d deletes
 	var sawDone bool
-	for _, id := range []string{"w1", "c1"} {
-		u.record("thing", id, "things delete "+id, d.answer(id, func(ctx context.Context) (*http.Response, error) {
-			sawDone = sawDone || ctx.Err() != nil
-			return &http.Response{StatusCode: http.StatusNoContent}, nil
-		}))
-	}
+	u.record("thing", "w1", "things delete w1", d.answer("w1", func(ctx context.Context) (*http.Response, error) {
+		sawDone = sawDone || ctx.Err() != nil
+		return &http.Response{StatusCode: http.StatusNoContent}, nil
+	}))
+	u.record("thing", "c1", "things delete c1", d.answer("c1", status(http.StatusTooManyRequests)))
 	cancel()
 	err := u.fail(nil, context.Canceled, "")
-	if strings.Join(d.order, ",") != "c1,w1" || sawDone {
+	if strings.Join(d.order, ",") != "c1,c1,w1" || sawDone {
 		t.Fatalf("deleted %v, a delete saw a done context: %v", d.order, sawDone)
 	}
 	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v", err)
+	}
+	if !strings.Contains(err.Error(), "deleted the thing c1") {
 		t.Fatalf("err = %v", err)
 	}
 }

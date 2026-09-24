@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -44,7 +45,7 @@ func row(name, status string, passed any, extra ...map[string]any) map[string]an
 }
 
 func run(status string, rows ...map[string]any) map[string]any {
-	return map[string]any{"id": "run-1", "status": status, "validations": rows}
+	return map[string]any{"id": "run-1", "status": status, "validations": rows, "validations_total": len(rows)}
 }
 
 func problem(message, resolution string) []any {
@@ -68,7 +69,7 @@ func TestWaitForValidationsFollowsTheRunAndPrintsEachValidationAsItFinishes(t *t
 		run("completed", row("connect", "completed", true), row("tables", "completed", true, map[string]any{"warnings": problem("Two tables were not readable.", "Grant SELECT on them.")})),
 	)
 
-	passed, err := waitForValidations(cmd, run("running", row("connect", "pending", nil), row("tables", "pending", nil)), fetch)
+	passed, err := waitForValidations(cmd, run("running", row("connect", "pending", nil), row("tables", "pending", nil)), fetch, "validations get run")
 
 	if err != nil || !passed {
 		t.Fatalf("passed %v, err %v", passed, err)
@@ -93,12 +94,13 @@ func TestWaitForValidationsFailsUnlessEveryValidationPassed(t *testing.T) {
 	}{
 		{"a blocking problem", row("connect", "completed", false, map[string]any{"errors": problem("The key was rejected.", "Check the user's public key.")}), "  ✗ Check connect\n"},
 		{"skipped", row("connect", "skipped", nil), "(skipped: a prerequisite did not pass)"},
-		{"timed out", row("connect", "timed_out", nil), "(timed out)"},
-		{"could not run", row("connect", "failed", nil), "(could not run)"},
+		{"timed out", row("connect", "timed_out", false), "(timed out)"},
+		{"timed out despite a stray passed flag", row("connect", "timed_out", true), "(timed out)"},
+		{"could not run", row("connect", "failed", false), "(could not run)"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cmd, _, _, stderr := validationFixture(t)
-			passed, err := waitForValidations(cmd, run("completed", row("ok", "completed", true), tc.row), nil)
+			passed, err := waitForValidations(cmd, run("completed", row("ok", "completed", true), tc.row), nil, "validations get run")
 			if err != nil || passed {
 				t.Fatalf("passed %v, err %v", passed, err)
 			}
@@ -119,7 +121,7 @@ func TestWaitForValidationsRetriesATransientPollAndReportsAnyOtherFailure(t *tes
 		}
 		return run("completed", row("connect", "completed", true)), &http.Response{StatusCode: http.StatusOK, Header: http.Header{}}, nil
 	}
-	if passed, err := waitForValidations(cmd, run("running", row("connect", "running", nil)), fetch); err != nil || !passed || calls != 2 {
+	if passed, err := waitForValidations(cmd, run("running", row("connect", "running", nil)), fetch, "validations get run"); err != nil || !passed || calls != 2 {
 		t.Fatalf("passed %v, err %v, after %d calls", passed, err, calls)
 	}
 
@@ -127,7 +129,7 @@ func TestWaitForValidationsRetriesATransientPollAndReportsAnyOtherFailure(t *tes
 	gone := func() (any, *http.Response, error) {
 		return nil, &http.Response{StatusCode: http.StatusNotFound, Header: http.Header{}}, errors.New("no validation run with that id")
 	}
-	if _, err := waitForValidations(cmd, run("running", row("connect", "running", nil)), gone); err == nil || !strings.Contains(err.Error(), "no validation run") {
+	if _, err := waitForValidations(cmd, run("running", row("connect", "running", nil)), gone, "validations get run"); err == nil || !strings.Contains(err.Error(), "no validation run") {
 		t.Fatalf("err = %v", err)
 	}
 }
@@ -136,14 +138,14 @@ func TestWaitForValidationsStopsOnCtrlCAndAfterItsBudget(t *testing.T) {
 	cmd, cancel, _, _ := validationFixture(t)
 	fetch, _ := polls(run("running", row("connect", "running", nil)))
 	cancel()
-	if _, err := waitForValidations(cmd, run("running", row("connect", "running", nil)), fetch); !errors.Is(err, context.Canceled) {
+	if _, err := waitForValidations(cmd, run("running", row("connect", "running", nil)), fetch, "validations get run"); !errors.Is(err, context.Canceled) {
 		t.Fatalf("err = %v", err)
 	}
 
 	cmd, _, _, _ = validationFixture(t)
 	validationPollTimeout = 30 * time.Millisecond
 	start := time.Now()
-	_, err := waitForValidations(cmd, run("running", row("connect", "running", nil)), fetch)
+	_, err := waitForValidations(cmd, run("running", row("connect", "running", nil)), fetch, "validations get run")
 	if err == nil || !strings.Contains(err.Error(), "validations get run run-1") || time.Since(start) > time.Second {
 		t.Fatalf("err = %v after %s", err, time.Since(start))
 	}
@@ -173,6 +175,68 @@ func TestTheLiveViewRedrawsInPlaceAndMarksUnfinishedRows(t *testing.T) {
 		"\x1b[3A\x1b[2K  ✓ Check connect\n\x1b[2K  ⠙ Check tables\n\x1b[2K  · Check views\n"
 	if out.String() != want {
 		t.Fatalf("got %q\nwant %q", out.String(), want)
+	}
+}
+
+func TestViewWriteResetsTheRedrawSoARetryMessageIsNotOverwritten(t *testing.T) {
+	var out bytes.Buffer
+	view := &validationView{w: &out, live: true}
+	r, _ := asValidationRun(run("running", row("connect", "running", nil)))
+
+	view.draw(r, "⠋")
+	fmt.Fprintf(view, "unavailable\nRetrying in 1s.\n")
+	view.draw(r, "⠙")
+
+	want := "\x1b[2K  ⠋ Check connect\n" +
+		"unavailable\nRetrying in 1s.\n" +
+		"\x1b[2K  ⠙ Check connect\n"
+	if out.String() != want {
+		t.Fatalf("got %q\nwant %q", out.String(), want)
+	}
+}
+
+func TestWaitForValidationsHonoursRetryAfterBetweenPolls(t *testing.T) {
+	cmd, _, _, _ := validationFixture(t)
+	var times []time.Time
+	calls := 0
+	fetch := func() (any, *http.Response, error) {
+		times = append(times, time.Now())
+		calls++
+		if calls == 1 {
+			return run("running", row("connect", "running", nil)), &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Retry-After": {"1"}}}, nil
+		}
+		return run("completed", row("connect", "completed", true)), &http.Response{StatusCode: http.StatusOK, Header: http.Header{}}, nil
+	}
+
+	passed, err := waitForValidations(cmd, run("running", row("connect", "pending", nil)), fetch, "validations get run")
+
+	if err != nil || !passed {
+		t.Fatalf("passed %v, err %v", passed, err)
+	}
+	if len(times) != 2 {
+		t.Fatalf("fetched %d times", len(times))
+	}
+	if gap := times[1].Sub(times[0]); gap < 900*time.Millisecond || gap > 5*time.Second {
+		t.Fatalf("gap between polls = %s", gap)
+	}
+}
+
+func TestWaitForValidationsRejectsARunWhoseValidationCountDoesNotMatchItsTotal(t *testing.T) {
+	cmd, _, _, _ := validationFixture(t)
+	r := run("completed", row("connect", "completed", true))
+	r["validations_total"] = 5
+
+	if _, err := waitForValidations(cmd, r, nil, "validations get run"); err == nil || !strings.Contains(err.Error(), "it lists 1 of 5 validations") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestWaitForValidationsRejectsACompletedRunWithNoValidations(t *testing.T) {
+	cmd, _, _, _ := validationFixture(t)
+	r := run("completed")
+
+	if _, err := waitForValidations(cmd, r, nil, "validations get run"); err == nil || !strings.Contains(err.Error(), "no validations") {
+		t.Fatalf("err = %v", err)
 	}
 }
 
