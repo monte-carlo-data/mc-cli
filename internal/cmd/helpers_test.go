@@ -29,7 +29,12 @@ func isolateEnv(t *testing.T) {
 // executions of the same command objects.
 func resetFlags(cmd *cobra.Command) {
 	reset := func(f *pflag.Flag) {
-		_ = f.Value.Set(f.DefValue)
+		// A slice flag's Set appends once it has been set, and its default renders as "[]".
+		if s, ok := f.Value.(pflag.SliceValue); ok {
+			_ = s.Replace(nil)
+		} else {
+			_ = f.Value.Set(f.DefValue)
+		}
 		f.Changed = false
 	}
 	cmd.Flags().VisitAll(reset)
