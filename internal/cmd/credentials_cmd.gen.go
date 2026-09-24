@@ -419,8 +419,24 @@ func newCredentialsCreateSnowflakeCmd() *cobra.Command {
 
 func newCredentialsDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "delete",
-		Short: "Delete credential",
+		Use:   "delete <credentials_id>",
+		Short: "Delete credentials",
+		Long:  "Delete credentials of any connection type and storage.\n\nTakes the id the list or a connection returns. Refused while a connection still uses them.\nDelete the connection first. Monte Carlo stops using them. Whatever they point at is\nuntouched.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeleteCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
 	}
 	cmd.AddCommand(newCredentialsDeleteAwsSecretsManagerCmd())
 	cmd.AddCommand(newCredentialsDeleteAzureKeyVaultCmd())
@@ -435,7 +451,7 @@ func newCredentialsDeleteAwsSecretsManagerCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "aws-secrets-manager <credentials_id>",
 		Short: "Delete AWS Secrets Manager credentials",
-		Long:  "Delete AWS Secrets Manager credentials.\n\nRefused while a connection still uses them: delete the connection or point it at other\ncredentials first. The secret in AWS is untouched.",
+		Long:  "Delete AWS Secrets Manager credentials.\n\nRefused while a connection still uses them. Delete the connection first. The secret in AWS\nis untouched.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := confirm(cmd, "Delete aws-secrets-manager credential"+" "+args[0]); err != nil {
@@ -459,7 +475,7 @@ func newCredentialsDeleteAzureKeyVaultCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "azure-key-vault <credentials_id>",
 		Short: "Delete Azure Key Vault credentials",
-		Long:  "Delete Azure Key Vault credentials.\n\nRefused while a connection still uses them: delete the connection or point it at other\ncredentials first. The secret in Azure is untouched.",
+		Long:  "Delete Azure Key Vault credentials.\n\nRefused while a connection still uses them. Delete the connection first. The secret in Azure\nis untouched.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := confirm(cmd, "Delete azure-key-vault credential"+" "+args[0]); err != nil {
@@ -483,7 +499,7 @@ func newCredentialsDeleteEnvVarCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "env-var <credentials_id>",
 		Short: "Delete environment variable credentials",
-		Long:  "Delete environment variable credentials.\n\nRefused while a connection still uses them: delete the connection or point it at other\ncredentials first. The variable on the deployment is untouched.",
+		Long:  "Delete environment variable credentials.\n\nRefused while a connection still uses them. Delete the connection first. The variable on the\ndeployment is untouched.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := confirm(cmd, "Delete env-var credential"+" "+args[0]); err != nil {
@@ -507,7 +523,7 @@ func newCredentialsDeleteFileCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "file <credentials_id>",
 		Short: "Delete file credentials",
-		Long:  "Delete file credentials.\n\nRefused while a connection still uses them: delete the connection or point it at other\ncredentials first. The file on the deployment is untouched.",
+		Long:  "Delete file credentials.\n\nRefused while a connection still uses them. Delete the connection first. The file on the\ndeployment is untouched.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := confirm(cmd, "Delete file credential"+" "+args[0]); err != nil {
@@ -531,7 +547,7 @@ func newCredentialsDeleteGcpSecretManagerCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "gcp-secret-manager <credentials_id>",
 		Short: "Delete GCP Secret Manager credentials",
-		Long:  "Delete GCP Secret Manager credentials.\n\nRefused while a connection still uses them: delete the connection or point it at other\ncredentials first. The secret in GCP is untouched.",
+		Long:  "Delete GCP Secret Manager credentials.\n\nRefused while a connection still uses them. Delete the connection first. The secret in GCP\nis untouched.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := confirm(cmd, "Delete gcp-secret-manager credential"+" "+args[0]); err != nil {
@@ -555,7 +571,7 @@ func newCredentialsDeleteSnowflakeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "snowflake <credentials_id>",
 		Short: "Delete Snowflake credentials",
-		Long:  "Delete Snowflake credentials.\n\nRefused while a connection still uses them: delete the connection or point it at other\ncredentials first. Monte Carlo stops using the stored key. Rotate or revoke the key pair\nin Snowflake if the key itself must be retired.",
+		Long:  "Delete Snowflake credentials.\n\nRefused while a connection still uses them. Delete the connection first. Monte Carlo stops\nusing the stored key. Rotate or revoke the key pair in Snowflake if the key itself must be\nretired.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := confirm(cmd, "Delete snowflake credential"+" "+args[0]); err != nil {
