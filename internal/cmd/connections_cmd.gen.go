@@ -3,7 +3,10 @@
 package cmd
 
 import (
+	"context"
+	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -20,11 +23,12 @@ func newConnectionsCmd() *cobra.Command {
 		Short: "Connections",
 	}
 	cmd.AddCommand(newConnectionsCreateCmd())
-	cmd.AddCommand(newConnectionsDeleteCmd())
 	cmd.AddCommand(newConnectionsGetCmd())
 	cmd.AddCommand(newConnectionsListCmd())
+	cmd.AddCommand(newConnectionsValidateCmd())
+	cmd.AddCommand(newConnectionsAddCmd())
 	cmd.AddCommand(newConnectionsUpdateCmd())
-	cmd.AddCommand(newConnectionsValidateConnectionCmd())
+	cmd.AddCommand(newConnectionsDeleteCmd())
 	return cmd
 }
 
@@ -75,30 +79,6 @@ func newConnectionsCreateCmd() *cobra.Command {
 	cmd.Flags().String("credentials-id", "", "The credentials the connection reads with. They also decide the connection's type. Create them first, through one of the credentials endpoints.")
 	_ = cmd.MarkFlagRequired("credentials-id")
 	cmd.Flags().StringSlice("job-types", nil, "The jobs to run on this connection. Omit it to run what the connection type runs by default, which is what the app does. Which values are accepted depends on the connection type. An empty list is not accepted; omit the field to take the defaults.")
-	return cmd
-}
-
-func newConnectionsDeleteCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "delete <connection_id>",
-		Short: "Delete a connection",
-		Long:  "Delete a connection.\n\nThe warehouse and the credentials are left in place. Delete each of those through its own\nendpoint once nothing uses it. Deleting the connection also deletes its own schedules,\nmonitors and rules.\n\nDeleting a warehouse's last connection is refused when that would also take monitors,\nrules or use cases that belong to the warehouse as a whole. Delete the warehouse instead.",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := confirm(cmd, "Delete connection"+" "+args[0]); err != nil {
-				return err
-			}
-			api, ctx, err := apiClient(cmd)
-			if err != nil {
-				return err
-			}
-			req := api.ConnectionsAPI.DeleteConnection(ctx, args[0])
-			if resp, err := req.Execute(); err != nil {
-				return apiErr(resp, err)
-			}
-			return nil
-		},
-	}
 	return cmd
 }
 
@@ -187,41 +167,9 @@ func newConnectionsListCmd() *cobra.Command {
 	return cmd
 }
 
-func newConnectionsUpdateCmd() *cobra.Command {
+func newConnectionsValidateCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "update <connection_id>",
-		Short: "Update a connection",
-		Long:  "Rename a connection.\n\nThe name is the only thing you can change. The type, the warehouse and the credentials\nare fixed when the connection is created. Two connections on one warehouse cannot share a\nname. Sending an empty body leaves the connection as it is and returns it.",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			api, ctx, err := apiClient(cmd)
-			if err != nil {
-				return err
-			}
-			req := api.ConnectionsAPI.UpdateConnection(ctx, args[0])
-			body := sdk.NewConnectionPatch()
-			if changed(cmd, "name") {
-				name, err := flagString(cmd, "name")
-				if err != nil {
-					return err
-				}
-				body.SetName(name)
-			}
-			req = req.ConnectionPatch(*body)
-			out, resp, err := retryOnTransient(cmd, req.Execute)
-			if err != nil {
-				return apiErr(resp, err)
-			}
-			return render(cmd, out, "id", "connection_type", "name", "warehouse_id", "warehouse_name", "deployment_id", "deployment_name", "credentials_id", "credentials_storage_type", "job_types", "created_time")
-		},
-	}
-	cmd.Flags().String("name", "", "New display name for the connection. Omit it to leave the name unchanged. An explicit null is ignored, the same as omitting the field.")
-	return cmd
-}
-
-func newConnectionsValidateConnectionCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "validate-connection <connection_id>",
+		Use:   "validate <connection_id>",
 		Short: "Validate a connection",
 		Long:  "Check a connection against the system it reads from.\n\nTests the connection as it stands, with the credentials it already uses. Nothing is\nchanged, and you send no credentials.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.\n\nAn id that does not exist or belongs to another account returns 404.",
 		Args:  cobra.ExactArgs(1),
@@ -235,8 +183,1701 @@ func newConnectionsValidateConnectionCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := waitForValidations(cmd, out, func() (any, *http.Response, error) {
+					run, resp, err := api.ValidationsAPI.GetValidationRun(ctx, out.GetId()).Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "validations get run")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return fmt.Errorf("not every validation passed")
+				}
+				return nil
+			}
 			return render(cmd, out, "id", "status", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
 		},
 	}
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
+}
+
+// connectionsAddCredentials validates, creates and deletes the credentials a new connection uses.
+type connectionsAddCredentials struct {
+	validate  func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error)
+	create    func(ctx context.Context) (string, *http.Response, error)
+	del       func(ctx context.Context, id string) (*http.Response, error)
+	deleteCmd string
+	listCmd   string
+}
+
+// connectionsAddNative is the credentials a subcommand named after its connection type takes.
+type connectionsAddNative struct {
+	group flagGroup
+	build func(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error)
+}
+
+func newConnectionsAddCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "add <connection-type>",
+		Short: "Add a connection, creating its warehouse and credentials",
+		Long:  "Adds a connection in one step. It validates the credentials first and, once every validation passes, asks before creating a warehouse unless --warehouse-id names one, then the credentials, then the connection. --validate-only stops after validating; --skip-validations creates without validating or asking. If a step fails, or the command is interrupted, what it created is deleted again, and anything it could not delete is listed with the command that deletes it.\n\nThe argument is the connection type. This command takes self-hosted credentials, one set of --self-hosted-* flags; the subcommands take each connection type's own credentials.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsAdd(cmd, args[0], nil)
+		},
+	}
+	registerConnectionsAddFlags(cmd)
+	cmd.AddCommand(newConnectionsAddSnowflakeCmd())
+	return cmd
+}
+
+func newConnectionsAddSnowflakeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "snowflake",
+		Short: "Add a snowflake connection, creating its warehouse and credentials",
+		Long:  "Adds a snowflake connection in one step, as the add command does. Pass snowflake credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsAdd(cmd, "snowflake", &connectionsAddNative{
+				group: flagGroup{"snowflake", []string{"account", "user", "private-key", "private-key-prompt", "private-key-passphrase", "private-key-passphrase-prompt", "warehouse"}},
+				build: buildConnectionsAddSnowflake,
+			})
+		},
+	}
+	cmd.Flags().String("account", "", "Snowflake account identifier, such as xy12345.us-east-1. Without the .snowflakecomputing.com suffix.")
+	cmd.Flags().String("user", "", "Snowflake user the key pair belongs to.")
+	cmd.Flags().String("private-key", "", "The private key of the pair, as PEM text including its BEGIN and END lines. Stored by Monte Carlo and never returned. Visible in the process list; --private-key-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("private-key-prompt", false, "Read --private-key from a hidden prompt instead of the command line.")
+	cmd.Flags().String("private-key-passphrase", "", "Passphrase the private key is encrypted with. Omit it for an unencrypted key. Never returned. Visible in the process list; --private-key-passphrase-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("private-key-passphrase-prompt", false, "Read --private-key-passphrase from a hidden prompt instead of the command line.")
+	cmd.Flags().String("warehouse", "", "Snowflake virtual warehouse to run queries in. Omit it to use the user's default.")
+	registerConnectionsAddFlags(cmd)
+	return cmd
+}
+
+// registerConnectionsAddFlags registers the flags every add command takes.
+func registerConnectionsAddFlags(cmd *cobra.Command) {
+	cmd.Flags().String("self-hosted-aws-secret", "", "Name or ARN of the AWS Secrets Manager secret holding the connection's credentials.")
+	cmd.Flags().String("self-hosted-aws-assumable-role", "", "ARN of a role the deployment assumes to read the secret. Omit it to read as itself.")
+	cmd.Flags().String("self-hosted-aws-region", "", "AWS region of the secret. Omit it to use the deployment's own region.")
+	cmd.Flags().String("self-hosted-aws-external-id", "", "External id the assumed role's trust policy requires, if it requires one.")
+	cmd.Flags().String("self-hosted-gcp-secret", "", "Name of the GCP Secret Manager secret holding the connection's credentials.")
+	cmd.Flags().String("self-hosted-azure-akv-secret", "", "Name of the Azure Key Vault secret holding the connection's credentials.")
+	cmd.Flags().String("self-hosted-azure-akv-vault-name", "", "Name of the key vault. Send this, akv_vault_url, or both.")
+	cmd.Flags().String("self-hosted-azure-akv-vault-url", "", "URL of the key vault. Send this, akv_vault_name, or both.")
+	cmd.Flags().String("self-hosted-env-var-name", "", "Name of the environment variable on the deployment that holds the connection's credentials. Must start with MCD_.")
+	cmd.Flags().String("self-hosted-env-var-kms-key-id", "", "AWS KMS key the variable's value is encrypted with. Omit it for a value stored in the clear.")
+	cmd.Flags().String("self-hosted-file-path", "", "Path of the file on the deployment that holds the connection's credentials.")
+	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
+	cmd.Flags().String("databricks-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
+	cmd.Flags().String("name", "", "Name of the new connection, and of the warehouse when one is created. Required unless --validate-only.")
+	cmd.Flags().String("warehouse-id", "", "Existing warehouse to add the connection to. Without it, a warehouse is created for the connection first. Connection types that attach to a warehouse another connection provides need it: without it the connection is refused and the created warehouse removed.")
+	cmd.Flags().String("deployment-id", "", "The deployment the warehouse's connections will run through. Pick one from the deployments list. Only a deployment on Monte Carlo's current collection platform is accepted. Required when --warehouse-id is not given, refused with it.")
+	cmd.Flags().StringSlice("job-types", nil, "The jobs to run on this connection. Omit it to run what the connection type runs by default, which is what the app does. Which values are accepted depends on the connection type. An empty list is not accepted; omit the field to take the defaults.")
+	cmd.Flags().Bool("validate-only", false, "Validate the credentials and create nothing.")
+	cmd.Flags().Bool("skip-validations", false, "Create the connection without validating the credentials first, and without asking.")
+}
+
+func buildConnectionsAddSnowflake(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
+	var err error
+	if err := requireAny(cmd, "account"); err != nil {
+		return nil, err
+	}
+	account, err := flagString(cmd, "account")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "user"); err != nil {
+		return nil, err
+	}
+	user, err := flagString(cmd, "user")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "private-key", "private-key-prompt"); err != nil {
+		return nil, err
+	}
+	privateKey, err := flagSecret(cmd, "private-key")
+	if err != nil {
+		return nil, err
+	}
+	var privateKeyPassphrase string
+	if changed(cmd, "private-key-passphrase", "private-key-passphrase-prompt") {
+		privateKeyPassphrase, err = flagSecret(cmd, "private-key-passphrase")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var warehouse string
+	if changed(cmd, "warehouse") {
+		warehouse, err = flagString(cmd, "warehouse")
+		if err != nil {
+			return nil, err
+		}
+	}
+	body := sdk.NewSnowflakeCredentialsIn(account, user, privateKey)
+	if changed(cmd, "private-key-passphrase", "private-key-passphrase-prompt") {
+		body.SetPrivateKeyPassphrase(privateKeyPassphrase)
+	}
+	if changed(cmd, "warehouse") {
+		body.SetWarehouse(warehouse)
+	}
+	return &connectionsAddCredentials{
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			candidate := sdk.NewSnowflakeCredentialsValidateIn(deploymentId, account, user, privateKey)
+			if changed(cmd, "private-key-passphrase", "private-key-passphrase-prompt") {
+				candidate.SetPrivateKeyPassphrase(privateKeyPassphrase)
+			}
+			if changed(cmd, "warehouse") {
+				candidate.SetWarehouse(warehouse)
+			}
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateSnowflakeCredentials(ctx).SnowflakeCredentialsValidateIn(*candidate).Execute)
+		},
+		create: func(ctx context.Context) (string, *http.Response, error) {
+			out, resp, err := retryOnTransient(cmd, api.CredentialsAPI.CreateSnowflakeCredentials(ctx).SnowflakeCredentialsIn(*body).Execute)
+			if err != nil {
+				return "", resp, err
+			}
+			return out.GetId(), resp, nil
+		},
+		del: func(ctx context.Context, id string) (*http.Response, error) {
+			return api.CredentialsAPI.DeleteSnowflakeCredentials(ctx, id).Execute()
+		},
+		deleteCmd: "credentials delete snowflake",
+		listCmd:   "credentials list",
+	}, nil
+}
+
+func buildConnectionsAddSelfHostedAws(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
+	var err error
+	if err := requireAny(cmd, "self-hosted-aws-secret"); err != nil {
+		return nil, err
+	}
+	selfHostedAwsAwsSecret, err := flagString(cmd, "self-hosted-aws-secret")
+	if err != nil {
+		return nil, err
+	}
+	var selfHostedAwsAssumableRole string
+	if changed(cmd, "self-hosted-aws-assumable-role") {
+		selfHostedAwsAssumableRole, err = flagString(cmd, "self-hosted-aws-assumable-role")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var selfHostedAwsAwsRegion string
+	if changed(cmd, "self-hosted-aws-region") {
+		selfHostedAwsAwsRegion, err = flagString(cmd, "self-hosted-aws-region")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var bqProjectId string
+	if changed(cmd, "bq-project-id") {
+		bqProjectId, err = flagString(cmd, "bq-project-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var databricksWarehouseId string
+	if changed(cmd, "databricks-warehouse-id") {
+		databricksWarehouseId, err = flagString(cmd, "databricks-warehouse-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var selfHostedAwsExternalId string
+	if changed(cmd, "self-hosted-aws-external-id") {
+		selfHostedAwsExternalId, err = flagString(cmd, "self-hosted-aws-external-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	body := sdk.NewAwsSecretsManagerCredentialsIn(connectionType, selfHostedAwsAwsSecret)
+	if changed(cmd, "self-hosted-aws-assumable-role") {
+		body.SetAssumableRole(selfHostedAwsAssumableRole)
+	}
+	if changed(cmd, "self-hosted-aws-region") {
+		body.SetAwsRegion(selfHostedAwsAwsRegion)
+	}
+	if changed(cmd, "bq-project-id") {
+		body.SetBqProjectId(bqProjectId)
+	}
+	if changed(cmd, "databricks-warehouse-id") {
+		body.SetDatabricksWarehouseId(databricksWarehouseId)
+	}
+	if changed(cmd, "self-hosted-aws-external-id") {
+		body.SetExternalId(selfHostedAwsExternalId)
+	}
+	return &connectionsAddCredentials{
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			candidate := sdk.NewAwsSecretsManagerCredentialsValidateIn(deploymentId, connectionType, selfHostedAwsAwsSecret)
+			if changed(cmd, "self-hosted-aws-assumable-role") {
+				candidate.SetAssumableRole(selfHostedAwsAssumableRole)
+			}
+			if changed(cmd, "self-hosted-aws-region") {
+				candidate.SetAwsRegion(selfHostedAwsAwsRegion)
+			}
+			if changed(cmd, "bq-project-id") {
+				candidate.SetBqProjectId(bqProjectId)
+			}
+			if changed(cmd, "databricks-warehouse-id") {
+				candidate.SetDatabricksWarehouseId(databricksWarehouseId)
+			}
+			if changed(cmd, "self-hosted-aws-external-id") {
+				candidate.SetExternalId(selfHostedAwsExternalId)
+			}
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateAwsSecretsManagerCredentials(ctx).AwsSecretsManagerCredentialsValidateIn(*candidate).Execute)
+		},
+		create: func(ctx context.Context) (string, *http.Response, error) {
+			out, resp, err := retryOnTransient(cmd, api.CredentialsAPI.CreateAwsSecretsManagerCredentials(ctx).AwsSecretsManagerCredentialsIn(*body).Execute)
+			if err != nil {
+				return "", resp, err
+			}
+			return out.GetId(), resp, nil
+		},
+		del: func(ctx context.Context, id string) (*http.Response, error) {
+			return api.CredentialsAPI.DeleteAwsSecretsManagerCredentials(ctx, id).Execute()
+		},
+		deleteCmd: "credentials delete aws-secrets-manager",
+		listCmd:   "credentials list",
+	}, nil
+}
+
+func buildConnectionsAddSelfHostedGcp(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
+	var err error
+	if err := requireAny(cmd, "self-hosted-gcp-secret"); err != nil {
+		return nil, err
+	}
+	selfHostedGcpGcpSecret, err := flagString(cmd, "self-hosted-gcp-secret")
+	if err != nil {
+		return nil, err
+	}
+	var bqProjectId string
+	if changed(cmd, "bq-project-id") {
+		bqProjectId, err = flagString(cmd, "bq-project-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var databricksWarehouseId string
+	if changed(cmd, "databricks-warehouse-id") {
+		databricksWarehouseId, err = flagString(cmd, "databricks-warehouse-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	body := sdk.NewGcpSecretManagerCredentialsIn(connectionType, selfHostedGcpGcpSecret)
+	if changed(cmd, "bq-project-id") {
+		body.SetBqProjectId(bqProjectId)
+	}
+	if changed(cmd, "databricks-warehouse-id") {
+		body.SetDatabricksWarehouseId(databricksWarehouseId)
+	}
+	return &connectionsAddCredentials{
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			candidate := sdk.NewGcpSecretManagerCredentialsValidateIn(deploymentId, connectionType, selfHostedGcpGcpSecret)
+			if changed(cmd, "bq-project-id") {
+				candidate.SetBqProjectId(bqProjectId)
+			}
+			if changed(cmd, "databricks-warehouse-id") {
+				candidate.SetDatabricksWarehouseId(databricksWarehouseId)
+			}
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateGcpSecretManagerCredentials(ctx).GcpSecretManagerCredentialsValidateIn(*candidate).Execute)
+		},
+		create: func(ctx context.Context) (string, *http.Response, error) {
+			out, resp, err := retryOnTransient(cmd, api.CredentialsAPI.CreateGcpSecretManagerCredentials(ctx).GcpSecretManagerCredentialsIn(*body).Execute)
+			if err != nil {
+				return "", resp, err
+			}
+			return out.GetId(), resp, nil
+		},
+		del: func(ctx context.Context, id string) (*http.Response, error) {
+			return api.CredentialsAPI.DeleteGcpSecretManagerCredentials(ctx, id).Execute()
+		},
+		deleteCmd: "credentials delete gcp-secret-manager",
+		listCmd:   "credentials list",
+	}, nil
+}
+
+func buildConnectionsAddSelfHostedAzure(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
+	var err error
+	if err := requireAny(cmd, "self-hosted-azure-akv-secret"); err != nil {
+		return nil, err
+	}
+	selfHostedAzureAkvSecret, err := flagString(cmd, "self-hosted-azure-akv-secret")
+	if err != nil {
+		return nil, err
+	}
+	var selfHostedAzureAkvVaultName string
+	if changed(cmd, "self-hosted-azure-akv-vault-name") {
+		selfHostedAzureAkvVaultName, err = flagString(cmd, "self-hosted-azure-akv-vault-name")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var selfHostedAzureAkvVaultUrl string
+	if changed(cmd, "self-hosted-azure-akv-vault-url") {
+		selfHostedAzureAkvVaultUrl, err = flagString(cmd, "self-hosted-azure-akv-vault-url")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var bqProjectId string
+	if changed(cmd, "bq-project-id") {
+		bqProjectId, err = flagString(cmd, "bq-project-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var databricksWarehouseId string
+	if changed(cmd, "databricks-warehouse-id") {
+		databricksWarehouseId, err = flagString(cmd, "databricks-warehouse-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	body := sdk.NewAzureKeyVaultCredentialsIn(connectionType, selfHostedAzureAkvSecret)
+	if changed(cmd, "self-hosted-azure-akv-vault-name") {
+		body.SetAkvVaultName(selfHostedAzureAkvVaultName)
+	}
+	if changed(cmd, "self-hosted-azure-akv-vault-url") {
+		body.SetAkvVaultUrl(selfHostedAzureAkvVaultUrl)
+	}
+	if changed(cmd, "bq-project-id") {
+		body.SetBqProjectId(bqProjectId)
+	}
+	if changed(cmd, "databricks-warehouse-id") {
+		body.SetDatabricksWarehouseId(databricksWarehouseId)
+	}
+	return &connectionsAddCredentials{
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			candidate := sdk.NewAzureKeyVaultCredentialsValidateIn(deploymentId, connectionType, selfHostedAzureAkvSecret)
+			if changed(cmd, "self-hosted-azure-akv-vault-name") {
+				candidate.SetAkvVaultName(selfHostedAzureAkvVaultName)
+			}
+			if changed(cmd, "self-hosted-azure-akv-vault-url") {
+				candidate.SetAkvVaultUrl(selfHostedAzureAkvVaultUrl)
+			}
+			if changed(cmd, "bq-project-id") {
+				candidate.SetBqProjectId(bqProjectId)
+			}
+			if changed(cmd, "databricks-warehouse-id") {
+				candidate.SetDatabricksWarehouseId(databricksWarehouseId)
+			}
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateAzureKeyVaultCredentials(ctx).AzureKeyVaultCredentialsValidateIn(*candidate).Execute)
+		},
+		create: func(ctx context.Context) (string, *http.Response, error) {
+			out, resp, err := retryOnTransient(cmd, api.CredentialsAPI.CreateAzureKeyVaultCredentials(ctx).AzureKeyVaultCredentialsIn(*body).Execute)
+			if err != nil {
+				return "", resp, err
+			}
+			return out.GetId(), resp, nil
+		},
+		del: func(ctx context.Context, id string) (*http.Response, error) {
+			return api.CredentialsAPI.DeleteAzureKeyVaultCredentials(ctx, id).Execute()
+		},
+		deleteCmd: "credentials delete azure-key-vault",
+		listCmd:   "credentials list",
+	}, nil
+}
+
+func buildConnectionsAddSelfHostedEnvVar(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
+	var err error
+	if err := requireAny(cmd, "self-hosted-env-var-name"); err != nil {
+		return nil, err
+	}
+	selfHostedEnvVarEnvVarName, err := flagString(cmd, "self-hosted-env-var-name")
+	if err != nil {
+		return nil, err
+	}
+	var bqProjectId string
+	if changed(cmd, "bq-project-id") {
+		bqProjectId, err = flagString(cmd, "bq-project-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var databricksWarehouseId string
+	if changed(cmd, "databricks-warehouse-id") {
+		databricksWarehouseId, err = flagString(cmd, "databricks-warehouse-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var selfHostedEnvVarKmsKeyId string
+	if changed(cmd, "self-hosted-env-var-kms-key-id") {
+		selfHostedEnvVarKmsKeyId, err = flagString(cmd, "self-hosted-env-var-kms-key-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	body := sdk.NewEnvVarCredentialsIn(connectionType, selfHostedEnvVarEnvVarName)
+	if changed(cmd, "bq-project-id") {
+		body.SetBqProjectId(bqProjectId)
+	}
+	if changed(cmd, "databricks-warehouse-id") {
+		body.SetDatabricksWarehouseId(databricksWarehouseId)
+	}
+	if changed(cmd, "self-hosted-env-var-kms-key-id") {
+		body.SetKmsKeyId(selfHostedEnvVarKmsKeyId)
+	}
+	return &connectionsAddCredentials{
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			candidate := sdk.NewEnvVarCredentialsValidateIn(deploymentId, connectionType, selfHostedEnvVarEnvVarName)
+			if changed(cmd, "bq-project-id") {
+				candidate.SetBqProjectId(bqProjectId)
+			}
+			if changed(cmd, "databricks-warehouse-id") {
+				candidate.SetDatabricksWarehouseId(databricksWarehouseId)
+			}
+			if changed(cmd, "self-hosted-env-var-kms-key-id") {
+				candidate.SetKmsKeyId(selfHostedEnvVarKmsKeyId)
+			}
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateEnvVarCredentials(ctx).EnvVarCredentialsValidateIn(*candidate).Execute)
+		},
+		create: func(ctx context.Context) (string, *http.Response, error) {
+			out, resp, err := retryOnTransient(cmd, api.CredentialsAPI.CreateEnvVarCredentials(ctx).EnvVarCredentialsIn(*body).Execute)
+			if err != nil {
+				return "", resp, err
+			}
+			return out.GetId(), resp, nil
+		},
+		del: func(ctx context.Context, id string) (*http.Response, error) {
+			return api.CredentialsAPI.DeleteEnvVarCredentials(ctx, id).Execute()
+		},
+		deleteCmd: "credentials delete env-var",
+		listCmd:   "credentials list",
+	}, nil
+}
+
+func buildConnectionsAddSelfHostedFile(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
+	var err error
+	if err := requireAny(cmd, "self-hosted-file-path"); err != nil {
+		return nil, err
+	}
+	selfHostedFileFilePath, err := flagString(cmd, "self-hosted-file-path")
+	if err != nil {
+		return nil, err
+	}
+	var bqProjectId string
+	if changed(cmd, "bq-project-id") {
+		bqProjectId, err = flagString(cmd, "bq-project-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var databricksWarehouseId string
+	if changed(cmd, "databricks-warehouse-id") {
+		databricksWarehouseId, err = flagString(cmd, "databricks-warehouse-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	body := sdk.NewFileCredentialsIn(connectionType, selfHostedFileFilePath)
+	if changed(cmd, "bq-project-id") {
+		body.SetBqProjectId(bqProjectId)
+	}
+	if changed(cmd, "databricks-warehouse-id") {
+		body.SetDatabricksWarehouseId(databricksWarehouseId)
+	}
+	return &connectionsAddCredentials{
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			candidate := sdk.NewFileCredentialsValidateIn(deploymentId, connectionType, selfHostedFileFilePath)
+			if changed(cmd, "bq-project-id") {
+				candidate.SetBqProjectId(bqProjectId)
+			}
+			if changed(cmd, "databricks-warehouse-id") {
+				candidate.SetDatabricksWarehouseId(databricksWarehouseId)
+			}
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateFileCredentials(ctx).FileCredentialsValidateIn(*candidate).Execute)
+		},
+		create: func(ctx context.Context) (string, *http.Response, error) {
+			out, resp, err := retryOnTransient(cmd, api.CredentialsAPI.CreateFileCredentials(ctx).FileCredentialsIn(*body).Execute)
+			if err != nil {
+				return "", resp, err
+			}
+			return out.GetId(), resp, nil
+		},
+		del: func(ctx context.Context, id string) (*http.Response, error) {
+			return api.CredentialsAPI.DeleteFileCredentials(ctx, id).Execute()
+		},
+		deleteCmd: "credentials delete file",
+		listCmd:   "credentials list",
+	}, nil
+}
+
+// runConnectionsAdd reads every flag and validates the credentials unless told otherwise. It
+// then creates the warehouse unless one is given, the credentials and the connection, and a
+// failed step deletes what the run created.
+func runConnectionsAdd(cmd *cobra.Command, connectionType string, native *connectionsAddNative) error {
+	groups := []flagGroup{
+		{"self-hosted-aws", []string{"self-hosted-aws-secret", "self-hosted-aws-assumable-role", "self-hosted-aws-region", "self-hosted-aws-external-id"}},
+		{"self-hosted-gcp", []string{"self-hosted-gcp-secret"}},
+		{"self-hosted-azure", []string{"self-hosted-azure-akv-secret", "self-hosted-azure-akv-vault-name", "self-hosted-azure-akv-vault-url"}},
+		{"self-hosted-env-var", []string{"self-hosted-env-var-name", "self-hosted-env-var-kms-key-id"}},
+		{"self-hosted-file", []string{"self-hosted-file-path"}},
+	}
+	if native != nil {
+		groups = append([]flagGroup{native.group}, groups...)
+	}
+	selected, err := requireOneGroup(cmd, groups...)
+	if err != nil {
+		return err
+	}
+	validateOnly, err := flagBool(cmd, "validate-only")
+	if err != nil {
+		return err
+	}
+	skipValidations, err := flagBool(cmd, "skip-validations")
+	if err != nil {
+		return err
+	}
+	if validateOnly && skipValidations {
+		return fmt.Errorf("pass --validate-only or --skip-validations, not both")
+	}
+	if !validateOnly {
+		if err := requireAny(cmd, "name"); err != nil {
+			return err
+		}
+	}
+	if changed(cmd, "warehouse-id") == changed(cmd, "deployment-id") {
+		return fmt.Errorf("pass --deployment-id to create a warehouse for the connection, or --warehouse-id to add it to an existing one")
+	}
+	api, ctx, err := apiClient(cmd)
+	if err != nil {
+		return err
+	}
+	var credentials *connectionsAddCredentials
+	switch {
+	case native != nil && selected == native.group.name:
+		if changed(cmd, "bq-project-id", "databricks-warehouse-id") {
+			return fmt.Errorf("--bq-project-id and --databricks-warehouse-id apply to self-hosted credentials only")
+		}
+		credentials, err = native.build(cmd, api, connectionType)
+	case selected == "self-hosted-aws":
+		credentials, err = buildConnectionsAddSelfHostedAws(cmd, api, connectionType)
+	case selected == "self-hosted-gcp":
+		credentials, err = buildConnectionsAddSelfHostedGcp(cmd, api, connectionType)
+	case selected == "self-hosted-azure":
+		credentials, err = buildConnectionsAddSelfHostedAzure(cmd, api, connectionType)
+	case selected == "self-hosted-env-var":
+		credentials, err = buildConnectionsAddSelfHostedEnvVar(cmd, api, connectionType)
+	case selected == "self-hosted-file":
+		credentials, err = buildConnectionsAddSelfHostedFile(cmd, api, connectionType)
+	}
+	if err != nil {
+		return err
+	}
+	name, err := flagString(cmd, "name")
+	if err != nil {
+		return err
+	}
+	warehouseId, err := flagString(cmd, "warehouse-id")
+	if err != nil {
+		return err
+	}
+	deploymentId, err := flagString(cmd, "deployment-id")
+	if err != nil {
+		return err
+	}
+	var credentialsId string
+	warehouse := sdk.NewWarehouseIn(name, deploymentId)
+	warehouse.SetConnectionType(connectionType)
+	connection := sdk.NewConnectionIn(name, warehouseId, credentialsId)
+	if changed(cmd, "job-types") {
+		jobTypes, err := flagStringSlice(cmd, "job-types")
+		if err != nil {
+			return err
+		}
+		connection.SetJobTypes(jobTypes)
+	}
+	if !skipValidations {
+		deployment := deploymentId
+		if changed(cmd, "warehouse-id") {
+			existing, resp, err := api.WarehousesAPI.GetWarehouse(ctx, warehouseId).Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			deployment = existing.GetDeploymentId()
+		}
+		started, resp, err := credentials.validate(ctx, deployment)
+		if err != nil {
+			return apiErr(resp, err)
+		}
+		passed, err := waitForValidations(cmd, started, func() (any, *http.Response, error) {
+			out, resp, err := api.ValidationsAPI.GetValidationRun(ctx, started.GetId()).Execute()
+			return out, resp, err
+		}, "validations get run")
+		if err != nil {
+			return err
+		}
+		if !passed {
+			return fmt.Errorf("the validations did not pass, so nothing was created. Fix the problems above, or pass --skip-validations to create the connection without validating")
+		}
+		if validateOnly {
+			fmt.Fprintln(cmd.ErrOrStderr(), "Nothing was created: --validate-only.")
+			return nil
+		}
+		if err := confirm(cmd, "Create "+connectionType+" connection \""+name+"\""); err != nil {
+			return err
+		}
+	}
+
+	run := newUnwind(cmd)
+	if !changed(cmd, "warehouse-id") {
+		created, resp, err := retryOnTransient(cmd, api.WarehousesAPI.CreateWarehouse(ctx).WarehouseIn(*warehouse).Execute)
+		if err != nil {
+			if resp != nil && resp.StatusCode == http.StatusConflict {
+				return fmt.Errorf("%w\nIf an earlier run created it, find its id with `%s %s` and pass it as --%s.", apiErr(resp, err), binaryName, "warehouses list", "warehouse-id")
+			}
+			return run.fail(resp, err, "The warehouse may have been created; check "+binaryName+" warehouses list.")
+		}
+		warehouseId = created.GetId()
+		run.record("warehouse", warehouseId, "warehouses delete "+warehouseId, func(ctx context.Context) (*http.Response, error) {
+			return api.WarehousesAPI.DeleteWarehouse(ctx, warehouseId).Execute()
+		})
+	}
+	credentialsId, resp, err := credentials.create(ctx)
+	if err != nil {
+		return run.fail(resp, err, "The credentials may have been stored; check "+binaryName+" "+credentials.listCmd+".")
+	}
+	run.record("credentials", credentialsId, credentials.deleteCmd+" "+credentialsId, func(ctx context.Context) (*http.Response, error) {
+		return credentials.del(ctx, credentialsId)
+	})
+	connection.SetName(name)
+	connection.SetWarehouseId(warehouseId)
+	connection.SetCredentialsId(credentialsId)
+	out, resp, err := retryOnTransient(cmd, api.ConnectionsAPI.CreateConnection(ctx).ConnectionIn(*connection).Execute)
+	if err != nil {
+		return run.fail(resp, err, "The connection may have been created; check "+binaryName+" connections list.")
+	}
+	return render(cmd, out, "id", "connection_type", "name", "warehouse_id", "warehouse_name", "deployment_id", "deployment_name", "credentials_id", "credentials_storage_type", "job_types", "created_time")
+}
+
+// connectionsUpdateCredentials validates a change to a connection's credentials, and makes it.
+type connectionsUpdateCredentials struct {
+	validate func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error)
+	patch    func(ctx context.Context) (*http.Response, error)
+}
+
+// connectionsUpdateNative is the credentials a subcommand named after its connection type changes.
+type connectionsUpdateNative struct {
+	group   flagGroup
+	storage string
+	build   func(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error)
+}
+
+func newConnectionsUpdateCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "update <connection_id>",
+		Short: "Update a connection, and change its credentials",
+		Long:  "Updates a connection. The flags that change credentials are validated first, then the command asks before changing them. The change applies to every connection using the credentials. Each field is taken from its flag, else from the stored credentials. A secret cannot be read back, so validating needs it passed, or --skip-validations. Pass a credentials flag as \"\" to clear its field.\n\nThis command changes self-hosted credentials, one set of --self-hosted-* flags, or the shared flags alone for the storage the connection has; the subcommands change each connection type's own credentials.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsUpdate(cmd, args[0], nil)
+		},
+	}
+	cmd.Flags().String("self-hosted-aws-assumable-role", "", "ARN of a role the deployment assumes to read the secret. Omit it to read as itself.")
+	cmd.Flags().String("self-hosted-aws-region", "", "AWS region of the secret. Omit it to use the deployment's own region.")
+	cmd.Flags().String("self-hosted-aws-secret", "", "Name or ARN of the AWS Secrets Manager secret holding the connection's credentials.")
+	cmd.Flags().String("self-hosted-aws-external-id", "", "External id the assumed role's trust policy requires, if it requires one.")
+	cmd.Flags().String("self-hosted-gcp-secret", "", "Name of the GCP Secret Manager secret holding the connection's credentials.")
+	cmd.Flags().String("self-hosted-azure-akv-secret", "", "Name of the Azure Key Vault secret holding the connection's credentials.")
+	cmd.Flags().String("self-hosted-azure-akv-vault-name", "", "Name of the key vault. Send this, akv_vault_url, or both.")
+	cmd.Flags().String("self-hosted-azure-akv-vault-url", "", "URL of the key vault. Send this, akv_vault_name, or both.")
+	cmd.Flags().String("self-hosted-env-var-name", "", "Name of the environment variable on the deployment that holds the connection's credentials. Must start with MCD_.")
+	cmd.Flags().String("self-hosted-env-var-kms-key-id", "", "AWS KMS key the variable's value is encrypted with. Omit it for a value stored in the clear.")
+	cmd.Flags().String("self-hosted-file-path", "", "Path of the file on the deployment that holds the connection's credentials.")
+	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
+	cmd.Flags().String("databricks-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
+	registerConnectionsUpdateFlags(cmd)
+	cmd.AddCommand(newConnectionsUpdateSnowflakeCmd())
+	return cmd
+}
+
+func newConnectionsUpdateSnowflakeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "snowflake <connection_id>",
+		Short: "Update a snowflake connection, and change its credentials",
+		Long:  "Updates a snowflake connection, as the update command does, changing its snowflake credentials with the flags below.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
+				group:   flagGroup{"snowflake", []string{"account", "private-key", "private-key-prompt", "private-key-passphrase", "private-key-passphrase-prompt", "user", "warehouse"}},
+				storage: "mc_managed",
+				build:   buildConnectionsUpdateSnowflake,
+			})
+		},
+	}
+	cmd.Flags().String("account", "", "New Snowflake account identifier, without the .snowflakecomputing.com suffix.")
+	cmd.Flags().String("private-key", "", "New private key, as PEM text. Replaces the stored key and its passphrase; send private_key_passphrase in the same request if the new key has one. Visible in the process list; --private-key-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("private-key-prompt", false, "Read --private-key from a hidden prompt instead of the command line.")
+	cmd.Flags().String("private-key-passphrase", "", "Passphrase of the new private key. Only accepted together with private_key. Visible in the process list; --private-key-passphrase-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("private-key-passphrase-prompt", false, "Read --private-key-passphrase from a hidden prompt instead of the command line.")
+	cmd.Flags().String("user", "", "New Snowflake user.")
+	cmd.Flags().String("warehouse", "", "New Snowflake virtual warehouse. An explicit null clears it; queries then run in the user's default.")
+	registerConnectionsUpdateFlags(cmd)
+	return cmd
+}
+
+// registerConnectionsUpdateFlags registers the flags every update command takes. A connection's
+// credentials keep their storage, so a native type's subcommand takes no self-hosted flags.
+func registerConnectionsUpdateFlags(cmd *cobra.Command) {
+	cmd.Flags().String("name", "", "New display name for the connection. Omit it to leave the name unchanged. An explicit null is ignored, the same as omitting the field.")
+	cmd.Flags().Bool("validate-only", false, "Validate the credentials change and change nothing.")
+	cmd.Flags().Bool("skip-validations", false, "Change the credentials without validating them first, and without asking.")
+}
+
+func buildConnectionsUpdateSnowflake(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+	var err error
+	var account string
+	if changed(cmd, "account") {
+		account, err = flagString(cmd, "account")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var privateKey string
+	if changed(cmd, "private-key", "private-key-prompt") {
+		privateKey, err = flagSecret(cmd, "private-key")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var privateKeyPassphrase string
+	if changed(cmd, "private-key-passphrase", "private-key-passphrase-prompt") {
+		privateKeyPassphrase, err = flagSecret(cmd, "private-key-passphrase")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var user string
+	if changed(cmd, "user") {
+		user, err = flagString(cmd, "user")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var warehouse string
+	if changed(cmd, "warehouse") {
+		warehouse, err = flagString(cmd, "warehouse")
+		if err != nil {
+			return nil, err
+		}
+	}
+	patch := sdk.NewSnowflakeCredentialsPatchWithDefaults()
+	if changed(cmd, "account") {
+		if account == "" {
+			patch.SetAccountNil()
+		} else {
+			patch.SetAccount(account)
+		}
+	}
+	if changed(cmd, "private-key", "private-key-prompt") {
+		if privateKey == "" {
+			patch.SetPrivateKeyNil()
+		} else {
+			patch.SetPrivateKey(privateKey)
+		}
+	}
+	if changed(cmd, "private-key-passphrase", "private-key-passphrase-prompt") {
+		if privateKeyPassphrase == "" {
+			patch.SetPrivateKeyPassphraseNil()
+		} else {
+			patch.SetPrivateKeyPassphrase(privateKeyPassphrase)
+		}
+	}
+	if changed(cmd, "user") {
+		if user == "" {
+			patch.SetUserNil()
+		} else {
+			patch.SetUser(user)
+		}
+	}
+	if changed(cmd, "warehouse") {
+		if warehouse == "" {
+			patch.SetWarehouseNil()
+		} else {
+			patch.SetWarehouse(warehouse)
+		}
+	}
+	return &connectionsUpdateCredentials{
+		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
+			stored, resp, err := api.CredentialsAPI.GetSnowflakeCredentials(ctx, credentialsId).Execute()
+			if err != nil {
+				return nil, resp, err
+			}
+			candidate := sdk.NewSnowflakeCredentialsValidateInWithDefaults()
+			var missing []string
+			candidate.SetDeploymentId(deploymentId)
+			if changed(cmd, "account") {
+				if account != "" {
+					candidate.SetAccount(account)
+				}
+			} else if v, ok := stored.GetAccountOk(); ok && v != nil {
+				candidate.SetAccount(*v)
+			}
+			if changed(cmd, "user") {
+				if user != "" {
+					candidate.SetUser(user)
+				}
+			} else if v, ok := stored.GetUserOk(); ok && v != nil {
+				candidate.SetUser(*v)
+			}
+			if changed(cmd, "private-key", "private-key-prompt") {
+				if privateKey != "" {
+					candidate.SetPrivateKey(privateKey)
+				}
+			} else {
+				missing = append(missing, "--private-key")
+			}
+			if changed(cmd, "private-key-passphrase", "private-key-passphrase-prompt") {
+				if privateKeyPassphrase != "" {
+					candidate.SetPrivateKeyPassphrase(privateKeyPassphrase)
+				}
+			}
+			if changed(cmd, "warehouse") {
+				if warehouse != "" {
+					candidate.SetWarehouse(warehouse)
+				}
+			} else if v, ok := stored.GetWarehouseOk(); ok && v != nil {
+				candidate.SetWarehouse(*v)
+			}
+			if len(missing) > 0 {
+				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+			}
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateSnowflakeCredentials(ctx).SnowflakeCredentialsValidateIn(*candidate).Execute)
+		},
+		patch: func(ctx context.Context) (*http.Response, error) {
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateSnowflakeCredentials(ctx, credentialsId).SnowflakeCredentialsPatch(*patch).Execute)
+			return resp, err
+		},
+	}, nil
+}
+
+func buildConnectionsUpdateSelfHostedAws(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+	var err error
+	var selfHostedAwsAssumableRole string
+	if changed(cmd, "self-hosted-aws-assumable-role") {
+		selfHostedAwsAssumableRole, err = flagString(cmd, "self-hosted-aws-assumable-role")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var selfHostedAwsAwsRegion string
+	if changed(cmd, "self-hosted-aws-region") {
+		selfHostedAwsAwsRegion, err = flagString(cmd, "self-hosted-aws-region")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var selfHostedAwsAwsSecret string
+	if changed(cmd, "self-hosted-aws-secret") {
+		selfHostedAwsAwsSecret, err = flagString(cmd, "self-hosted-aws-secret")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var bqProjectId string
+	if changed(cmd, "bq-project-id") {
+		bqProjectId, err = flagString(cmd, "bq-project-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var databricksWarehouseId string
+	if changed(cmd, "databricks-warehouse-id") {
+		databricksWarehouseId, err = flagString(cmd, "databricks-warehouse-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var selfHostedAwsExternalId string
+	if changed(cmd, "self-hosted-aws-external-id") {
+		selfHostedAwsExternalId, err = flagString(cmd, "self-hosted-aws-external-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	patch := sdk.NewAwsSecretsManagerCredentialsPatchWithDefaults()
+	if changed(cmd, "self-hosted-aws-assumable-role") {
+		if selfHostedAwsAssumableRole == "" {
+			patch.SetAssumableRoleNil()
+		} else {
+			patch.SetAssumableRole(selfHostedAwsAssumableRole)
+		}
+	}
+	if changed(cmd, "self-hosted-aws-region") {
+		if selfHostedAwsAwsRegion == "" {
+			patch.SetAwsRegionNil()
+		} else {
+			patch.SetAwsRegion(selfHostedAwsAwsRegion)
+		}
+	}
+	if changed(cmd, "self-hosted-aws-secret") {
+		if selfHostedAwsAwsSecret == "" {
+			patch.SetAwsSecretNil()
+		} else {
+			patch.SetAwsSecret(selfHostedAwsAwsSecret)
+		}
+	}
+	if changed(cmd, "bq-project-id") {
+		if bqProjectId == "" {
+			patch.SetBqProjectIdNil()
+		} else {
+			patch.SetBqProjectId(bqProjectId)
+		}
+	}
+	if changed(cmd, "databricks-warehouse-id") {
+		if databricksWarehouseId == "" {
+			patch.SetDatabricksWarehouseIdNil()
+		} else {
+			patch.SetDatabricksWarehouseId(databricksWarehouseId)
+		}
+	}
+	if changed(cmd, "self-hosted-aws-external-id") {
+		if selfHostedAwsExternalId == "" {
+			patch.SetExternalIdNil()
+		} else {
+			patch.SetExternalId(selfHostedAwsExternalId)
+		}
+	}
+	return &connectionsUpdateCredentials{
+		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
+			stored, resp, err := api.CredentialsAPI.GetAwsSecretsManagerCredentials(ctx, credentialsId).Execute()
+			if err != nil {
+				return nil, resp, err
+			}
+			candidate := sdk.NewAwsSecretsManagerCredentialsValidateInWithDefaults()
+			var missing []string
+			candidate.SetDeploymentId(deploymentId)
+			candidate.SetConnectionType(connectionType)
+			if changed(cmd, "self-hosted-aws-secret") {
+				if selfHostedAwsAwsSecret != "" {
+					candidate.SetAwsSecret(selfHostedAwsAwsSecret)
+				}
+			} else if v, ok := stored.GetAwsSecretOk(); ok && v != nil {
+				candidate.SetAwsSecret(*v)
+			}
+			if changed(cmd, "self-hosted-aws-assumable-role") {
+				if selfHostedAwsAssumableRole != "" {
+					candidate.SetAssumableRole(selfHostedAwsAssumableRole)
+				}
+			} else if v, ok := stored.GetAssumableRoleOk(); ok && v != nil {
+				candidate.SetAssumableRole(*v)
+			}
+			if changed(cmd, "self-hosted-aws-region") {
+				if selfHostedAwsAwsRegion != "" {
+					candidate.SetAwsRegion(selfHostedAwsAwsRegion)
+				}
+			} else if v, ok := stored.GetAwsRegionOk(); ok && v != nil {
+				candidate.SetAwsRegion(*v)
+			}
+			if changed(cmd, "bq-project-id") {
+				if bqProjectId != "" {
+					candidate.SetBqProjectId(bqProjectId)
+				}
+			} else if v, ok := stored.GetBqProjectIdOk(); ok && v != nil {
+				candidate.SetBqProjectId(*v)
+			}
+			if changed(cmd, "databricks-warehouse-id") {
+				if databricksWarehouseId != "" {
+					candidate.SetDatabricksWarehouseId(databricksWarehouseId)
+				}
+			} else if v, ok := stored.GetDatabricksWarehouseIdOk(); ok && v != nil {
+				candidate.SetDatabricksWarehouseId(*v)
+			}
+			if changed(cmd, "self-hosted-aws-external-id") {
+				if selfHostedAwsExternalId != "" {
+					candidate.SetExternalId(selfHostedAwsExternalId)
+				}
+			} else if v, ok := stored.GetExternalIdOk(); ok && v != nil {
+				candidate.SetExternalId(*v)
+			}
+			if len(missing) > 0 {
+				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+			}
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateAwsSecretsManagerCredentials(ctx).AwsSecretsManagerCredentialsValidateIn(*candidate).Execute)
+		},
+		patch: func(ctx context.Context) (*http.Response, error) {
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateAwsSecretsManagerCredentials(ctx, credentialsId).AwsSecretsManagerCredentialsPatch(*patch).Execute)
+			return resp, err
+		},
+	}, nil
+}
+
+func buildConnectionsUpdateSelfHostedGcp(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+	var err error
+	var bqProjectId string
+	if changed(cmd, "bq-project-id") {
+		bqProjectId, err = flagString(cmd, "bq-project-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var databricksWarehouseId string
+	if changed(cmd, "databricks-warehouse-id") {
+		databricksWarehouseId, err = flagString(cmd, "databricks-warehouse-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var selfHostedGcpGcpSecret string
+	if changed(cmd, "self-hosted-gcp-secret") {
+		selfHostedGcpGcpSecret, err = flagString(cmd, "self-hosted-gcp-secret")
+		if err != nil {
+			return nil, err
+		}
+	}
+	patch := sdk.NewGcpSecretManagerCredentialsPatchWithDefaults()
+	if changed(cmd, "bq-project-id") {
+		if bqProjectId == "" {
+			patch.SetBqProjectIdNil()
+		} else {
+			patch.SetBqProjectId(bqProjectId)
+		}
+	}
+	if changed(cmd, "databricks-warehouse-id") {
+		if databricksWarehouseId == "" {
+			patch.SetDatabricksWarehouseIdNil()
+		} else {
+			patch.SetDatabricksWarehouseId(databricksWarehouseId)
+		}
+	}
+	if changed(cmd, "self-hosted-gcp-secret") {
+		if selfHostedGcpGcpSecret == "" {
+			patch.SetGcpSecretNil()
+		} else {
+			patch.SetGcpSecret(selfHostedGcpGcpSecret)
+		}
+	}
+	return &connectionsUpdateCredentials{
+		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
+			stored, resp, err := api.CredentialsAPI.GetGcpSecretManagerCredentials(ctx, credentialsId).Execute()
+			if err != nil {
+				return nil, resp, err
+			}
+			candidate := sdk.NewGcpSecretManagerCredentialsValidateInWithDefaults()
+			var missing []string
+			candidate.SetDeploymentId(deploymentId)
+			candidate.SetConnectionType(connectionType)
+			if changed(cmd, "self-hosted-gcp-secret") {
+				if selfHostedGcpGcpSecret != "" {
+					candidate.SetGcpSecret(selfHostedGcpGcpSecret)
+				}
+			} else if v, ok := stored.GetGcpSecretOk(); ok && v != nil {
+				candidate.SetGcpSecret(*v)
+			}
+			if changed(cmd, "bq-project-id") {
+				if bqProjectId != "" {
+					candidate.SetBqProjectId(bqProjectId)
+				}
+			} else if v, ok := stored.GetBqProjectIdOk(); ok && v != nil {
+				candidate.SetBqProjectId(*v)
+			}
+			if changed(cmd, "databricks-warehouse-id") {
+				if databricksWarehouseId != "" {
+					candidate.SetDatabricksWarehouseId(databricksWarehouseId)
+				}
+			} else if v, ok := stored.GetDatabricksWarehouseIdOk(); ok && v != nil {
+				candidate.SetDatabricksWarehouseId(*v)
+			}
+			if len(missing) > 0 {
+				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+			}
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateGcpSecretManagerCredentials(ctx).GcpSecretManagerCredentialsValidateIn(*candidate).Execute)
+		},
+		patch: func(ctx context.Context) (*http.Response, error) {
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateGcpSecretManagerCredentials(ctx, credentialsId).GcpSecretManagerCredentialsPatch(*patch).Execute)
+			return resp, err
+		},
+	}, nil
+}
+
+func buildConnectionsUpdateSelfHostedAzure(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+	var err error
+	var selfHostedAzureAkvSecret string
+	if changed(cmd, "self-hosted-azure-akv-secret") {
+		selfHostedAzureAkvSecret, err = flagString(cmd, "self-hosted-azure-akv-secret")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var selfHostedAzureAkvVaultName string
+	if changed(cmd, "self-hosted-azure-akv-vault-name") {
+		selfHostedAzureAkvVaultName, err = flagString(cmd, "self-hosted-azure-akv-vault-name")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var selfHostedAzureAkvVaultUrl string
+	if changed(cmd, "self-hosted-azure-akv-vault-url") {
+		selfHostedAzureAkvVaultUrl, err = flagString(cmd, "self-hosted-azure-akv-vault-url")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var bqProjectId string
+	if changed(cmd, "bq-project-id") {
+		bqProjectId, err = flagString(cmd, "bq-project-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var databricksWarehouseId string
+	if changed(cmd, "databricks-warehouse-id") {
+		databricksWarehouseId, err = flagString(cmd, "databricks-warehouse-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	patch := sdk.NewAzureKeyVaultCredentialsPatchWithDefaults()
+	if changed(cmd, "self-hosted-azure-akv-secret") {
+		if selfHostedAzureAkvSecret == "" {
+			patch.SetAkvSecretNil()
+		} else {
+			patch.SetAkvSecret(selfHostedAzureAkvSecret)
+		}
+	}
+	if changed(cmd, "self-hosted-azure-akv-vault-name") {
+		if selfHostedAzureAkvVaultName == "" {
+			patch.SetAkvVaultNameNil()
+		} else {
+			patch.SetAkvVaultName(selfHostedAzureAkvVaultName)
+		}
+	}
+	if changed(cmd, "self-hosted-azure-akv-vault-url") {
+		if selfHostedAzureAkvVaultUrl == "" {
+			patch.SetAkvVaultUrlNil()
+		} else {
+			patch.SetAkvVaultUrl(selfHostedAzureAkvVaultUrl)
+		}
+	}
+	if changed(cmd, "bq-project-id") {
+		if bqProjectId == "" {
+			patch.SetBqProjectIdNil()
+		} else {
+			patch.SetBqProjectId(bqProjectId)
+		}
+	}
+	if changed(cmd, "databricks-warehouse-id") {
+		if databricksWarehouseId == "" {
+			patch.SetDatabricksWarehouseIdNil()
+		} else {
+			patch.SetDatabricksWarehouseId(databricksWarehouseId)
+		}
+	}
+	return &connectionsUpdateCredentials{
+		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
+			stored, resp, err := api.CredentialsAPI.GetAzureKeyVaultCredentials(ctx, credentialsId).Execute()
+			if err != nil {
+				return nil, resp, err
+			}
+			candidate := sdk.NewAzureKeyVaultCredentialsValidateInWithDefaults()
+			var missing []string
+			candidate.SetDeploymentId(deploymentId)
+			candidate.SetConnectionType(connectionType)
+			if changed(cmd, "self-hosted-azure-akv-secret") {
+				if selfHostedAzureAkvSecret != "" {
+					candidate.SetAkvSecret(selfHostedAzureAkvSecret)
+				}
+			} else if v, ok := stored.GetAkvSecretOk(); ok && v != nil {
+				candidate.SetAkvSecret(*v)
+			}
+			if changed(cmd, "self-hosted-azure-akv-vault-name") {
+				if selfHostedAzureAkvVaultName != "" {
+					candidate.SetAkvVaultName(selfHostedAzureAkvVaultName)
+				}
+			} else if v, ok := stored.GetAkvVaultNameOk(); ok && v != nil {
+				candidate.SetAkvVaultName(*v)
+			}
+			if changed(cmd, "self-hosted-azure-akv-vault-url") {
+				if selfHostedAzureAkvVaultUrl != "" {
+					candidate.SetAkvVaultUrl(selfHostedAzureAkvVaultUrl)
+				}
+			} else if v, ok := stored.GetAkvVaultUrlOk(); ok && v != nil {
+				candidate.SetAkvVaultUrl(*v)
+			}
+			if changed(cmd, "bq-project-id") {
+				if bqProjectId != "" {
+					candidate.SetBqProjectId(bqProjectId)
+				}
+			} else if v, ok := stored.GetBqProjectIdOk(); ok && v != nil {
+				candidate.SetBqProjectId(*v)
+			}
+			if changed(cmd, "databricks-warehouse-id") {
+				if databricksWarehouseId != "" {
+					candidate.SetDatabricksWarehouseId(databricksWarehouseId)
+				}
+			} else if v, ok := stored.GetDatabricksWarehouseIdOk(); ok && v != nil {
+				candidate.SetDatabricksWarehouseId(*v)
+			}
+			if len(missing) > 0 {
+				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+			}
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateAzureKeyVaultCredentials(ctx).AzureKeyVaultCredentialsValidateIn(*candidate).Execute)
+		},
+		patch: func(ctx context.Context) (*http.Response, error) {
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateAzureKeyVaultCredentials(ctx, credentialsId).AzureKeyVaultCredentialsPatch(*patch).Execute)
+			return resp, err
+		},
+	}, nil
+}
+
+func buildConnectionsUpdateSelfHostedEnvVar(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+	var err error
+	var bqProjectId string
+	if changed(cmd, "bq-project-id") {
+		bqProjectId, err = flagString(cmd, "bq-project-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var databricksWarehouseId string
+	if changed(cmd, "databricks-warehouse-id") {
+		databricksWarehouseId, err = flagString(cmd, "databricks-warehouse-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var selfHostedEnvVarEnvVarName string
+	if changed(cmd, "self-hosted-env-var-name") {
+		selfHostedEnvVarEnvVarName, err = flagString(cmd, "self-hosted-env-var-name")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var selfHostedEnvVarKmsKeyId string
+	if changed(cmd, "self-hosted-env-var-kms-key-id") {
+		selfHostedEnvVarKmsKeyId, err = flagString(cmd, "self-hosted-env-var-kms-key-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	patch := sdk.NewEnvVarCredentialsPatchWithDefaults()
+	if changed(cmd, "bq-project-id") {
+		if bqProjectId == "" {
+			patch.SetBqProjectIdNil()
+		} else {
+			patch.SetBqProjectId(bqProjectId)
+		}
+	}
+	if changed(cmd, "databricks-warehouse-id") {
+		if databricksWarehouseId == "" {
+			patch.SetDatabricksWarehouseIdNil()
+		} else {
+			patch.SetDatabricksWarehouseId(databricksWarehouseId)
+		}
+	}
+	if changed(cmd, "self-hosted-env-var-name") {
+		if selfHostedEnvVarEnvVarName == "" {
+			patch.SetEnvVarNameNil()
+		} else {
+			patch.SetEnvVarName(selfHostedEnvVarEnvVarName)
+		}
+	}
+	if changed(cmd, "self-hosted-env-var-kms-key-id") {
+		if selfHostedEnvVarKmsKeyId == "" {
+			patch.SetKmsKeyIdNil()
+		} else {
+			patch.SetKmsKeyId(selfHostedEnvVarKmsKeyId)
+		}
+	}
+	return &connectionsUpdateCredentials{
+		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
+			stored, resp, err := api.CredentialsAPI.GetEnvVarCredentials(ctx, credentialsId).Execute()
+			if err != nil {
+				return nil, resp, err
+			}
+			candidate := sdk.NewEnvVarCredentialsValidateInWithDefaults()
+			var missing []string
+			candidate.SetDeploymentId(deploymentId)
+			candidate.SetConnectionType(connectionType)
+			if changed(cmd, "self-hosted-env-var-name") {
+				if selfHostedEnvVarEnvVarName != "" {
+					candidate.SetEnvVarName(selfHostedEnvVarEnvVarName)
+				}
+			} else if v, ok := stored.GetEnvVarNameOk(); ok && v != nil {
+				candidate.SetEnvVarName(*v)
+			}
+			if changed(cmd, "bq-project-id") {
+				if bqProjectId != "" {
+					candidate.SetBqProjectId(bqProjectId)
+				}
+			} else if v, ok := stored.GetBqProjectIdOk(); ok && v != nil {
+				candidate.SetBqProjectId(*v)
+			}
+			if changed(cmd, "databricks-warehouse-id") {
+				if databricksWarehouseId != "" {
+					candidate.SetDatabricksWarehouseId(databricksWarehouseId)
+				}
+			} else if v, ok := stored.GetDatabricksWarehouseIdOk(); ok && v != nil {
+				candidate.SetDatabricksWarehouseId(*v)
+			}
+			if changed(cmd, "self-hosted-env-var-kms-key-id") {
+				if selfHostedEnvVarKmsKeyId != "" {
+					candidate.SetKmsKeyId(selfHostedEnvVarKmsKeyId)
+				}
+			} else if v, ok := stored.GetKmsKeyIdOk(); ok && v != nil {
+				candidate.SetKmsKeyId(*v)
+			}
+			if len(missing) > 0 {
+				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+			}
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateEnvVarCredentials(ctx).EnvVarCredentialsValidateIn(*candidate).Execute)
+		},
+		patch: func(ctx context.Context) (*http.Response, error) {
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateEnvVarCredentials(ctx, credentialsId).EnvVarCredentialsPatch(*patch).Execute)
+			return resp, err
+		},
+	}, nil
+}
+
+func buildConnectionsUpdateSelfHostedFile(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+	var err error
+	var bqProjectId string
+	if changed(cmd, "bq-project-id") {
+		bqProjectId, err = flagString(cmd, "bq-project-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var databricksWarehouseId string
+	if changed(cmd, "databricks-warehouse-id") {
+		databricksWarehouseId, err = flagString(cmd, "databricks-warehouse-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var selfHostedFileFilePath string
+	if changed(cmd, "self-hosted-file-path") {
+		selfHostedFileFilePath, err = flagString(cmd, "self-hosted-file-path")
+		if err != nil {
+			return nil, err
+		}
+	}
+	patch := sdk.NewFileCredentialsPatchWithDefaults()
+	if changed(cmd, "bq-project-id") {
+		if bqProjectId == "" {
+			patch.SetBqProjectIdNil()
+		} else {
+			patch.SetBqProjectId(bqProjectId)
+		}
+	}
+	if changed(cmd, "databricks-warehouse-id") {
+		if databricksWarehouseId == "" {
+			patch.SetDatabricksWarehouseIdNil()
+		} else {
+			patch.SetDatabricksWarehouseId(databricksWarehouseId)
+		}
+	}
+	if changed(cmd, "self-hosted-file-path") {
+		if selfHostedFileFilePath == "" {
+			patch.SetFilePathNil()
+		} else {
+			patch.SetFilePath(selfHostedFileFilePath)
+		}
+	}
+	return &connectionsUpdateCredentials{
+		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
+			stored, resp, err := api.CredentialsAPI.GetFileCredentials(ctx, credentialsId).Execute()
+			if err != nil {
+				return nil, resp, err
+			}
+			candidate := sdk.NewFileCredentialsValidateInWithDefaults()
+			var missing []string
+			candidate.SetDeploymentId(deploymentId)
+			candidate.SetConnectionType(connectionType)
+			if changed(cmd, "self-hosted-file-path") {
+				if selfHostedFileFilePath != "" {
+					candidate.SetFilePath(selfHostedFileFilePath)
+				}
+			} else if v, ok := stored.GetFilePathOk(); ok && v != nil {
+				candidate.SetFilePath(*v)
+			}
+			if changed(cmd, "bq-project-id") {
+				if bqProjectId != "" {
+					candidate.SetBqProjectId(bqProjectId)
+				}
+			} else if v, ok := stored.GetBqProjectIdOk(); ok && v != nil {
+				candidate.SetBqProjectId(*v)
+			}
+			if changed(cmd, "databricks-warehouse-id") {
+				if databricksWarehouseId != "" {
+					candidate.SetDatabricksWarehouseId(databricksWarehouseId)
+				}
+			} else if v, ok := stored.GetDatabricksWarehouseIdOk(); ok && v != nil {
+				candidate.SetDatabricksWarehouseId(*v)
+			}
+			if len(missing) > 0 {
+				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+			}
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateFileCredentials(ctx).FileCredentialsValidateIn(*candidate).Execute)
+		},
+		patch: func(ctx context.Context) (*http.Response, error) {
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateFileCredentials(ctx, credentialsId).FileCredentialsPatch(*patch).Execute)
+			return resp, err
+		},
+	}, nil
+}
+
+// runConnectionsUpdate reads every flag, validates a credentials change unless told otherwise, then
+// changes the credentials and renames the connection.
+func runConnectionsUpdate(cmd *cobra.Command, connectionId string, native *connectionsUpdateNative) error {
+	groups := []flagGroup{
+		{"self-hosted-aws", []string{"self-hosted-aws-assumable-role", "self-hosted-aws-region", "self-hosted-aws-secret", "self-hosted-aws-external-id"}},
+		{"self-hosted-gcp", []string{"self-hosted-gcp-secret"}},
+		{"self-hosted-azure", []string{"self-hosted-azure-akv-secret", "self-hosted-azure-akv-vault-name", "self-hosted-azure-akv-vault-url"}},
+		{"self-hosted-env-var", []string{"self-hosted-env-var-name", "self-hosted-env-var-kms-key-id"}},
+		{"self-hosted-file", []string{"self-hosted-file-path"}},
+	}
+	groupFlags := []string{"self-hosted-aws-assumable-role", "self-hosted-aws-region", "self-hosted-aws-secret", "self-hosted-aws-external-id", "self-hosted-gcp-secret", "self-hosted-azure-akv-secret", "self-hosted-azure-akv-vault-name", "self-hosted-azure-akv-vault-url", "self-hosted-env-var-name", "self-hosted-env-var-kms-key-id", "self-hosted-file-path"}
+	credentialsFlags := []string{"self-hosted-aws-assumable-role", "self-hosted-aws-region", "self-hosted-aws-secret", "self-hosted-aws-external-id", "self-hosted-gcp-secret", "self-hosted-azure-akv-secret", "self-hosted-azure-akv-vault-name", "self-hosted-azure-akv-vault-url", "self-hosted-env-var-name", "self-hosted-env-var-kms-key-id", "self-hosted-file-path", "bq-project-id", "databricks-warehouse-id"}
+	if native != nil {
+		groups = []flagGroup{native.group}
+		groupFlags = native.group.flags
+		credentialsFlags = native.group.flags
+	}
+	var selected string
+	var err error
+	if changed(cmd, groupFlags...) {
+		if selected, err = requireOneGroup(cmd, groups...); err != nil {
+			return err
+		}
+	}
+	changing := changed(cmd, credentialsFlags...)
+	renaming := changed(cmd, "name")
+	if !changing && !renaming {
+		return fmt.Errorf("nothing to update: pass the flags of what changes")
+	}
+	validateOnly, err := flagBool(cmd, "validate-only")
+	if err != nil {
+		return err
+	}
+	skipValidations, err := flagBool(cmd, "skip-validations")
+	if err != nil {
+		return err
+	}
+	if validateOnly && skipValidations {
+		return fmt.Errorf("pass --validate-only or --skip-validations, not both")
+	}
+	if validateOnly && !changing {
+		return fmt.Errorf("--validate-only validates a credentials change; pass the flags of one")
+	}
+	api, ctx, err := apiClient(cmd)
+	if err != nil {
+		return err
+	}
+	connection, resp, err := api.ConnectionsAPI.GetConnection(ctx, connectionId).Execute()
+	if err != nil {
+		return apiErr(resp, err)
+	}
+	credentialsId, _ := connection.GetCredentialsIdOk()
+	var credentials *connectionsUpdateCredentials
+	if changing {
+		if credentialsId == nil {
+			return fmt.Errorf("connection %s has no credentials this command can change; recreate it with %s %s", connectionId, binaryName, "connections add")
+		}
+		stored := ""
+		if v, ok := connection.GetCredentialsStorageTypeOk(); ok && v != nil {
+			stored = string(*v)
+		}
+		connectionType := connection.GetConnectionType()
+		if native != nil {
+			if connectionType != native.group.name || stored != native.storage {
+				return fmt.Errorf("connection %s is a %s connection keeping its credentials in %s; this command changes %s credentials kept in %s", connectionId, connectionType, stored, native.group.name, native.storage)
+			}
+		} else {
+			storages := map[string]string{
+				"aws_secrets_manager": "self-hosted-aws",
+				"gcp_secret_manager":  "self-hosted-gcp",
+				"azure_key_vault":     "self-hosted-azure",
+				"env_var":             "self-hosted-env-var",
+				"file":                "self-hosted-file",
+			}
+			fits, ok := storages[stored]
+			if !ok {
+				return fmt.Errorf("connection %s keeps its credentials in %s, which this command does not change", connectionId, stored)
+			}
+			if selected != "" && selected != fits {
+				return fmt.Errorf("connection %s keeps its credentials in %s; pass the flags of %s", connectionId, stored, fits)
+			}
+			selected = fits
+		}
+		switch {
+		case native != nil:
+			credentials, err = native.build(cmd, api, *credentialsId)
+		case selected == "self-hosted-aws":
+			credentials, err = buildConnectionsUpdateSelfHostedAws(cmd, api, *credentialsId)
+		case selected == "self-hosted-gcp":
+			credentials, err = buildConnectionsUpdateSelfHostedGcp(cmd, api, *credentialsId)
+		case selected == "self-hosted-azure":
+			credentials, err = buildConnectionsUpdateSelfHostedAzure(cmd, api, *credentialsId)
+		case selected == "self-hosted-env-var":
+			credentials, err = buildConnectionsUpdateSelfHostedEnvVar(cmd, api, *credentialsId)
+		case selected == "self-hosted-file":
+			credentials, err = buildConnectionsUpdateSelfHostedFile(cmd, api, *credentialsId)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	rename := sdk.NewConnectionPatch()
+	if changed(cmd, "name") {
+		name, err := flagString(cmd, "name")
+		if err != nil {
+			return err
+		}
+		rename.SetName(name)
+	}
+	if credentials != nil && !skipValidations {
+		deploymentId, ok := connection.GetDeploymentIdOk()
+		if !ok || deploymentId == nil {
+			return fmt.Errorf("connection %s has no deployment to validate from; pass --skip-validations", connectionId)
+		}
+		started, resp, err := credentials.validate(ctx, *deploymentId, connection.GetConnectionType())
+		if err != nil {
+			return apiErr(resp, err)
+		}
+		passed, err := waitForValidations(cmd, started, func() (any, *http.Response, error) {
+			out, resp, err := api.ValidationsAPI.GetValidationRun(ctx, started.GetId()).Execute()
+			return out, resp, err
+		}, "validations get run")
+		if err != nil {
+			return err
+		}
+		if !passed {
+			return fmt.Errorf("the validations did not pass, so nothing was changed. Fix the problems above, or pass --skip-validations to change the credentials without validating")
+		}
+		if validateOnly {
+			fmt.Fprintln(cmd.ErrOrStderr(), "Nothing was changed: --validate-only.")
+			return nil
+		}
+	}
+	if credentials != nil {
+		reach := "credentials " + *credentialsId + ", used by connection " + connectionId + " and any other connection using them"
+		if !skipValidations {
+			if err := confirm(cmd, "Change "+reach); err != nil {
+				return err
+			}
+		} else {
+			fmt.Fprintln(cmd.ErrOrStderr(), "Changing "+reach+".")
+		}
+		if resp, err := credentials.patch(ctx); err != nil {
+			return apiErr(resp, err)
+		}
+	}
+	if renaming {
+		out, resp, err := retryOnTransient(cmd, api.ConnectionsAPI.UpdateConnection(ctx, connectionId).ConnectionPatch(*rename).Execute)
+		if err != nil {
+			if credentials != nil {
+				return fmt.Errorf("%w\nThe credentials were changed; the connection was not renamed.", apiErr(resp, err))
+			}
+			return apiErr(resp, err)
+		}
+		connection = out
+	}
+	return render(cmd, connection, "id", "connection_type", "name", "warehouse_id", "warehouse_name", "deployment_id", "deployment_name", "credentials_id", "credentials_storage_type", "job_types", "created_time")
+}
+
+func newConnectionsDeleteCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "delete <connection_id>",
+		Short: "Delete a connection, and its credentials",
+		Long:  "Deletes a connection, then the credentials it used, unless --keep-credentials. Credentials another connection still uses are kept. The warehouse is kept unless --with-warehouse, and when it has no connection left, the command says so. With --with-warehouse, nothing is deleted while the warehouse has another connection. Deleting the connection also deletes its own schedules, monitors and rules.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsDelete(cmd, args[0])
+		},
+	}
+	cmd.Flags().Bool("keep-credentials", false, "Keep the credentials the connection used.")
+	cmd.Flags().Bool("with-warehouse", false, "Also delete the connection's warehouse. Nothing is deleted while the warehouse has another connection.")
+	return cmd
+}
+
+// runConnectionsDelete deletes the connection, then what the flags say goes with it.
+func runConnectionsDelete(cmd *cobra.Command, connectionId string) error {
+	keepCredentials, err := flagBool(cmd, "keep-credentials")
+	if err != nil {
+		return err
+	}
+	withWarehouse, err := flagBool(cmd, "with-warehouse")
+	if err != nil {
+		return err
+	}
+	prompt := "Delete connection " + connectionId
+	switch {
+	case !keepCredentials && withWarehouse:
+		prompt += ", its credentials and its warehouse"
+	case !keepCredentials:
+		prompt += " and its credentials"
+	case withWarehouse:
+		prompt += " and its warehouse"
+	}
+	if err := confirm(cmd, prompt); err != nil {
+		return err
+	}
+	api, ctx, err := apiClient(cmd)
+	if err != nil {
+		return err
+	}
+	connection, resp, err := api.ConnectionsAPI.GetConnection(ctx, connectionId).Execute()
+	if err != nil {
+		return apiErr(resp, err)
+	}
+	warehouseId := connection.GetWarehouseId()
+	if withWarehouse {
+		others, resp, err := api.ConnectionsAPI.ListConnections(ctx).WarehouseId(warehouseId).Limit(2).Execute()
+		if err != nil {
+			return apiErr(resp, err)
+		}
+		for _, other := range others.GetItems() {
+			if other.GetId() != connectionId {
+				return fmt.Errorf("the warehouse %s also has connection %s, so nothing was deleted", warehouseId, other.GetId())
+			}
+		}
+	}
+	if resp, err := api.ConnectionsAPI.DeleteConnection(ctx, connectionId).Execute(); err != nil {
+		return apiErr(resp, err)
+	}
+	stderr := cmd.ErrOrStderr()
+	var left []string
+	if credentialsId, ok := connection.GetCredentialsIdOk(); ok && credentialsId != nil && !keepCredentials {
+		resp, err := api.CredentialsAPI.DeleteCredentials(ctx, *credentialsId).Execute()
+		switch {
+		case err == nil || resp != nil && resp.StatusCode == http.StatusNotFound:
+		case resp != nil && resp.StatusCode == http.StatusConflict:
+			fmt.Fprintf(stderr, "Kept the credentials %s: %s\n", *credentialsId, firstLine(apiErr(resp, err)))
+		default:
+			left = append(left, fmt.Sprintf("could not delete the credentials %s: %s\n    delete them with: %s %s %s", *credentialsId, firstLine(apiErr(resp, err)), binaryName, "credentials delete", *credentialsId))
+		}
+	}
+	if withWarehouse {
+		resp, err := api.WarehousesAPI.DeleteWarehouse(ctx, warehouseId).Execute()
+		if err != nil && (resp == nil || resp.StatusCode != http.StatusNotFound) {
+			left = append(left, fmt.Sprintf("could not delete the warehouse %s: %s\n    delete it with: %s %s %s", warehouseId, firstLine(apiErr(resp, err)), binaryName, "warehouses delete", warehouseId))
+		}
+	} else {
+		// Only the stderr note depends on this read, so its error does not fail the command.
+		remaining, _, err := api.ConnectionsAPI.ListConnections(ctx).WarehouseId(warehouseId).Limit(1).Execute()
+		if err == nil && len(remaining.GetItems()) == 0 {
+			fmt.Fprintf(stderr, "The warehouse %s has no connection left. Delete it with: %s %s %s, or next time pass --with-warehouse.\n", warehouseId, binaryName, "warehouses delete", warehouseId)
+		}
+	}
+	if len(left) > 0 {
+		return fmt.Errorf("the connection %s was deleted, but:\n  %s", connectionId, strings.Join(left, "\n  "))
+	}
+	return nil
 }

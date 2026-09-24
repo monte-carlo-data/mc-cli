@@ -3,6 +3,7 @@
 package cmd
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/spf13/cobra"
@@ -24,12 +25,7 @@ func newCredentialsCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsGetCmd())
 	cmd.AddCommand(newCredentialsListCmd())
 	cmd.AddCommand(newCredentialsUpdateCmd())
-	cmd.AddCommand(newCredentialsValidateAwsSecretsManagerCredentialsCmd())
-	cmd.AddCommand(newCredentialsValidateAzureKeyVaultCredentialsCmd())
-	cmd.AddCommand(newCredentialsValidateEnvVarCredentialsCmd())
-	cmd.AddCommand(newCredentialsValidateFileCredentialsCmd())
-	cmd.AddCommand(newCredentialsValidateGcpSecretManagerCredentialsCmd())
-	cmd.AddCommand(newCredentialsValidateSnowflakeCredentialsCmd())
+	cmd.AddCommand(newCredentialsValidateCmd())
 	return cmd
 }
 
@@ -1160,9 +1156,23 @@ func newCredentialsUpdateSnowflakeCmd() *cobra.Command {
 	return cmd
 }
 
-func newCredentialsValidateAwsSecretsManagerCredentialsCmd() *cobra.Command {
+func newCredentialsValidateCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "validate-aws-secrets-manager-credentials",
+		Use:   "validate",
+		Short: "Validate credential",
+	}
+	cmd.AddCommand(newCredentialsValidateAwsSecretsManagerCmd())
+	cmd.AddCommand(newCredentialsValidateAzureKeyVaultCmd())
+	cmd.AddCommand(newCredentialsValidateEnvVarCmd())
+	cmd.AddCommand(newCredentialsValidateFileCmd())
+	cmd.AddCommand(newCredentialsValidateGcpSecretManagerCmd())
+	cmd.AddCommand(newCredentialsValidateSnowflakeCmd())
+	return cmd
+}
+
+func newCredentialsValidateAwsSecretsManagerCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "aws-secrets-manager",
 		Short: "Validate AWS Secrets Manager credentials",
 		Long:  "Check candidate AWS Secrets Manager credentials against the system they are for.\n\nNo credentials are created. Send the values you would create the credentials with, and\na deployment to run them from, and the checks run against that system.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
 		Args:  cobra.NoArgs,
@@ -1225,6 +1235,29 @@ func newCredentialsValidateAwsSecretsManagerCredentialsCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := waitForValidations(cmd, out, func() (any, *http.Response, error) {
+					run, resp, err := api.ValidationsAPI.GetValidationRun(ctx, out.GetId()).Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "validations get run")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return fmt.Errorf("not every validation passed")
+				}
+				return nil
+			}
 			return render(cmd, out, "id", "status", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
 		},
 	}
@@ -1239,12 +1272,13 @@ func newCredentialsValidateAwsSecretsManagerCredentialsCmd() *cobra.Command {
 	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
 	cmd.Flags().String("databricks-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
 	cmd.Flags().String("external-id", "", "External id the assumed role's trust policy requires, if it requires one.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }
 
-func newCredentialsValidateAzureKeyVaultCredentialsCmd() *cobra.Command {
+func newCredentialsValidateAzureKeyVaultCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "validate-azure-key-vault-credentials",
+		Use:   "azure-key-vault",
 		Short: "Validate Azure Key Vault credentials",
 		Long:  "Check candidate Azure Key Vault credentials against the system they are for.\n\nNo credentials are created. Send the values you would create the credentials with, and\na deployment to run them from, and the checks run against that system.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
 		Args:  cobra.NoArgs,
@@ -1300,6 +1334,29 @@ func newCredentialsValidateAzureKeyVaultCredentialsCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := waitForValidations(cmd, out, func() (any, *http.Response, error) {
+					run, resp, err := api.ValidationsAPI.GetValidationRun(ctx, out.GetId()).Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "validations get run")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return fmt.Errorf("not every validation passed")
+				}
+				return nil
+			}
 			return render(cmd, out, "id", "status", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
 		},
 	}
@@ -1313,12 +1370,13 @@ func newCredentialsValidateAzureKeyVaultCredentialsCmd() *cobra.Command {
 	cmd.Flags().String("akv-vault-url", "", "URL of the key vault. Send this, akv_vault_name, or both.")
 	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
 	cmd.Flags().String("databricks-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }
 
-func newCredentialsValidateEnvVarCredentialsCmd() *cobra.Command {
+func newCredentialsValidateEnvVarCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "validate-env-var-credentials",
+		Use:   "env-var",
 		Short: "Validate environment variable credentials",
 		Long:  "Check candidate environment variable credentials against the system they are for.\n\nNo credentials are created. Send the values you would create the credentials with, and\na deployment to run them from, and the checks run against that system.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
 		Args:  cobra.NoArgs,
@@ -1367,6 +1425,29 @@ func newCredentialsValidateEnvVarCredentialsCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := waitForValidations(cmd, out, func() (any, *http.Response, error) {
+					run, resp, err := api.ValidationsAPI.GetValidationRun(ctx, out.GetId()).Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "validations get run")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return fmt.Errorf("not every validation passed")
+				}
+				return nil
+			}
 			return render(cmd, out, "id", "status", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
 		},
 	}
@@ -1379,12 +1460,13 @@ func newCredentialsValidateEnvVarCredentialsCmd() *cobra.Command {
 	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
 	cmd.Flags().String("databricks-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
 	cmd.Flags().String("kms-key-id", "", "AWS KMS key the variable's value is encrypted with. Omit it for a value stored in the clear.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }
 
-func newCredentialsValidateFileCredentialsCmd() *cobra.Command {
+func newCredentialsValidateFileCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "validate-file-credentials",
+		Use:   "file",
 		Short: "Validate file credentials",
 		Long:  "Check candidate file credentials against the system they are for.\n\nNo credentials are created. Send the values you would create the credentials with, and\na deployment to run them from, and the checks run against that system.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
 		Args:  cobra.NoArgs,
@@ -1426,6 +1508,29 @@ func newCredentialsValidateFileCredentialsCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := waitForValidations(cmd, out, func() (any, *http.Response, error) {
+					run, resp, err := api.ValidationsAPI.GetValidationRun(ctx, out.GetId()).Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "validations get run")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return fmt.Errorf("not every validation passed")
+				}
+				return nil
+			}
 			return render(cmd, out, "id", "status", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
 		},
 	}
@@ -1437,12 +1542,13 @@ func newCredentialsValidateFileCredentialsCmd() *cobra.Command {
 	_ = cmd.MarkFlagRequired("file-path")
 	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
 	cmd.Flags().String("databricks-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }
 
-func newCredentialsValidateGcpSecretManagerCredentialsCmd() *cobra.Command {
+func newCredentialsValidateGcpSecretManagerCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "validate-gcp-secret-manager-credentials",
+		Use:   "gcp-secret-manager",
 		Short: "Validate GCP Secret Manager credentials",
 		Long:  "Check candidate GCP Secret Manager credentials against the system they are for.\n\nNo credentials are created. Send the values you would create the credentials with, and\na deployment to run them from, and the checks run against that system.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
 		Args:  cobra.NoArgs,
@@ -1484,6 +1590,29 @@ func newCredentialsValidateGcpSecretManagerCredentialsCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := waitForValidations(cmd, out, func() (any, *http.Response, error) {
+					run, resp, err := api.ValidationsAPI.GetValidationRun(ctx, out.GetId()).Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "validations get run")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return fmt.Errorf("not every validation passed")
+				}
+				return nil
+			}
 			return render(cmd, out, "id", "status", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
 		},
 	}
@@ -1495,12 +1624,13 @@ func newCredentialsValidateGcpSecretManagerCredentialsCmd() *cobra.Command {
 	_ = cmd.MarkFlagRequired("gcp-secret")
 	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
 	cmd.Flags().String("databricks-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }
 
-func newCredentialsValidateSnowflakeCredentialsCmd() *cobra.Command {
+func newCredentialsValidateSnowflakeCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "validate-snowflake-credentials",
+		Use:   "snowflake",
 		Short: "Validate Snowflake credentials",
 		Long:  "Check a candidate Snowflake key pair against Snowflake.\n\nNo credentials are created. Send the values you would create the credentials with, and\na deployment to run them from, and the checks run against your Snowflake account.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
 		Args:  cobra.NoArgs,
@@ -1549,6 +1679,29 @@ func newCredentialsValidateSnowflakeCredentialsCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := waitForValidations(cmd, out, func() (any, *http.Response, error) {
+					run, resp, err := api.ValidationsAPI.GetValidationRun(ctx, out.GetId()).Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "validations get run")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return fmt.Errorf("not every validation passed")
+				}
+				return nil
+			}
 			return render(cmd, out, "id", "status", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
 		},
 	}
@@ -1563,5 +1716,6 @@ func newCredentialsValidateSnowflakeCredentialsCmd() *cobra.Command {
 	cmd.Flags().String("private-key-passphrase", "", "Passphrase the private key is encrypted with. Omit it for an unencrypted key. Never returned. Visible in the process list; --private-key-passphrase-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("private-key-passphrase-prompt", false, "Read --private-key-passphrase from a hidden prompt instead of the command line.")
 	cmd.Flags().String("warehouse", "", "Snowflake virtual warehouse to run queries in. Omit it to use the user's default.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }
