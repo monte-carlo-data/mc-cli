@@ -149,6 +149,14 @@ func TestWaitForValidationsStopsOnCtrlCAndAfterItsBudget(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "validations get run run-1") || time.Since(start) > time.Second {
 		t.Fatalf("err = %v after %s", err, time.Since(start))
 	}
+
+	// With no command that reads a run, the error names the run and no command.
+	cmd, _, _, _ = validationFixture(t)
+	validationPollTimeout = 30 * time.Millisecond
+	_, err = waitForValidations(cmd, run("running", row("connect", "running", nil)), fetch, "")
+	if err == nil || !strings.HasSuffix(err.Error(), "the run is run-1") {
+		t.Fatalf("err = %v", err)
+	}
 }
 
 func TestPollAfterHonoursRetryAfter(t *testing.T) {
