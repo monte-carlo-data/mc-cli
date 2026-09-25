@@ -1246,7 +1246,7 @@ func newCredentialsValidateAwsSecretsManagerCmd() *cobra.Command {
 						out = run
 					}
 					return run, resp, err
-				}, "validations get run")
+				}, "")
 				if err != nil {
 					return err
 				}
@@ -1258,7 +1258,7 @@ func newCredentialsValidateAwsSecretsManagerCmd() *cobra.Command {
 				}
 				return nil
 			}
-			return render(cmd, out, "id", "status", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
 		},
 	}
 	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
@@ -1345,7 +1345,7 @@ func newCredentialsValidateAzureKeyVaultCmd() *cobra.Command {
 						out = run
 					}
 					return run, resp, err
-				}, "validations get run")
+				}, "")
 				if err != nil {
 					return err
 				}
@@ -1357,7 +1357,7 @@ func newCredentialsValidateAzureKeyVaultCmd() *cobra.Command {
 				}
 				return nil
 			}
-			return render(cmd, out, "id", "status", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
 		},
 	}
 	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
@@ -1436,7 +1436,7 @@ func newCredentialsValidateEnvVarCmd() *cobra.Command {
 						out = run
 					}
 					return run, resp, err
-				}, "validations get run")
+				}, "")
 				if err != nil {
 					return err
 				}
@@ -1448,7 +1448,7 @@ func newCredentialsValidateEnvVarCmd() *cobra.Command {
 				}
 				return nil
 			}
-			return render(cmd, out, "id", "status", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
 		},
 	}
 	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
@@ -1519,7 +1519,7 @@ func newCredentialsValidateFileCmd() *cobra.Command {
 						out = run
 					}
 					return run, resp, err
-				}, "validations get run")
+				}, "")
 				if err != nil {
 					return err
 				}
@@ -1531,7 +1531,7 @@ func newCredentialsValidateFileCmd() *cobra.Command {
 				}
 				return nil
 			}
-			return render(cmd, out, "id", "status", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
 		},
 	}
 	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
@@ -1601,7 +1601,7 @@ func newCredentialsValidateGcpSecretManagerCmd() *cobra.Command {
 						out = run
 					}
 					return run, resp, err
-				}, "validations get run")
+				}, "")
 				if err != nil {
 					return err
 				}
@@ -1613,7 +1613,7 @@ func newCredentialsValidateGcpSecretManagerCmd() *cobra.Command {
 				}
 				return nil
 			}
-			return render(cmd, out, "id", "status", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
 		},
 	}
 	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
@@ -1690,7 +1690,7 @@ func newCredentialsValidateSnowflakeCmd() *cobra.Command {
 						out = run
 					}
 					return run, resp, err
-				}, "validations get run")
+				}, "")
 				if err != nil {
 					return err
 				}
@@ -1702,7 +1702,7 @@ func newCredentialsValidateSnowflakeCmd() *cobra.Command {
 				}
 				return nil
 			}
-			return render(cmd, out, "id", "status", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
 		},
 	}
 	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")

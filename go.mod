@@ -3,7 +3,7 @@ module github.com/monte-carlo-data/mc-cli
 go 1.26.0
 
 require (
-	github.com/monte-carlo-data/mc-sdk-go v0.0.0-20260924125013-5b8fb9b59d6e
+	github.com/monte-carlo-data/mc-sdk-go v0.0.0-20260925202557-4677fa549a57
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.9
 	golang.org/x/term v0.46.0
