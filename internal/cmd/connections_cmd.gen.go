@@ -194,7 +194,7 @@ func newConnectionsValidateCmd() *cobra.Command {
 						out = run
 					}
 					return run, resp, err
-				}, "validations get run")
+				}, "")
 				if err != nil {
 					return err
 				}
@@ -206,7 +206,7 @@ func newConnectionsValidateCmd() *cobra.Command {
 				}
 				return nil
 			}
-			return render(cmd, out, "id", "status", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
 		},
 	}
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
@@ -819,7 +819,7 @@ func runConnectionsAdd(cmd *cobra.Command, connectionType string, native *connec
 		passed, err := waitForValidations(cmd, started, func() (any, *http.Response, error) {
 			out, resp, err := api.ValidationsAPI.GetValidationRun(ctx, started.GetId()).Execute()
 			return out, resp, err
-		}, "validations get run")
+		}, "")
 		if err != nil {
 			return err
 		}
@@ -1754,7 +1754,7 @@ func runConnectionsUpdate(cmd *cobra.Command, connectionId string, native *conne
 		passed, err := waitForValidations(cmd, started, func() (any, *http.Response, error) {
 			out, resp, err := api.ValidationsAPI.GetValidationRun(ctx, started.GetId()).Execute()
 			return out, resp, err
-		}, "validations get run")
+		}, "")
 		if err != nil {
 			return err
 		}
