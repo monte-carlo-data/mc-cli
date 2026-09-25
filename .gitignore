@@ -11,8 +11,8 @@
 # Claude Code local settings (machine-specific)
 .claude/settings.local.json
 
-# .work temp directories
-.work/**/tmp/
+# Local working notes, plans and review docs
+/.work/
 
 # Environment / secrets
 .env
