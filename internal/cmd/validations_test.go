@@ -86,10 +86,12 @@ func TestWaitForValidationsFollowsTheRunAndPrintsEachValidationAsItFinishes(t *t
 	}
 }
 
-// answer is one response a scripted read gives: a run with an optional ETag, else a 304.
+// answer is one response a scripted read gives: a run with an optional ETag, an error response
+// with status, or, when both state and status are zero, a 304.
 type answer struct {
-	state map[string]any
-	etag  string
+	state  map[string]any
+	etag   string
+	status int
 }
 
 // reads answers each fetch with the next answer, then keeps answering the last, and records
@@ -106,6 +108,9 @@ func reads(answers ...answer) (func(*int64, string) (any, *http.Response, error)
 		}
 		got = append(got, req)
 		a := answers[min(len(got)-1, len(answers)-1)]
+		if a.status != 0 {
+			return nil, &http.Response{StatusCode: a.status, Header: http.Header{}}, fmt.Errorf("status %d", a.status)
+		}
 		if a.state == nil {
 			return nil, &http.Response{StatusCode: http.StatusNotModified, Header: http.Header{}}, errors.New("304 Not Modified")
 		}
@@ -178,6 +183,43 @@ func TestFollowValidationRunSendsTheETagBackAndTreatsA304AsNoChange(t *testing.T
 	}
 }
 
+// A 404 on the final whole read is an error, and passed is false.
+func TestFollowValidationRunFailsWhenTheFinalWholeReadErrors(t *testing.T) {
+	cmd, _, _, _ := validationFixture(t)
+	fetch, got := reads(
+		answer{state: delta(5, "completed", 2, row("connect", "completed", true))},
+		answer{status: http.StatusNotFound},
+	)
+
+	passed, err := followValidationRun(cmd, at(3, run("running", row("connect", "pending", nil), row("tables", "pending", nil))), fetch, "")
+
+	if err == nil || passed {
+		t.Fatalf("passed %v, err %v", passed, err)
+	}
+	if fmt.Sprint(*got) != "[3 -]" {
+		t.Errorf("reads = %v", *got)
+	}
+}
+
+// A 503 on the final whole read is retried like any other transient failure.
+func TestFollowValidationRunRetriesA503OnTheFinalWholeRead(t *testing.T) {
+	cmd, _, _, _ := validationFixture(t)
+	fetch, got := reads(
+		answer{state: delta(5, "completed", 2, row("connect", "completed", true))},
+		answer{status: http.StatusServiceUnavailable},
+		answer{state: at(7, run("completed", row("connect", "completed", true), row("tables", "completed", true)))},
+	)
+
+	passed, err := followValidationRun(cmd, at(3, run("running", row("connect", "pending", nil), row("tables", "pending", nil))), fetch, "")
+
+	if err != nil || !passed {
+		t.Fatalf("passed %v, err %v", passed, err)
+	}
+	if fmt.Sprint(*got) != "[3 - -]" {
+		t.Errorf("reads = %v", *got)
+	}
+}
+
 func TestFollowValidationRunReadsTheWholeRunWhenItCarriesNoRevision(t *testing.T) {
 	cmd, _, _, _ := validationFixture(t)
 	fetch, got := reads(answer{state: run("completed", row("connect", "completed", true), row("tables", "completed", true)), etag: `W/"2"`})
@@ -192,7 +234,7 @@ func TestFollowValidationRunReadsTheWholeRunWhenItCarriesNoRevision(t *testing.T
 	}
 }
 
-func TestWaitForValidationsReadsTheWholeRunEvenWhenItCarriesARevision(t *testing.T) {
+func TestWaitForValidationsReadsOnceWhenTheCompletedReadIsWhole(t *testing.T) {
 	cmd, _, _, _ := validationFixture(t)
 	fetch, calls := polls(at(4, run("completed", row("connect", "completed", true))))
 
@@ -200,6 +242,23 @@ func TestWaitForValidationsReadsTheWholeRunEvenWhenItCarriesARevision(t *testing
 
 	if err != nil || !passed || *calls != 1 {
 		t.Fatalf("passed %v, err %v, after %d calls", passed, err, *calls)
+	}
+}
+
+// A partial completed read triggers the extra whole read, even through the wrapper.
+func TestWaitForValidationsReadsAgainWhenTheCompletedReadIsPartial(t *testing.T) {
+	cmd, _, _, _ := validationFixture(t)
+	partial := run("completed", row("connect", "completed", true))
+	partial["validations_total"] = 5
+	fetch, calls := polls(partial)
+
+	_, err := waitForValidations(cmd, run("running", row("connect", "pending", nil)), fetch, "")
+
+	if err == nil || !strings.Contains(err.Error(), "lists 1 of 5 validations") {
+		t.Fatalf("err = %v", err)
+	}
+	if *calls != 2 {
+		t.Errorf("fetched %d times", *calls)
 	}
 }
 
@@ -273,6 +332,56 @@ func TestWaitForValidationsStopsOnCtrlCAndAfterItsBudget(t *testing.T) {
 	_, err = waitForValidations(cmd, run("running", row("connect", "running", nil)), fetch, "")
 	if err == nil || !strings.HasSuffix(err.Error(), "the run is run-1") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestMergeValidationsReplacesByNameAndAppendsTheUnknown(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		held    []validationRow
+		changed []validationRow
+		want    []validationRow
+	}{
+		{
+			"a known name is replaced in place",
+			[]validationRow{{Name: "a", Status: "pending"}, {Name: "b", Status: "pending"}},
+			[]validationRow{{Name: "a", Status: "completed"}},
+			[]validationRow{{Name: "a", Status: "completed"}, {Name: "b", Status: "pending"}},
+		},
+		{
+			"held's order is kept",
+			[]validationRow{{Name: "b", Status: "pending"}, {Name: "a", Status: "pending"}},
+			[]validationRow{{Name: "a", Status: "completed"}, {Name: "b", Status: "completed"}},
+			[]validationRow{{Name: "b", Status: "completed"}, {Name: "a", Status: "completed"}},
+		},
+		{
+			"an unknown name is appended last",
+			[]validationRow{{Name: "a", Status: "pending"}},
+			[]validationRow{{Name: "b", Status: "completed"}},
+			[]validationRow{{Name: "a", Status: "pending"}, {Name: "b", Status: "completed"}},
+		},
+		{
+			"an empty changed returns held's content",
+			[]validationRow{{Name: "a", Status: "pending"}},
+			nil,
+			[]validationRow{{Name: "a", Status: "pending"}},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := mergeValidations(tc.held, tc.changed)
+			if fmt.Sprint(got) != fmt.Sprint(tc.want) {
+				t.Errorf("got %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestMergeValidationsDoesNotModifyHeld(t *testing.T) {
+	held := []validationRow{{Name: "a", Status: "pending"}}
+	mergeValidations(held, []validationRow{{Name: "a", Status: "completed"}})
+
+	if held[0].Status != "pending" {
+		t.Errorf("held[0] = %+v", held[0])
 	}
 }
 

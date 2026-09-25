@@ -50,10 +50,10 @@ type validationProblem struct {
 // changed after that revision; with etag set, it answers 304 while the run is unchanged.
 type runFetch func(since *int64, etag string) (any, *http.Response, error)
 
-// waitForValidations is followValidationRun for a fetch that takes neither and always reads
-// the whole run.
+// waitForValidations is followValidationRun for a fetch that takes neither, so every read is
+// whole.
 func waitForValidations(cmd *cobra.Command, first any, fetch func() (any, *http.Response, error), runCmd string) (bool, error) {
-	return followRun(cmd, first, func(*int64, string) (any, *http.Response, error) { return fetch() }, runCmd, false)
+	return followValidationRun(cmd, first, func(*int64, string) (any, *http.Response, error) { return fetch() }, runCmd)
 }
 
 // followValidationRun follows a validation run to its end and says whether every validation in
@@ -65,7 +65,7 @@ func waitForValidations(cmd *cobra.Command, first any, fetch func() (any, *http.
 // validations it returns are merged into the held run by name, so a read listing only those
 // changed since that revision is enough, and a 304 leaves the held run as it is. When the
 // last read listed fewer validations than the run has, the run is read once more whole, with
-// neither, so fetch's last result is the complete run.
+// neither: the caller keeps what fetch last returned, so that must be the complete run.
 //
 // runCmd is the command, without the binary name, that reads a run by id; the id is appended
 // to it, mirroring how the undo helper's record takes deleteCmd from the caller. "" means no
@@ -75,11 +75,6 @@ func waitForValidations(cmd *cobra.Command, first any, fetch func() (any, *http.
 // validation as it finishes. The problems behind each verdict are printed at the end, then a
 // summary naming the run. Ctrl-C stops the wait.
 func followValidationRun(cmd *cobra.Command, first any, fetch runFetch, runCmd string) (bool, error) {
-	return followRun(cmd, first, fetch, runCmd, true)
-}
-
-// followRun is followValidationRun, passing fetch a since and an ETag only when deltas is set.
-func followRun(cmd *cobra.Command, first any, fetch runFetch, runCmd string, deltas bool) (bool, error) {
 	run, err := asValidationRun(first)
 	if err != nil {
 		return false, err
@@ -103,11 +98,7 @@ func followRun(cmd *cobra.Command, first any, fetch runFetch, runCmd string, del
 		if err := view.animate(cmd, run, wait); err != nil {
 			return false, err
 		}
-		var since *int64
-		if deltas {
-			since = run.Revision
-		}
-		next, resp, changed, err := readValidationRun(cmd, view, fetch, since, etag)
+		next, resp, changed, err := readValidationRun(cmd, view, fetch, run.Revision, etag)
 		if err != nil {
 			return false, err
 		}
@@ -115,15 +106,11 @@ func followRun(cmd *cobra.Command, first any, fetch runFetch, runCmd string, del
 		if !changed {
 			continue
 		}
-		if deltas {
-			etag = resp.Header.Get("ETag")
-		}
+		etag = resp.Header.Get("ETag")
 		whole = len(next.Validations) == next.Total
 		next.Validations = mergeValidations(run.Validations, next.Validations)
 		run = next
 	}
-	// The caller keeps what fetch last returned, so a run whose last read was a delta is read
-	// whole.
 	if !whole {
 		if run, _, _, err = readValidationRun(cmd, view, fetch, nil, ""); err != nil {
 			return false, err
