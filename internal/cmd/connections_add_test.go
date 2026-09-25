@@ -126,7 +126,7 @@ func (f *fakeConnectionsAPI) serve(w http.ResponseWriter, r *http.Request) {
 }
 
 func validationRunJSON(runStatus, status, passed, errs string) string {
-	return `{"id":"run-1","status":"` + runStatus + `","target_type":"credentials","target_id":null,` +
+	return `{"id":"run-1","status":"` + runStatus + `","revision":1,"target_type":"credentials","target_id":null,` +
 		`"validations_passed":0,"validations_total":1,"started_at":"2026-09-23T00:00:00Z","finished_at":null,` +
 		`"expires_at":"2026-09-23T02:00:00Z","validations":[{"name":"connect","description":"Connect to the warehouse",` +
 		`"status":"` + status + `","is_prerequisite":true,"passed":` + passed + `,"errors":` + errs + `,"warnings":[],` +
