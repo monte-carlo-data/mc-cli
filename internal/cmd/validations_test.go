@@ -86,6 +86,123 @@ func TestWaitForValidationsFollowsTheRunAndPrintsEachValidationAsItFinishes(t *t
 	}
 }
 
+// answer is one response a scripted read gives: a run with an optional ETag, else a 304.
+type answer struct {
+	state map[string]any
+	etag  string
+}
+
+// reads answers each fetch with the next answer, then keeps answering the last, and records
+// what each fetch was given: the since, "-" for none, then the ETag when there is one.
+func reads(answers ...answer) (func(*int64, string) (any, *http.Response, error), *[]string) {
+	var got []string
+	return func(since *int64, etag string) (any, *http.Response, error) {
+		req := "-"
+		if since != nil {
+			req = fmt.Sprint(*since)
+		}
+		if etag != "" {
+			req += " " + etag
+		}
+		got = append(got, req)
+		a := answers[min(len(got)-1, len(answers)-1)]
+		if a.state == nil {
+			return nil, &http.Response{StatusCode: http.StatusNotModified, Header: http.Header{}}, errors.New("304 Not Modified")
+		}
+		return a.state, &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Etag": {a.etag}}}, nil
+	}, &got
+}
+
+func at(revision int64, r map[string]any) map[string]any {
+	r["revision"] = revision
+	return r
+}
+
+// delta is a since read's answer: only what changed, with validations_total still the whole
+// run's count.
+func delta(revision int64, status string, total int, rows ...map[string]any) map[string]any {
+	r := at(revision, run(status, rows...))
+	r["validations_total"] = total
+	return r
+}
+
+func TestFollowValidationRunPollsForChangesAndMergesThemByName(t *testing.T) {
+	cmd, _, _, stderr := validationFixture(t)
+	fetch, got := reads(
+		answer{state: delta(5, "running", 2, row("connect", "completed", true))},
+		answer{state: delta(7, "completed", 2, row("tables", "completed", true))},
+		answer{state: at(7, run("completed", row("connect", "completed", true), row("tables", "completed", true)))},
+	)
+
+	passed, err := followValidationRun(cmd, at(3, run("running", row("connect", "pending", nil), row("tables", "pending", nil))), fetch, "")
+
+	if err != nil || !passed {
+		t.Fatalf("passed %v, err %v\n%s", passed, err, stderr)
+	}
+	// The last read takes the whole run, which is what fetch's caller is left holding.
+	if fmt.Sprint(*got) != "[3 5 -]" {
+		t.Errorf("reads = %v", *got)
+	}
+	if !strings.Contains(stderr.String(), "  ✓ Check connect\n  ✓ Check tables\n") || !strings.HasSuffix(stderr.String(), "2 of 2 validations passed (run run-1).\n") {
+		t.Fatalf("stderr =\n%s", stderr)
+	}
+}
+
+func TestFollowValidationRunReadsNoMoreWhenTheLastReadListedTheWholeRun(t *testing.T) {
+	cmd, _, _, _ := validationFixture(t)
+	fetch, got := reads(answer{state: at(5, run("completed", row("connect", "completed", true), row("tables", "completed", true)))})
+
+	passed, err := followValidationRun(cmd, at(3, run("running", row("connect", "pending", nil), row("tables", "pending", nil))), fetch, "")
+
+	if err != nil || !passed || fmt.Sprint(*got) != "[3]" {
+		t.Fatalf("passed %v, err %v, reads %v", passed, err, *got)
+	}
+}
+
+func TestFollowValidationRunSendsTheETagBackAndTreatsA304AsNoChange(t *testing.T) {
+	cmd, _, _, stderr := validationFixture(t)
+	fetch, got := reads(
+		answer{state: delta(5, "running", 2, row("connect", "completed", true)), etag: `W/"5"`},
+		answer{},
+		answer{state: delta(7, "completed", 2, row("tables", "completed", true)), etag: `W/"7"`},
+		answer{state: at(7, run("completed", row("connect", "completed", true), row("tables", "completed", true)))},
+	)
+
+	passed, err := followValidationRun(cmd, at(3, run("running", row("connect", "pending", nil), row("tables", "pending", nil))), fetch, "")
+
+	if err != nil || !passed {
+		t.Fatalf("passed %v, err %v\n%s", passed, err, stderr)
+	}
+	if fmt.Sprint(*got) != `[3 5 W/"5" 5 W/"5" -]` {
+		t.Errorf("reads = %v", *got)
+	}
+}
+
+func TestFollowValidationRunReadsTheWholeRunWhenItCarriesNoRevision(t *testing.T) {
+	cmd, _, _, _ := validationFixture(t)
+	fetch, got := reads(answer{state: run("completed", row("connect", "completed", true), row("tables", "completed", true)), etag: `W/"2"`})
+
+	passed, err := followValidationRun(cmd, run("running", row("connect", "pending", nil), row("tables", "pending", nil)), fetch, "")
+
+	if err != nil || !passed {
+		t.Fatalf("passed %v, err %v", passed, err)
+	}
+	if fmt.Sprint(*got) != "[-]" {
+		t.Errorf("reads = %v", *got)
+	}
+}
+
+func TestWaitForValidationsReadsTheWholeRunEvenWhenItCarriesARevision(t *testing.T) {
+	cmd, _, _, _ := validationFixture(t)
+	fetch, calls := polls(at(4, run("completed", row("connect", "completed", true))))
+
+	passed, err := waitForValidations(cmd, at(3, run("running", row("connect", "pending", nil))), fetch, "")
+
+	if err != nil || !passed || *calls != 1 {
+		t.Fatalf("passed %v, err %v, after %d calls", passed, err, *calls)
+	}
+}
+
 func TestWaitForValidationsFailsUnlessEveryValidationPassed(t *testing.T) {
 	for _, tc := range []struct {
 		name string
