@@ -50,9 +50,10 @@ type validationProblem struct {
 // first is the run as the validate call returned it; fetch reads its current state, and is
 // retried like retryOnTransient. runCmd is the command, without the binary name, that reads a
 // run by id; the id is appended to it, mirroring how the undo helper's record takes deleteCmd
-// from the caller. "" means no command reads a run, and the timeout error names none. Progress goes to stderr: a table redrawn in place on a terminal, else one
-// line per validation as it finishes. The problems behind each verdict are printed at the end,
-// then a summary naming the run.
+// from the caller. "" means no command reads a run, and the timeout error names none.
+// Progress goes to stderr: a table redrawn in place on a terminal, else one line per
+// validation as it finishes. The problems behind each verdict are printed at the end, then a
+// summary naming the run.
 // Ctrl-C stops the wait.
 func waitForValidations(cmd *cobra.Command, first any, fetch func() (any, *http.Response, error), runCmd string) (bool, error) {
 	run, err := asValidationRun(first)
