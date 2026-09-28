@@ -1240,8 +1240,15 @@ func newCredentialsValidateAwsSecretsManagerCmd() *cobra.Command {
 				return err
 			}
 			if !noWait {
-				passed, err := waitForValidations(cmd, out, func() (any, *http.Response, error) {
-					run, resp, err := api.ValidationsAPI.GetValidationRun(ctx, out.GetId()).Execute()
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
 					if err == nil {
 						out = run
 					}
@@ -1339,8 +1346,15 @@ func newCredentialsValidateAzureKeyVaultCmd() *cobra.Command {
 				return err
 			}
 			if !noWait {
-				passed, err := waitForValidations(cmd, out, func() (any, *http.Response, error) {
-					run, resp, err := api.ValidationsAPI.GetValidationRun(ctx, out.GetId()).Execute()
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
 					if err == nil {
 						out = run
 					}
@@ -1430,8 +1444,15 @@ func newCredentialsValidateEnvVarCmd() *cobra.Command {
 				return err
 			}
 			if !noWait {
-				passed, err := waitForValidations(cmd, out, func() (any, *http.Response, error) {
-					run, resp, err := api.ValidationsAPI.GetValidationRun(ctx, out.GetId()).Execute()
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
 					if err == nil {
 						out = run
 					}
@@ -1513,8 +1534,15 @@ func newCredentialsValidateFileCmd() *cobra.Command {
 				return err
 			}
 			if !noWait {
-				passed, err := waitForValidations(cmd, out, func() (any, *http.Response, error) {
-					run, resp, err := api.ValidationsAPI.GetValidationRun(ctx, out.GetId()).Execute()
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
 					if err == nil {
 						out = run
 					}
@@ -1595,8 +1623,15 @@ func newCredentialsValidateGcpSecretManagerCmd() *cobra.Command {
 				return err
 			}
 			if !noWait {
-				passed, err := waitForValidations(cmd, out, func() (any, *http.Response, error) {
-					run, resp, err := api.ValidationsAPI.GetValidationRun(ctx, out.GetId()).Execute()
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
 					if err == nil {
 						out = run
 					}
@@ -1684,8 +1719,15 @@ func newCredentialsValidateSnowflakeCmd() *cobra.Command {
 				return err
 			}
 			if !noWait {
-				passed, err := waitForValidations(cmd, out, func() (any, *http.Response, error) {
-					run, resp, err := api.ValidationsAPI.GetValidationRun(ctx, out.GetId()).Execute()
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
 					if err == nil {
 						out = run
 					}
