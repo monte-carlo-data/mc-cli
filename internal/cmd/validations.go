@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -28,6 +29,7 @@ type validationRun struct {
 	Status      string          `json:"status"`
 	Validations []validationRow `json:"validations"`
 	Total       int             `json:"validations_total"`
+	Revision    *int64          `json:"revision"`
 }
 
 type validationRow struct {
@@ -44,18 +46,35 @@ type validationProblem struct {
 	Resolution      *string `json:"resolution"`
 }
 
-// waitForValidations follows a validation run to its end and says whether every validation in
+// runFetch reads a validation run. With since set, the read lists only the validations
+// changed after that revision; with etag set, it answers 304 while the run is unchanged.
+type runFetch func(since *int64, etag string) (any, *http.Response, error)
+
+// waitForValidations is followValidationRun for a fetch that takes neither, so every read is
+// whole.
+func waitForValidations(cmd *cobra.Command, first any, fetch func() (any, *http.Response, error), runCmd string) (bool, error) {
+	return followValidationRun(cmd, first, func(*int64, string) (any, *http.Response, error) { return fetch() }, runCmd)
+}
+
+// followValidationRun follows a validation run to its end and says whether every validation in
 // it passed: reached a verdict, and found no blocking problem. Warnings do not fail it.
 //
 // first is the run as the validate call returned it; fetch reads its current state, and is
-// retried like retryOnTransient. runCmd is the command, without the binary name, that reads a
-// run by id; the id is appended to it, mirroring how the undo helper's record takes deleteCmd
-// from the caller. "" means no command reads a run, and the timeout error names none.
+// retried like retryOnTransient. fetch gets the revision of the run held so far as since, nil
+// when the run carries none, and the ETag of the last read, "" before there is one. The
+// validations it returns are merged into the held run by name, so a read listing only those
+// changed since that revision is enough, and a 304 leaves the held run as it is. When the
+// last read listed fewer validations than the run has, the run is read once more whole, with
+// neither: the caller keeps what fetch last returned, so that must be the complete run.
+//
+// runCmd is the command, without the binary name, that reads a run by id; the id is appended
+// to it, mirroring how the undo helper's record takes deleteCmd from the caller. "" means no
+// command reads a run, and the timeout error names none.
+//
 // Progress goes to stderr: a table redrawn in place on a terminal, else one line per
 // validation as it finishes. The problems behind each verdict are printed at the end, then a
-// summary naming the run.
-// Ctrl-C stops the wait.
-func waitForValidations(cmd *cobra.Command, first any, fetch func() (any, *http.Response, error), runCmd string) (bool, error) {
+// summary naming the run. Ctrl-C stops the wait.
+func followValidationRun(cmd *cobra.Command, first any, fetch runFetch, runCmd string) (bool, error) {
 	run, err := asValidationRun(first)
 	if err != nil {
 		return false, err
@@ -66,6 +85,8 @@ func waitForValidations(cmd *cobra.Command, first any, fetch func() (any, *http.
 	view := &validationView{w: w, live: live, color: live && os.Getenv("NO_COLOR") == "", width: stderrWidth(cmd)}
 	deadline := time.Now().Add(validationPollTimeout)
 	wait := validationPollInterval
+	whole := true
+	etag := ""
 	for run.Status != "completed" {
 		if time.Now().Add(wait).After(deadline) {
 			view.draw(run, "")
@@ -77,14 +98,23 @@ func waitForValidations(cmd *cobra.Command, first any, fetch func() (any, *http.
 		if err := view.animate(cmd, run, wait); err != nil {
 			return false, err
 		}
-		out, resp, err := retryWithin(cmd.Context(), view, fetch)
+		next, resp, changed, err := readValidationRun(cmd, view, fetch, run.Revision, etag)
 		if err != nil {
-			return false, apiErr(resp, err)
-		}
-		if run, err = asValidationRun(out); err != nil {
 			return false, err
 		}
 		wait = pollAfter(resp)
+		if !changed {
+			continue
+		}
+		etag = resp.Header.Get("ETag")
+		whole = len(next.Validations) == next.Total
+		next.Validations = mergeValidations(run.Validations, next.Validations)
+		run = next
+	}
+	if !whole {
+		if run, _, _, err = readValidationRun(cmd, view, fetch, nil, ""); err != nil {
+			return false, err
+		}
 	}
 	view.draw(run, "")
 	if len(run.Validations) != run.Total {
@@ -102,6 +132,39 @@ func waitForValidations(cmd *cobra.Command, first any, fetch func() (any, *http.
 	}
 	fmt.Fprintf(w, "%d of %d validations passed (run %s).\n", passed, len(run.Validations), run.ID)
 	return passed == len(run.Validations), nil
+}
+
+// readValidationRun calls fetch, retried like retryOnTransient, and decodes the run. changed is
+// false for a 304, which carries no run.
+func readValidationRun(cmd *cobra.Command, view io.Writer, fetch runFetch, since *int64, etag string) (run validationRun, resp *http.Response, changed bool, err error) {
+	out, resp, err := retryWithin(cmd.Context(), view, func() (any, *http.Response, error) { return fetch(since, etag) })
+	if resp != nil && resp.StatusCode == http.StatusNotModified {
+		return run, resp, false, nil
+	}
+	if err != nil {
+		return run, resp, false, apiErr(resp, err)
+	}
+	run, err = asValidationRun(out)
+	return run, resp, true, err
+}
+
+// mergeValidations replaces each validation in held that changed carries by name, keeping
+// held's order. A validation held does not know yet goes last.
+func mergeValidations(held, changed []validationRow) []validationRow {
+	out := slices.Clone(held)
+	index := make(map[string]int, len(out))
+	for i, v := range out {
+		index[v.Name] = i
+	}
+	for _, v := range changed {
+		if i, ok := index[v.Name]; ok {
+			out[i] = v
+			continue
+		}
+		index[v.Name] = len(out)
+		out = append(out, v)
+	}
+	return out
 }
 
 func asValidationRun(v any) (validationRun, error) {
