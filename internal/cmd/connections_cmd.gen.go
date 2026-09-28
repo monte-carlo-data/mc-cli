@@ -188,8 +188,15 @@ func newConnectionsValidateCmd() *cobra.Command {
 				return err
 			}
 			if !noWait {
-				passed, err := waitForValidations(cmd, out, func() (any, *http.Response, error) {
-					run, resp, err := api.ValidationsAPI.GetValidationRun(ctx, out.GetId()).Execute()
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
 					if err == nil {
 						out = run
 					}
@@ -816,8 +823,15 @@ func runConnectionsAdd(cmd *cobra.Command, connectionType string, native *connec
 		if err != nil {
 			return apiErr(resp, err)
 		}
-		passed, err := waitForValidations(cmd, started, func() (any, *http.Response, error) {
-			out, resp, err := api.ValidationsAPI.GetValidationRun(ctx, started.GetId()).Execute()
+		passed, err := followValidationRun(cmd, started, func(since *int64, etag string) (any, *http.Response, error) {
+			req := api.ValidationsAPI.GetValidationRun(ctx, started.GetId())
+			if since != nil {
+				req = req.Since(int32(*since))
+			}
+			if etag != "" {
+				req = req.IfNoneMatch(etag)
+			}
+			out, resp, err := req.Execute()
 			return out, resp, err
 		}, "")
 		if err != nil {
@@ -1751,8 +1765,15 @@ func runConnectionsUpdate(cmd *cobra.Command, connectionId string, native *conne
 		if err != nil {
 			return apiErr(resp, err)
 		}
-		passed, err := waitForValidations(cmd, started, func() (any, *http.Response, error) {
-			out, resp, err := api.ValidationsAPI.GetValidationRun(ctx, started.GetId()).Execute()
+		passed, err := followValidationRun(cmd, started, func(since *int64, etag string) (any, *http.Response, error) {
+			req := api.ValidationsAPI.GetValidationRun(ctx, started.GetId())
+			if since != nil {
+				req = req.Since(int32(*since))
+			}
+			if etag != "" {
+				req = req.IfNoneMatch(etag)
+			}
+			out, resp, err := req.Execute()
 			return out, resp, err
 		}, "")
 		if err != nil {
