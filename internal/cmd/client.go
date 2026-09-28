@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	sdk "github.com/monte-carlo-data/mc-sdk-go/montecarlo"
 	"github.com/spf13/cobra"
@@ -57,6 +58,10 @@ func clientOptions(cmd *cobra.Command) (sdk.Options, error) {
 		Profile:      str("profile"),
 		ConfigDir:    dir,
 		UserAgent:    binaryName + "/" + version,
+		// The gateway drops User-Agent, so these are what identify the CLI to usage telemetry.
+		TelemetryReason:  "cli",
+		TelemetryService: "mc-cli",
+		TelemetryCommand: telemetryCommand(cmd),
 	}
 
 	// The active profile set with "profile use" is a CLI-only fallback, layered in only when
@@ -87,6 +92,12 @@ func clientOptions(cmd *cobra.Command) (sdk.Options, error) {
 		resolved.Endpoint = defaultEndpoint
 	}
 	return resolved, nil
+}
+
+// telemetryCommand names the command without the binary, e.g. "connections add snowflake".
+// CommandPath joins command names only, so positional arguments never reach it.
+func telemetryCommand(cmd *cobra.Command) string {
+	return strings.TrimSpace(strings.TrimPrefix(cmd.CommandPath(), binaryName))
 }
 
 // hasCredentialMechanism reports whether opts, or the environment variables the SDK falls back

@@ -43,6 +43,8 @@ A destructive command asks first, `Delete deployment <id>? [y/N]`; `--yes` answe
 
 `montecarlo --help` lists the commands; each API resource is a group, each operation a command under its verb.
 
+Each request names the CLI and the command that made it, e.g. `deployments get`, in `x-mcd-telemetry-*` headers, as the other Monte Carlo tools do. Arguments and flag values are never sent in them.
+
 ## Shell completion
 
 ```bash
