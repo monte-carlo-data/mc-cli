@@ -53,23 +53,23 @@ func problem(message, resolution string) []any {
 }
 
 // polls answers each fetch with the next state, then keeps answering the last.
-func polls(states ...map[string]any) (func() (any, *http.Response, error), *int) {
+func polls(states ...map[string]any) (runFetch, *int) {
 	calls := 0
-	return func() (any, *http.Response, error) {
+	return func(*int64, string) (any, *http.Response, error) {
 		s := states[min(calls, len(states)-1)]
 		calls++
 		return s, &http.Response{StatusCode: http.StatusOK, Header: http.Header{}}, nil
 	}, &calls
 }
 
-func TestWaitForValidationsFollowsTheRunAndPrintsEachValidationAsItFinishes(t *testing.T) {
+func TestFollowValidationRunFollowsTheRunAndPrintsEachValidationAsItFinishes(t *testing.T) {
 	cmd, _, stdout, stderr := validationFixture(t)
 	fetch, calls := polls(
 		run("running", row("connect", "completed", true), row("tables", "running", nil)),
 		run("completed", row("connect", "completed", true), row("tables", "completed", true, map[string]any{"warnings": problem("Two tables were not readable.", "Grant SELECT on them.")})),
 	)
 
-	passed, err := waitForValidations(cmd, run("running", row("connect", "pending", nil), row("tables", "pending", nil)), fetch, "validations get run")
+	passed, err := followValidationRun(cmd, run("running", row("connect", "pending", nil), row("tables", "pending", nil)), fetch, "validations get run")
 
 	if err != nil || !passed {
 		t.Fatalf("passed %v, err %v", passed, err)
@@ -234,25 +234,14 @@ func TestFollowValidationRunReadsTheWholeRunWhenItCarriesNoRevision(t *testing.T
 	}
 }
 
-func TestWaitForValidationsReadsOnceWhenTheCompletedReadIsWhole(t *testing.T) {
-	cmd, _, _, _ := validationFixture(t)
-	fetch, calls := polls(at(4, run("completed", row("connect", "completed", true))))
-
-	passed, err := waitForValidations(cmd, at(3, run("running", row("connect", "pending", nil))), fetch, "")
-
-	if err != nil || !passed || *calls != 1 {
-		t.Fatalf("passed %v, err %v, after %d calls", passed, err, *calls)
-	}
-}
-
-// A partial completed read triggers the extra whole read, even through the wrapper.
-func TestWaitForValidationsReadsAgainWhenTheCompletedReadIsPartial(t *testing.T) {
+// A partial completed read triggers the extra whole read.
+func TestFollowValidationRunReadsAgainWhenTheCompletedReadIsPartial(t *testing.T) {
 	cmd, _, _, _ := validationFixture(t)
 	partial := run("completed", row("connect", "completed", true))
 	partial["validations_total"] = 5
 	fetch, calls := polls(partial)
 
-	_, err := waitForValidations(cmd, run("running", row("connect", "pending", nil)), fetch, "")
+	_, err := followValidationRun(cmd, run("running", row("connect", "pending", nil)), fetch, "")
 
 	if err == nil || !strings.Contains(err.Error(), "lists 1 of 5 validations") {
 		t.Fatalf("err = %v", err)
@@ -262,7 +251,7 @@ func TestWaitForValidationsReadsAgainWhenTheCompletedReadIsPartial(t *testing.T)
 	}
 }
 
-func TestWaitForValidationsFailsUnlessEveryValidationPassed(t *testing.T) {
+func TestFollowValidationRunFailsUnlessEveryValidationPassed(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		row  map[string]any
@@ -276,7 +265,7 @@ func TestWaitForValidationsFailsUnlessEveryValidationPassed(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cmd, _, _, stderr := validationFixture(t)
-			passed, err := waitForValidations(cmd, run("completed", row("ok", "completed", true), tc.row), nil, "validations get run")
+			passed, err := followValidationRun(cmd, run("completed", row("ok", "completed", true), tc.row), nil, "validations get run")
 			if err != nil || passed {
 				t.Fatalf("passed %v, err %v", passed, err)
 			}
@@ -287,41 +276,41 @@ func TestWaitForValidationsFailsUnlessEveryValidationPassed(t *testing.T) {
 	}
 }
 
-func TestWaitForValidationsRetriesATransientPollAndReportsAnyOtherFailure(t *testing.T) {
+func TestFollowValidationRunRetriesATransientPollAndReportsAnyOtherFailure(t *testing.T) {
 	cmd, _, _, _ := validationFixture(t)
 	calls := 0
-	fetch := func() (any, *http.Response, error) {
+	fetch := func(*int64, string) (any, *http.Response, error) {
 		calls++
 		if calls == 1 {
 			return nil, &http.Response{StatusCode: http.StatusServiceUnavailable, Header: http.Header{}}, errors.New("unavailable")
 		}
 		return run("completed", row("connect", "completed", true)), &http.Response{StatusCode: http.StatusOK, Header: http.Header{}}, nil
 	}
-	if passed, err := waitForValidations(cmd, run("running", row("connect", "running", nil)), fetch, "validations get run"); err != nil || !passed || calls != 2 {
+	if passed, err := followValidationRun(cmd, run("running", row("connect", "running", nil)), fetch, "validations get run"); err != nil || !passed || calls != 2 {
 		t.Fatalf("passed %v, err %v, after %d calls", passed, err, calls)
 	}
 
 	cmd, _, _, _ = validationFixture(t)
-	gone := func() (any, *http.Response, error) {
+	gone := func(*int64, string) (any, *http.Response, error) {
 		return nil, &http.Response{StatusCode: http.StatusNotFound, Header: http.Header{}}, errors.New("no validation run with that id")
 	}
-	if _, err := waitForValidations(cmd, run("running", row("connect", "running", nil)), gone, "validations get run"); err == nil || !strings.Contains(err.Error(), "no validation run") {
+	if _, err := followValidationRun(cmd, run("running", row("connect", "running", nil)), gone, "validations get run"); err == nil || !strings.Contains(err.Error(), "no validation run") {
 		t.Fatalf("err = %v", err)
 	}
 }
 
-func TestWaitForValidationsStopsOnCtrlCAndAfterItsBudget(t *testing.T) {
+func TestFollowValidationRunStopsOnCtrlCAndAfterItsBudget(t *testing.T) {
 	cmd, cancel, _, _ := validationFixture(t)
 	fetch, _ := polls(run("running", row("connect", "running", nil)))
 	cancel()
-	if _, err := waitForValidations(cmd, run("running", row("connect", "running", nil)), fetch, "validations get run"); !errors.Is(err, context.Canceled) {
+	if _, err := followValidationRun(cmd, run("running", row("connect", "running", nil)), fetch, "validations get run"); !errors.Is(err, context.Canceled) {
 		t.Fatalf("err = %v", err)
 	}
 
 	cmd, _, _, _ = validationFixture(t)
 	validationPollTimeout = 30 * time.Millisecond
 	start := time.Now()
-	_, err := waitForValidations(cmd, run("running", row("connect", "running", nil)), fetch, "validations get run")
+	_, err := followValidationRun(cmd, run("running", row("connect", "running", nil)), fetch, "validations get run")
 	if err == nil || !strings.Contains(err.Error(), "validations get run run-1") || time.Since(start) > time.Second {
 		t.Fatalf("err = %v after %s", err, time.Since(start))
 	}
@@ -329,7 +318,7 @@ func TestWaitForValidationsStopsOnCtrlCAndAfterItsBudget(t *testing.T) {
 	// With no command that reads a run, the error names the run and no command.
 	cmd, _, _, _ = validationFixture(t)
 	validationPollTimeout = 30 * time.Millisecond
-	_, err = waitForValidations(cmd, run("running", row("connect", "running", nil)), fetch, "")
+	_, err = followValidationRun(cmd, run("running", row("connect", "running", nil)), fetch, "")
 	if err == nil || !strings.HasSuffix(err.Error(), "the run is run-1") {
 		t.Fatalf("err = %v", err)
 	}
@@ -429,11 +418,11 @@ func TestViewWriteResetsTheRedrawSoARetryMessageIsNotOverwritten(t *testing.T) {
 	}
 }
 
-func TestWaitForValidationsHonoursRetryAfterBetweenPolls(t *testing.T) {
+func TestFollowValidationRunHonoursRetryAfterBetweenPolls(t *testing.T) {
 	cmd, _, _, _ := validationFixture(t)
 	var times []time.Time
 	calls := 0
-	fetch := func() (any, *http.Response, error) {
+	fetch := func(*int64, string) (any, *http.Response, error) {
 		times = append(times, time.Now())
 		calls++
 		if calls == 1 {
@@ -442,7 +431,7 @@ func TestWaitForValidationsHonoursRetryAfterBetweenPolls(t *testing.T) {
 		return run("completed", row("connect", "completed", true)), &http.Response{StatusCode: http.StatusOK, Header: http.Header{}}, nil
 	}
 
-	passed, err := waitForValidations(cmd, run("running", row("connect", "pending", nil)), fetch, "validations get run")
+	passed, err := followValidationRun(cmd, run("running", row("connect", "pending", nil)), fetch, "validations get run")
 
 	if err != nil || !passed {
 		t.Fatalf("passed %v, err %v", passed, err)
@@ -455,21 +444,21 @@ func TestWaitForValidationsHonoursRetryAfterBetweenPolls(t *testing.T) {
 	}
 }
 
-func TestWaitForValidationsRejectsARunWhoseValidationCountDoesNotMatchItsTotal(t *testing.T) {
+func TestFollowValidationRunRejectsARunWhoseValidationCountDoesNotMatchItsTotal(t *testing.T) {
 	cmd, _, _, _ := validationFixture(t)
 	r := run("completed", row("connect", "completed", true))
 	r["validations_total"] = 5
 
-	if _, err := waitForValidations(cmd, r, nil, "validations get run"); err == nil || !strings.Contains(err.Error(), "it lists 1 of 5 validations") {
+	if _, err := followValidationRun(cmd, r, nil, "validations get run"); err == nil || !strings.Contains(err.Error(), "it lists 1 of 5 validations") {
 		t.Fatalf("err = %v", err)
 	}
 }
 
-func TestWaitForValidationsRejectsACompletedRunWithNoValidations(t *testing.T) {
+func TestFollowValidationRunRejectsACompletedRunWithNoValidations(t *testing.T) {
 	cmd, _, _, _ := validationFixture(t)
 	r := run("completed")
 
-	if _, err := waitForValidations(cmd, r, nil, "validations get run"); err == nil || !strings.Contains(err.Error(), "no validations") {
+	if _, err := followValidationRun(cmd, r, nil, "validations get run"); err == nil || !strings.Contains(err.Error(), "no validations") {
 		t.Fatalf("err = %v", err)
 	}
 }

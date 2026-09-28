@@ -50,12 +50,6 @@ type validationProblem struct {
 // changed after that revision; with etag set, it answers 304 while the run is unchanged.
 type runFetch func(since *int64, etag string) (any, *http.Response, error)
 
-// waitForValidations is followValidationRun for a fetch that takes neither, so every read is
-// whole.
-func waitForValidations(cmd *cobra.Command, first any, fetch func() (any, *http.Response, error), runCmd string) (bool, error) {
-	return followValidationRun(cmd, first, func(*int64, string) (any, *http.Response, error) { return fetch() }, runCmd)
-}
-
 // followValidationRun follows a validation run to its end and says whether every validation in
 // it passed: reached a verdict, and found no blocking problem. Warnings do not fail it.
 //
