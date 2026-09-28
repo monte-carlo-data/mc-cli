@@ -166,3 +166,44 @@ func TestAnAdoptedActiveProfileNamesWhereItCameFrom(t *testing.T) {
 		t.Fatalf("error does not hint at %q: %v", "profile use", err)
 	}
 }
+
+// The gateway drops User-Agent and x-mcd-source, so the telemetry headers are what identify the
+// CLI and the command that made a request. The command never carries its arguments.
+func TestRequestsCarryTheCLITelemetryHeaders(t *testing.T) {
+	cases := []struct {
+		args    []string
+		command string
+	}{
+		{[]string{"whoami"}, "whoami"},
+		{[]string{"collection-data-stores", "get", "aws", "store-1"}, "collection-data-stores get aws"},
+	}
+	for _, c := range cases {
+		t.Run(c.command, func(t *testing.T) {
+			var got http.Header
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				got = r.Header.Clone()
+				// Only the request matters here; the 404 fails the command.
+				http.NotFound(w, r)
+			}))
+			defer srv.Close()
+
+			args := append(c.args, "--endpoint", srv.URL, "--api-id", "i", "--api-token", "s", "--config-dir", t.TempDir())
+			_, _ = execute(t, args...)
+			if got == nil {
+				t.Fatal("no request reached the server")
+			}
+			for key, want := range map[string]string{
+				"x-mcd-telemetry-reason":  "cli",
+				"x-mcd-telemetry-service": "mc-cli",
+				"x-mcd-telemetry-command": c.command,
+			} {
+				if v := got.Values(key); len(v) != 1 || v[0] != want {
+					t.Errorf("%s: expected [%q], got %q", key, want, v)
+				}
+			}
+			if v := got.Values("x-mcd-source"); len(v) != 0 {
+				t.Errorf("x-mcd-source: expected none, got %q", v)
+			}
+		})
+	}
+}
