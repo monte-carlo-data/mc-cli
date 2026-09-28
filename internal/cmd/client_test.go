@@ -167,8 +167,7 @@ func TestAnAdoptedActiveProfileNamesWhereItCameFrom(t *testing.T) {
 	}
 }
 
-// The gateway drops User-Agent and x-mcd-source, so the telemetry headers are what identify the
-// CLI and the command that made a request. The command never carries its arguments.
+// The command header names the command path and never carries its arguments.
 func TestRequestsCarryTheCLITelemetryHeaders(t *testing.T) {
 	cases := []struct {
 		args    []string
