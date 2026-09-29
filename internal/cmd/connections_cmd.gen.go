@@ -232,7 +232,9 @@ type connectionsAddCredentials struct {
 // connectionsAddNative is the credentials a subcommand named after its connection type takes.
 type connectionsAddNative struct {
 	group flagGroup
-	build func(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error)
+	// The shared flags this type's credentials do not take.
+	selfHostedOnly []string
+	build          func(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error)
 }
 
 func newConnectionsAddCmd() *cobra.Command {
@@ -258,8 +260,9 @@ func newConnectionsAddSnowflakeCmd() *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, "snowflake", &connectionsAddNative{
-				group: flagGroup{"snowflake", []string{"account", "user", "private-key", "private-key-prompt", "private-key-passphrase", "private-key-passphrase-prompt", "warehouse"}},
-				build: buildConnectionsAddSnowflake,
+				group:          flagGroup{"snowflake", []string{"account", "user", "private-key", "private-key-prompt", "private-key-passphrase", "private-key-passphrase-prompt", "warehouse"}},
+				selfHostedOnly: []string{"bq-project-id", "databricks-warehouse-id"},
+				build:          buildConnectionsAddSnowflake,
 			})
 		},
 	}
@@ -769,8 +772,8 @@ func runConnectionsAdd(cmd *cobra.Command, connectionType string, native *connec
 	var credentials *connectionsAddCredentials
 	switch {
 	case native != nil && selected == native.group.name:
-		if changed(cmd, "bq-project-id", "databricks-warehouse-id") {
-			return fmt.Errorf("--bq-project-id and --databricks-warehouse-id apply to self-hosted credentials only")
+		if changed(cmd, native.selfHostedOnly...) {
+			return fmt.Errorf("%s credentials take no --%s", connectionType, strings.Join(native.selfHostedOnly, " or --"))
 		}
 		credentials, err = native.build(cmd, api, connectionType)
 	case selected == "self-hosted-aws":
