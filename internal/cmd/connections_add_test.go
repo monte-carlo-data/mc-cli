@@ -289,8 +289,8 @@ func TestConnectionsAddRefusesBadFlagsBeforeAnyRequest(t *testing.T) {
 		says string
 	}{
 		{"no credentials", func(srv *httptest.Server, t *testing.T) []string {
-			return addArgs(srv, t, "bigquery", "--name", "n", "--deployment-id", "d")
-		}, "pass the flags of one of: self-hosted-aws"},
+			return addArgs(srv, t, "snowflake", "--name", "n", "--deployment-id", "d")
+		}, "pass the flags of one of: snowflake, self-hosted-aws"},
 		{"two credentials", func(srv *httptest.Server, t *testing.T) []string {
 			return snowflakeArgs(srv, t, "--deployment-id", "d", "--self-hosted-aws-secret", "s")
 		}, "belong to different alternatives"},
