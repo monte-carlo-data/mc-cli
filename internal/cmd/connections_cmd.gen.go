@@ -249,6 +249,8 @@ func newConnectionsAddCmd() *cobra.Command {
 	}
 	registerConnectionsAddFlags(cmd)
 	cmd.AddCommand(newConnectionsAddSnowflakeCmd())
+	cmd.AddCommand(newConnectionsAddBigqueryCmd())
+	cmd.AddCommand(newConnectionsAddRedshiftCmd())
 	return cmd
 }
 
@@ -273,6 +275,55 @@ func newConnectionsAddSnowflakeCmd() *cobra.Command {
 	cmd.Flags().String("private-key-passphrase", "", "Passphrase the private key is encrypted with. Omit it for an unencrypted key. Never returned. Visible in the process list; --private-key-passphrase-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("private-key-passphrase-prompt", false, "Read --private-key-passphrase from a hidden prompt instead of the command line.")
 	cmd.Flags().String("warehouse", "", "Snowflake virtual warehouse to run queries in. Omit it to use the user's default.")
+	registerConnectionsAddFlags(cmd)
+	return cmd
+}
+
+func newConnectionsAddBigqueryCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "bigquery",
+		Short: "Add a bigquery connection, creating its warehouse and credentials",
+		Long:  "Adds a bigquery connection in one step, as the add command does. Pass bigquery credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsAdd(cmd, "bigquery", &connectionsAddNative{
+				group:          flagGroup{"bigquery", []string{"service-account-key", "service-account-key-prompt"}},
+				selfHostedOnly: []string{"bq-project-id", "databricks-warehouse-id"},
+				build:          buildConnectionsAddBigquery,
+			})
+		},
+	}
+	cmd.Flags().String("service-account-key", "", "The service account's JSON key file, as its text. Stored by Monte Carlo and never returned. Visible in the process list; --service-account-key-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("service-account-key-prompt", false, "Read --service-account-key from a hidden prompt instead of the command line.")
+	registerConnectionsAddFlags(cmd)
+	return cmd
+}
+
+func newConnectionsAddRedshiftCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "redshift",
+		Short: "Add a redshift connection, creating its warehouse and credentials",
+		Long:  "Adds a redshift connection in one step, as the add command does. Pass redshift credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsAdd(cmd, "redshift", &connectionsAddNative{
+				group:          flagGroup{"redshift", []string{"host", "port", "user", "password", "password-prompt", "db-name", "ssl-ca-data", "ssl-disabled", "ssl-skip-cert-verification", "ssl-verify-cert", "ssl-verify-identity"}},
+				selfHostedOnly: []string{"bq-project-id", "databricks-warehouse-id"},
+				build:          buildConnectionsAddRedshift,
+			})
+		},
+	}
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	cmd.Flags().String("password", "", "Password of the database user. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("db-name", "", "Redshift database to connect to.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM text of the CA certificate the server's certificate is checked against.")
+	cmd.Flags().Bool("ssl-disabled", false, "Connect without TLS.")
+	cmd.Flags().Bool("ssl-skip-cert-verification", false, "Encrypt the connection without checking the server's certificate.")
+	cmd.Flags().Bool("ssl-verify-cert", false, "Check the server's certificate against the CA.")
+	cmd.Flags().Bool("ssl-verify-identity", false, "Check the certificate and that it names the host.")
 	registerConnectionsAddFlags(cmd)
 	return cmd
 }
@@ -366,6 +417,159 @@ func buildConnectionsAddSnowflake(cmd *cobra.Command, api *sdk.APIClient, connec
 			return api.CredentialsAPI.DeleteSnowflakeCredentials(ctx, id).Execute()
 		},
 		deleteCmd: "credentials delete snowflake",
+		listCmd:   "credentials list",
+	}, nil
+}
+
+func buildConnectionsAddBigquery(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
+	var err error
+	if err := requireAny(cmd, "service-account-key", "service-account-key-prompt"); err != nil {
+		return nil, err
+	}
+	serviceAccountKey, err := flagSecret(cmd, "service-account-key")
+	if err != nil {
+		return nil, err
+	}
+	body := sdk.NewBigQueryCredentialsIn(serviceAccountKey)
+	return &connectionsAddCredentials{
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			candidate := sdk.NewBigQueryCredentialsValidateIn(deploymentId, serviceAccountKey)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateBigqueryCredentials(ctx).BigQueryCredentialsValidateIn(*candidate).Execute)
+		},
+		create: func(ctx context.Context) (string, *http.Response, error) {
+			out, resp, err := retryOnTransient(cmd, api.CredentialsAPI.CreateBigqueryCredentials(ctx).BigQueryCredentialsIn(*body).Execute)
+			if err != nil {
+				return "", resp, err
+			}
+			return out.GetId(), resp, nil
+		},
+		del: func(ctx context.Context, id string) (*http.Response, error) {
+			return api.CredentialsAPI.DeleteBigqueryCredentials(ctx, id).Execute()
+		},
+		deleteCmd: "credentials delete bigquery",
+		listCmd:   "credentials list",
+	}, nil
+}
+
+func buildConnectionsAddRedshift(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
+	var err error
+	if err := requireAny(cmd, "host"); err != nil {
+		return nil, err
+	}
+	host, err := flagString(cmd, "host")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "port"); err != nil {
+		return nil, err
+	}
+	port, err := flagInt(cmd, "port")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "user"); err != nil {
+		return nil, err
+	}
+	user, err := flagString(cmd, "user")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "password", "password-prompt"); err != nil {
+		return nil, err
+	}
+	password, err := flagSecret(cmd, "password")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "db-name"); err != nil {
+		return nil, err
+	}
+	dbName, err := flagString(cmd, "db-name")
+	if err != nil {
+		return nil, err
+	}
+	var sslCaData string
+	if changed(cmd, "ssl-ca-data") {
+		sslCaData, err = flagString(cmd, "ssl-ca-data")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var sslDisabled bool
+	if changed(cmd, "ssl-disabled") {
+		sslDisabled, err = flagBool(cmd, "ssl-disabled")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var sslSkipCertVerification bool
+	if changed(cmd, "ssl-skip-cert-verification") {
+		sslSkipCertVerification, err = flagBool(cmd, "ssl-skip-cert-verification")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var sslVerifyCert bool
+	if changed(cmd, "ssl-verify-cert") {
+		sslVerifyCert, err = flagBool(cmd, "ssl-verify-cert")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var sslVerifyIdentity bool
+	if changed(cmd, "ssl-verify-identity") {
+		sslVerifyIdentity, err = flagBool(cmd, "ssl-verify-identity")
+		if err != nil {
+			return nil, err
+		}
+	}
+	body := sdk.NewRedshiftCredentialsIn(host, port, user, password, dbName)
+	if changed(cmd, "ssl-ca-data") {
+		body.SetSslCaData(sslCaData)
+	}
+	if changed(cmd, "ssl-disabled") {
+		body.SetSslDisabled(sslDisabled)
+	}
+	if changed(cmd, "ssl-skip-cert-verification") {
+		body.SetSslSkipCertVerification(sslSkipCertVerification)
+	}
+	if changed(cmd, "ssl-verify-cert") {
+		body.SetSslVerifyCert(sslVerifyCert)
+	}
+	if changed(cmd, "ssl-verify-identity") {
+		body.SetSslVerifyIdentity(sslVerifyIdentity)
+	}
+	return &connectionsAddCredentials{
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			candidate := sdk.NewRedshiftCredentialsValidateIn(deploymentId, host, port, user, password, dbName)
+			if changed(cmd, "ssl-ca-data") {
+				candidate.SetSslCaData(sslCaData)
+			}
+			if changed(cmd, "ssl-disabled") {
+				candidate.SetSslDisabled(sslDisabled)
+			}
+			if changed(cmd, "ssl-skip-cert-verification") {
+				candidate.SetSslSkipCertVerification(sslSkipCertVerification)
+			}
+			if changed(cmd, "ssl-verify-cert") {
+				candidate.SetSslVerifyCert(sslVerifyCert)
+			}
+			if changed(cmd, "ssl-verify-identity") {
+				candidate.SetSslVerifyIdentity(sslVerifyIdentity)
+			}
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateRedshiftCredentials(ctx).RedshiftCredentialsValidateIn(*candidate).Execute)
+		},
+		create: func(ctx context.Context) (string, *http.Response, error) {
+			out, resp, err := retryOnTransient(cmd, api.CredentialsAPI.CreateRedshiftCredentials(ctx).RedshiftCredentialsIn(*body).Execute)
+			if err != nil {
+				return "", resp, err
+			}
+			return out.GetId(), resp, nil
+		},
+		del: func(ctx context.Context, id string) (*http.Response, error) {
+			return api.CredentialsAPI.DeleteRedshiftCredentials(ctx, id).Execute()
+		},
+		deleteCmd: "credentials delete redshift",
 		listCmd:   "credentials list",
 	}, nil
 }
@@ -921,6 +1125,8 @@ func newConnectionsUpdateCmd() *cobra.Command {
 	cmd.Flags().String("databricks-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
 	registerConnectionsUpdateFlags(cmd)
 	cmd.AddCommand(newConnectionsUpdateSnowflakeCmd())
+	cmd.AddCommand(newConnectionsUpdateBigqueryCmd())
+	cmd.AddCommand(newConnectionsUpdateRedshiftCmd())
 	return cmd
 }
 
@@ -945,6 +1151,55 @@ func newConnectionsUpdateSnowflakeCmd() *cobra.Command {
 	cmd.Flags().Bool("private-key-passphrase-prompt", false, "Read --private-key-passphrase from a hidden prompt instead of the command line.")
 	cmd.Flags().String("user", "", "New Snowflake user.")
 	cmd.Flags().String("warehouse", "", "New Snowflake virtual warehouse. An explicit null clears it; queries then run in the user's default.")
+	registerConnectionsUpdateFlags(cmd)
+	return cmd
+}
+
+func newConnectionsUpdateBigqueryCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "bigquery <connection_id>",
+		Short: "Update a bigquery connection, and change its credentials",
+		Long:  "Updates a bigquery connection, as the update command does, changing its bigquery credentials with the flags below.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
+				group:   flagGroup{"bigquery", []string{"service-account-key", "service-account-key-prompt"}},
+				storage: "mc_managed",
+				build:   buildConnectionsUpdateBigquery,
+			})
+		},
+	}
+	cmd.Flags().String("service-account-key", "", "New JSON key file, as its text. Replaces the stored key whole. Visible in the process list; --service-account-key-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("service-account-key-prompt", false, "Read --service-account-key from a hidden prompt instead of the command line.")
+	registerConnectionsUpdateFlags(cmd)
+	return cmd
+}
+
+func newConnectionsUpdateRedshiftCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "redshift <connection_id>",
+		Short: "Update a redshift connection, and change its credentials",
+		Long:  "Updates a redshift connection, as the update command does, changing its redshift credentials with the flags below.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
+				group:   flagGroup{"redshift", []string{"db-name", "host", "password", "password-prompt", "port", "ssl-ca-data", "ssl-disabled", "ssl-skip-cert-verification", "ssl-verify-cert", "ssl-verify-identity", "user"}},
+				storage: "mc_managed",
+				build:   buildConnectionsUpdateRedshift,
+			})
+		},
+	}
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM text of the CA certificate the server's certificate is checked against.")
+	cmd.Flags().Bool("ssl-disabled", false, "Connect without TLS.")
+	cmd.Flags().Bool("ssl-skip-cert-verification", false, "Encrypt the connection without checking the server's certificate.")
+	cmd.Flags().Bool("ssl-verify-cert", false, "Check the server's certificate against the CA.")
+	cmd.Flags().Bool("ssl-verify-identity", false, "Check the certificate and that it names the host.")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
 	registerConnectionsUpdateFlags(cmd)
 	return cmd
 }
@@ -1079,6 +1334,251 @@ func buildConnectionsUpdateSnowflake(cmd *cobra.Command, api *sdk.APIClient, cre
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateSnowflakeCredentials(ctx, credentialsId).SnowflakeCredentialsPatch(*patch).Execute)
+			return resp, err
+		},
+	}, nil
+}
+
+func buildConnectionsUpdateBigquery(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+	var err error
+	var serviceAccountKey string
+	if changed(cmd, "service-account-key", "service-account-key-prompt") {
+		serviceAccountKey, err = flagSecret(cmd, "service-account-key")
+		if err != nil {
+			return nil, err
+		}
+	}
+	patch := sdk.NewBigQueryCredentialsPatchWithDefaults()
+	if changed(cmd, "service-account-key", "service-account-key-prompt") {
+		if serviceAccountKey == "" {
+			patch.SetServiceAccountKeyNil()
+		} else {
+			patch.SetServiceAccountKey(serviceAccountKey)
+		}
+	}
+	return &connectionsUpdateCredentials{
+		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
+			candidate := sdk.NewBigQueryCredentialsValidateInWithDefaults()
+			var missing []string
+			candidate.SetDeploymentId(deploymentId)
+			if changed(cmd, "service-account-key", "service-account-key-prompt") {
+				if serviceAccountKey != "" {
+					candidate.SetServiceAccountKey(serviceAccountKey)
+				}
+			} else {
+				missing = append(missing, "--service-account-key")
+			}
+			if len(missing) > 0 {
+				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+			}
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateBigqueryCredentials(ctx).BigQueryCredentialsValidateIn(*candidate).Execute)
+		},
+		patch: func(ctx context.Context) (*http.Response, error) {
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateBigqueryCredentials(ctx, credentialsId).BigQueryCredentialsPatch(*patch).Execute)
+			return resp, err
+		},
+	}, nil
+}
+
+func buildConnectionsUpdateRedshift(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+	var err error
+	var dbName string
+	if changed(cmd, "db-name") {
+		dbName, err = flagString(cmd, "db-name")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var host string
+	if changed(cmd, "host") {
+		host, err = flagString(cmd, "host")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var password string
+	if changed(cmd, "password", "password-prompt") {
+		password, err = flagSecret(cmd, "password")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var port int32
+	if changed(cmd, "port") {
+		port, err = flagInt(cmd, "port")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var sslCaData string
+	if changed(cmd, "ssl-ca-data") {
+		sslCaData, err = flagString(cmd, "ssl-ca-data")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var sslDisabled bool
+	if changed(cmd, "ssl-disabled") {
+		sslDisabled, err = flagBool(cmd, "ssl-disabled")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var sslSkipCertVerification bool
+	if changed(cmd, "ssl-skip-cert-verification") {
+		sslSkipCertVerification, err = flagBool(cmd, "ssl-skip-cert-verification")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var sslVerifyCert bool
+	if changed(cmd, "ssl-verify-cert") {
+		sslVerifyCert, err = flagBool(cmd, "ssl-verify-cert")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var sslVerifyIdentity bool
+	if changed(cmd, "ssl-verify-identity") {
+		sslVerifyIdentity, err = flagBool(cmd, "ssl-verify-identity")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var user string
+	if changed(cmd, "user") {
+		user, err = flagString(cmd, "user")
+		if err != nil {
+			return nil, err
+		}
+	}
+	patch := sdk.NewRedshiftCredentialsPatchWithDefaults()
+	if changed(cmd, "db-name") {
+		if dbName == "" {
+			patch.SetDbNameNil()
+		} else {
+			patch.SetDbName(dbName)
+		}
+	}
+	if changed(cmd, "host") {
+		if host == "" {
+			patch.SetHostNil()
+		} else {
+			patch.SetHost(host)
+		}
+	}
+	if changed(cmd, "password", "password-prompt") {
+		if password == "" {
+			patch.SetPasswordNil()
+		} else {
+			patch.SetPassword(password)
+		}
+	}
+	if changed(cmd, "port") {
+		patch.SetPort(port)
+	}
+	if changed(cmd, "ssl-ca-data") {
+		if sslCaData == "" {
+			patch.SetSslCaDataNil()
+		} else {
+			patch.SetSslCaData(sslCaData)
+		}
+	}
+	if changed(cmd, "ssl-disabled") {
+		patch.SetSslDisabled(sslDisabled)
+	}
+	if changed(cmd, "ssl-skip-cert-verification") {
+		patch.SetSslSkipCertVerification(sslSkipCertVerification)
+	}
+	if changed(cmd, "ssl-verify-cert") {
+		patch.SetSslVerifyCert(sslVerifyCert)
+	}
+	if changed(cmd, "ssl-verify-identity") {
+		patch.SetSslVerifyIdentity(sslVerifyIdentity)
+	}
+	if changed(cmd, "user") {
+		if user == "" {
+			patch.SetUserNil()
+		} else {
+			patch.SetUser(user)
+		}
+	}
+	return &connectionsUpdateCredentials{
+		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
+			stored, resp, err := api.CredentialsAPI.GetRedshiftCredentials(ctx, credentialsId).Execute()
+			if err != nil {
+				return nil, resp, err
+			}
+			candidate := sdk.NewRedshiftCredentialsValidateInWithDefaults()
+			var missing []string
+			candidate.SetDeploymentId(deploymentId)
+			if changed(cmd, "host") {
+				if host != "" {
+					candidate.SetHost(host)
+				}
+			} else if v, ok := stored.GetHostOk(); ok && v != nil {
+				candidate.SetHost(*v)
+			}
+			if changed(cmd, "port") {
+				candidate.SetPort(port)
+			} else if v, ok := stored.GetPortOk(); ok && v != nil {
+				candidate.SetPort(*v)
+			}
+			if changed(cmd, "user") {
+				if user != "" {
+					candidate.SetUser(user)
+				}
+			} else if v, ok := stored.GetUserOk(); ok && v != nil {
+				candidate.SetUser(*v)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				if password != "" {
+					candidate.SetPassword(password)
+				}
+			} else {
+				missing = append(missing, "--password")
+			}
+			if changed(cmd, "db-name") {
+				if dbName != "" {
+					candidate.SetDbName(dbName)
+				}
+			} else if v, ok := stored.GetDbNameOk(); ok && v != nil {
+				candidate.SetDbName(*v)
+			}
+			if changed(cmd, "ssl-ca-data") {
+				if sslCaData != "" {
+					candidate.SetSslCaData(sslCaData)
+				}
+			} else if v, ok := stored.GetSslCaDataOk(); ok && v != nil {
+				candidate.SetSslCaData(*v)
+			}
+			if changed(cmd, "ssl-disabled") {
+				candidate.SetSslDisabled(sslDisabled)
+			} else if v, ok := stored.GetSslDisabledOk(); ok && v != nil {
+				candidate.SetSslDisabled(*v)
+			}
+			if changed(cmd, "ssl-skip-cert-verification") {
+				candidate.SetSslSkipCertVerification(sslSkipCertVerification)
+			} else if v, ok := stored.GetSslSkipCertVerificationOk(); ok && v != nil {
+				candidate.SetSslSkipCertVerification(*v)
+			}
+			if changed(cmd, "ssl-verify-cert") {
+				candidate.SetSslVerifyCert(sslVerifyCert)
+			} else if v, ok := stored.GetSslVerifyCertOk(); ok && v != nil {
+				candidate.SetSslVerifyCert(*v)
+			}
+			if changed(cmd, "ssl-verify-identity") {
+				candidate.SetSslVerifyIdentity(sslVerifyIdentity)
+			} else if v, ok := stored.GetSslVerifyIdentityOk(); ok && v != nil {
+				candidate.SetSslVerifyIdentity(*v)
+			}
+			if len(missing) > 0 {
+				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+			}
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateRedshiftCredentials(ctx).RedshiftCredentialsValidateIn(*candidate).Execute)
+		},
+		patch: func(ctx context.Context) (*http.Response, error) {
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateRedshiftCredentials(ctx, credentialsId).RedshiftCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
