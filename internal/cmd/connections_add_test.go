@@ -296,7 +296,7 @@ func TestConnectionsAddRefusesBadFlagsBeforeAnyRequest(t *testing.T) {
 		}, "belong to different alternatives"},
 		{"a shared flag with native credentials", func(srv *httptest.Server, t *testing.T) []string {
 			return snowflakeArgs(srv, t, "--deployment-id", "d", "--bq-project-id", "p")
-		}, "--bq-project-id"},
+		}, "snowflake credentials take no --bq-project-id"},
 		{"both warehouse flags", func(srv *httptest.Server, t *testing.T) []string {
 			return snowflakeArgs(srv, t, "--deployment-id", "d", "--warehouse-id", "w")
 		}, "pass --deployment-id to create a warehouse"},
