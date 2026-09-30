@@ -36,7 +36,7 @@ func newConnectionsCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create a connection",
-		Long:  "Add a connection to a warehouse.\n\nCreate the credentials first, through one of the credentials endpoints, then name them\nhere. The connection's type comes from them, and has to be a type the warehouse accepts\nand the warehouse's deployment supports.\n\nOmit `job_types` to run what the type runs by default.\n\nAn unknown warehouse id or credentials id returns 404.",
+		Long:  "Add a connection to a warehouse.\n\nCreate the credentials first, through one of the credentials endpoints, then name them\nhere. The connection's type comes from them, and has to be a type the warehouse accepts\nand the warehouse's deployment supports. A type that depends on a metastore, such as\n`databricks-sql-warehouse`, goes on a data lake warehouse that already has a metastore\nconnection.\n\nOmit `job_types` to run what the type runs by default.\n\nAn unknown warehouse id or credentials id returns 404.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			api, ctx, err := apiClient(cmd)
@@ -251,6 +251,8 @@ func newConnectionsAddCmd() *cobra.Command {
 	cmd.AddCommand(newConnectionsAddSnowflakeCmd())
 	cmd.AddCommand(newConnectionsAddBigqueryCmd())
 	cmd.AddCommand(newConnectionsAddRedshiftCmd())
+	cmd.AddCommand(newConnectionsAddDatabricksMetastoreSqlWarehouseCmd())
+	cmd.AddCommand(newConnectionsAddDatabricksSqlWarehouseCmd())
 	return cmd
 }
 
@@ -263,7 +265,7 @@ func newConnectionsAddSnowflakeCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, "snowflake", &connectionsAddNative{
 				group:          flagGroup{"snowflake", []string{"account", "user", "private-key", "private-key-prompt", "private-key-passphrase", "private-key-passphrase-prompt", "warehouse"}},
-				selfHostedOnly: []string{"bq-project-id", "databricks-warehouse-id"},
+				selfHostedOnly: []string{"bq-project-id", "sql-warehouse-id"},
 				build:          buildConnectionsAddSnowflake,
 			})
 		},
@@ -288,7 +290,7 @@ func newConnectionsAddBigqueryCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, "bigquery", &connectionsAddNative{
 				group:          flagGroup{"bigquery", []string{"service-account-key", "service-account-key-prompt"}},
-				selfHostedOnly: []string{"bq-project-id", "databricks-warehouse-id"},
+				selfHostedOnly: []string{"bq-project-id", "sql-warehouse-id"},
 				build:          buildConnectionsAddBigquery,
 			})
 		},
@@ -308,7 +310,7 @@ func newConnectionsAddRedshiftCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, "redshift", &connectionsAddNative{
 				group:          flagGroup{"redshift", []string{"host", "port", "user", "password", "password-prompt", "db-name", "ssl-ca-data", "ssl-disabled", "ssl-skip-cert-verification", "ssl-verify-cert", "ssl-verify-identity"}},
-				selfHostedOnly: []string{"bq-project-id", "databricks-warehouse-id"},
+				selfHostedOnly: []string{"bq-project-id", "sql-warehouse-id"},
 				build:          buildConnectionsAddRedshift,
 			})
 		},
@@ -328,6 +330,60 @@ func newConnectionsAddRedshiftCmd() *cobra.Command {
 	return cmd
 }
 
+func newConnectionsAddDatabricksMetastoreSqlWarehouseCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "databricks-metastore-sql-warehouse",
+		Short: "Add a databricks-metastore-sql-warehouse connection, creating its warehouse and credentials",
+		Long:  "Adds a databricks-metastore-sql-warehouse connection in one step, as the add command does. Pass databricks-metastore-sql-warehouse credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsAdd(cmd, "databricks-metastore-sql-warehouse", &connectionsAddNative{
+				group:          flagGroup{"databricks-metastore-sql-warehouse", []string{"workspace-url", "workspace-id", "azure-tenant-id", "azure-workspace-resource-id", "oauth-client-id", "oauth-client-secret", "oauth-client-secret-prompt", "token", "token-prompt"}},
+				selfHostedOnly: []string{"bq-project-id"},
+				build:          buildConnectionsAddDatabricksMetastoreSqlWarehouse,
+			})
+		},
+	}
+	cmd.Flags().String("workspace-url", "", "URL of the Databricks workspace, or its host name.")
+	cmd.Flags().String("workspace-id", "", "ID of the Databricks workspace.")
+	cmd.Flags().String("azure-tenant-id", "", "Microsoft Entra ID tenant, for a service principal Azure manages. Send it with azure_workspace_resource_id and the OAuth client.")
+	cmd.Flags().String("azure-workspace-resource-id", "", "Azure resource ID of the workspace, for a service principal Azure manages. Send it with azure_tenant_id and the OAuth client.")
+	cmd.Flags().String("oauth-client-id", "", "Client ID of the service principal Monte Carlo signs in as with OAuth. Send it with oauth_client_secret, instead of token.")
+	cmd.Flags().String("oauth-client-secret", "", "OAuth secret of the service principal in oauth_client_id. Stored by Monte Carlo and never returned. Visible in the process list; --oauth-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("oauth-client-secret-prompt", false, "Read --oauth-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("token", "", "Personal access token or service principal token. Send this, or oauth_client_id and oauth_client_secret. Stored by Monte Carlo and never returned. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
+	registerConnectionsAddFlags(cmd)
+	return cmd
+}
+
+func newConnectionsAddDatabricksSqlWarehouseCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "databricks-sql-warehouse",
+		Short: "Add a databricks-sql-warehouse connection, creating its warehouse and credentials",
+		Long:  "Adds a databricks-sql-warehouse connection in one step, as the add command does. Pass databricks-sql-warehouse credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsAdd(cmd, "databricks-sql-warehouse", &connectionsAddNative{
+				group:          flagGroup{"databricks-sql-warehouse", []string{"workspace-url", "azure-tenant-id", "azure-workspace-resource-id", "oauth-client-id", "oauth-client-secret", "oauth-client-secret-prompt", "token", "token-prompt", "workspace-id"}},
+				selfHostedOnly: []string{"bq-project-id"},
+				build:          buildConnectionsAddDatabricksSqlWarehouse,
+			})
+		},
+	}
+	cmd.Flags().String("workspace-url", "", "URL of the Databricks workspace, or its host name.")
+	cmd.Flags().String("azure-tenant-id", "", "Microsoft Entra ID tenant, for a service principal Azure manages. Send it with azure_workspace_resource_id and the OAuth client.")
+	cmd.Flags().String("azure-workspace-resource-id", "", "Azure resource ID of the workspace, for a service principal Azure manages. Send it with azure_tenant_id and the OAuth client.")
+	cmd.Flags().String("oauth-client-id", "", "Client ID of the service principal Monte Carlo signs in as with OAuth. Send it with oauth_client_secret, instead of token.")
+	cmd.Flags().String("oauth-client-secret", "", "OAuth secret of the service principal in oauth_client_id. Stored by Monte Carlo and never returned. Visible in the process list; --oauth-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("oauth-client-secret-prompt", false, "Read --oauth-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("token", "", "Personal access token or service principal token. Send this, or oauth_client_id and oauth_client_secret. Stored by Monte Carlo and never returned. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
+	cmd.Flags().String("workspace-id", "", "ID of the Databricks workspace.")
+	registerConnectionsAddFlags(cmd)
+	return cmd
+}
+
 // registerConnectionsAddFlags registers the flags every add command takes.
 func registerConnectionsAddFlags(cmd *cobra.Command) {
 	cmd.Flags().String("self-hosted-aws-secret", "", "Name or ARN of the AWS Secrets Manager secret holding the connection's credentials.")
@@ -342,7 +398,7 @@ func registerConnectionsAddFlags(cmd *cobra.Command) {
 	cmd.Flags().String("self-hosted-env-var-kms-key-id", "", "AWS KMS key the variable's value is encrypted with. Omit it for a value stored in the clear.")
 	cmd.Flags().String("self-hosted-file-path", "", "Path of the file on the deployment that holds the connection's credentials.")
 	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
-	cmd.Flags().String("databricks-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
+	cmd.Flags().String("sql-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
 	cmd.Flags().String("name", "", "Name of the new connection, and of the warehouse when one is created. Required unless --validate-only.")
 	cmd.Flags().String("warehouse-id", "", "Existing warehouse to add the connection to. Without it, a warehouse is created for the connection first. Connection types that attach to a warehouse another connection provides need it: without it the connection is refused and the created warehouse removed.")
 	cmd.Flags().String("deployment-id", "", "The deployment the warehouse's connections will run through. Pick one from the deployments list. Only a deployment on Monte Carlo's current collection platform is accepted. Required when --warehouse-id is not given, refused with it.")
@@ -574,6 +630,230 @@ func buildConnectionsAddRedshift(cmd *cobra.Command, api *sdk.APIClient, connect
 	}, nil
 }
 
+func buildConnectionsAddDatabricksMetastoreSqlWarehouse(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
+	var err error
+	if err := requireAny(cmd, "workspace-url"); err != nil {
+		return nil, err
+	}
+	workspaceUrl, err := flagString(cmd, "workspace-url")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "sql-warehouse-id"); err != nil {
+		return nil, err
+	}
+	sqlWarehouseId, err := flagString(cmd, "sql-warehouse-id")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "workspace-id"); err != nil {
+		return nil, err
+	}
+	workspaceId, err := flagString(cmd, "workspace-id")
+	if err != nil {
+		return nil, err
+	}
+	var azureTenantId string
+	if changed(cmd, "azure-tenant-id") {
+		azureTenantId, err = flagString(cmd, "azure-tenant-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var azureWorkspaceResourceId string
+	if changed(cmd, "azure-workspace-resource-id") {
+		azureWorkspaceResourceId, err = flagString(cmd, "azure-workspace-resource-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var oauthClientId string
+	if changed(cmd, "oauth-client-id") {
+		oauthClientId, err = flagString(cmd, "oauth-client-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var oauthClientSecret string
+	if changed(cmd, "oauth-client-secret", "oauth-client-secret-prompt") {
+		oauthClientSecret, err = flagSecret(cmd, "oauth-client-secret")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var token string
+	if changed(cmd, "token", "token-prompt") {
+		token, err = flagSecret(cmd, "token")
+		if err != nil {
+			return nil, err
+		}
+	}
+	body := sdk.NewDatabricksMetastoreSqlWarehouseCredentialsIn(workspaceUrl, sqlWarehouseId, workspaceId)
+	if changed(cmd, "azure-tenant-id") {
+		body.SetAzureTenantId(azureTenantId)
+	}
+	if changed(cmd, "azure-workspace-resource-id") {
+		body.SetAzureWorkspaceResourceId(azureWorkspaceResourceId)
+	}
+	if changed(cmd, "oauth-client-id") {
+		body.SetOauthClientId(oauthClientId)
+	}
+	if changed(cmd, "oauth-client-secret", "oauth-client-secret-prompt") {
+		body.SetOauthClientSecret(oauthClientSecret)
+	}
+	if changed(cmd, "token", "token-prompt") {
+		body.SetToken(token)
+	}
+	return &connectionsAddCredentials{
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			candidate := sdk.NewDatabricksMetastoreSqlWarehouseCredentialsValidateIn(deploymentId, workspaceUrl, sqlWarehouseId, workspaceId)
+			if changed(cmd, "azure-tenant-id") {
+				candidate.SetAzureTenantId(azureTenantId)
+			}
+			if changed(cmd, "azure-workspace-resource-id") {
+				candidate.SetAzureWorkspaceResourceId(azureWorkspaceResourceId)
+			}
+			if changed(cmd, "oauth-client-id") {
+				candidate.SetOauthClientId(oauthClientId)
+			}
+			if changed(cmd, "oauth-client-secret", "oauth-client-secret-prompt") {
+				candidate.SetOauthClientSecret(oauthClientSecret)
+			}
+			if changed(cmd, "token", "token-prompt") {
+				candidate.SetToken(token)
+			}
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateDatabricksMetastoreSqlWarehouseCredentials(ctx).DatabricksMetastoreSqlWarehouseCredentialsValidateIn(*candidate).Execute)
+		},
+		create: func(ctx context.Context) (string, *http.Response, error) {
+			out, resp, err := retryOnTransient(cmd, api.CredentialsAPI.CreateDatabricksMetastoreSqlWarehouseCredentials(ctx).DatabricksMetastoreSqlWarehouseCredentialsIn(*body).Execute)
+			if err != nil {
+				return "", resp, err
+			}
+			return out.GetId(), resp, nil
+		},
+		del: func(ctx context.Context, id string) (*http.Response, error) {
+			return api.CredentialsAPI.DeleteDatabricksMetastoreSqlWarehouseCredentials(ctx, id).Execute()
+		},
+		deleteCmd: "credentials delete databricks-metastore-sql-warehouse",
+		listCmd:   "credentials list",
+	}, nil
+}
+
+func buildConnectionsAddDatabricksSqlWarehouse(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
+	var err error
+	if err := requireAny(cmd, "workspace-url"); err != nil {
+		return nil, err
+	}
+	workspaceUrl, err := flagString(cmd, "workspace-url")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "sql-warehouse-id"); err != nil {
+		return nil, err
+	}
+	sqlWarehouseId, err := flagString(cmd, "sql-warehouse-id")
+	if err != nil {
+		return nil, err
+	}
+	var azureTenantId string
+	if changed(cmd, "azure-tenant-id") {
+		azureTenantId, err = flagString(cmd, "azure-tenant-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var azureWorkspaceResourceId string
+	if changed(cmd, "azure-workspace-resource-id") {
+		azureWorkspaceResourceId, err = flagString(cmd, "azure-workspace-resource-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var oauthClientId string
+	if changed(cmd, "oauth-client-id") {
+		oauthClientId, err = flagString(cmd, "oauth-client-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var oauthClientSecret string
+	if changed(cmd, "oauth-client-secret", "oauth-client-secret-prompt") {
+		oauthClientSecret, err = flagSecret(cmd, "oauth-client-secret")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var token string
+	if changed(cmd, "token", "token-prompt") {
+		token, err = flagSecret(cmd, "token")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var workspaceId string
+	if changed(cmd, "workspace-id") {
+		workspaceId, err = flagString(cmd, "workspace-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	body := sdk.NewDatabricksSqlWarehouseCredentialsIn(workspaceUrl, sqlWarehouseId)
+	if changed(cmd, "azure-tenant-id") {
+		body.SetAzureTenantId(azureTenantId)
+	}
+	if changed(cmd, "azure-workspace-resource-id") {
+		body.SetAzureWorkspaceResourceId(azureWorkspaceResourceId)
+	}
+	if changed(cmd, "oauth-client-id") {
+		body.SetOauthClientId(oauthClientId)
+	}
+	if changed(cmd, "oauth-client-secret", "oauth-client-secret-prompt") {
+		body.SetOauthClientSecret(oauthClientSecret)
+	}
+	if changed(cmd, "token", "token-prompt") {
+		body.SetToken(token)
+	}
+	if changed(cmd, "workspace-id") {
+		body.SetWorkspaceId(workspaceId)
+	}
+	return &connectionsAddCredentials{
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			candidate := sdk.NewDatabricksSqlWarehouseCredentialsValidateIn(deploymentId, workspaceUrl, sqlWarehouseId)
+			if changed(cmd, "azure-tenant-id") {
+				candidate.SetAzureTenantId(azureTenantId)
+			}
+			if changed(cmd, "azure-workspace-resource-id") {
+				candidate.SetAzureWorkspaceResourceId(azureWorkspaceResourceId)
+			}
+			if changed(cmd, "oauth-client-id") {
+				candidate.SetOauthClientId(oauthClientId)
+			}
+			if changed(cmd, "oauth-client-secret", "oauth-client-secret-prompt") {
+				candidate.SetOauthClientSecret(oauthClientSecret)
+			}
+			if changed(cmd, "token", "token-prompt") {
+				candidate.SetToken(token)
+			}
+			if changed(cmd, "workspace-id") {
+				candidate.SetWorkspaceId(workspaceId)
+			}
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateDatabricksSqlWarehouseCredentials(ctx).DatabricksSqlWarehouseCredentialsValidateIn(*candidate).Execute)
+		},
+		create: func(ctx context.Context) (string, *http.Response, error) {
+			out, resp, err := retryOnTransient(cmd, api.CredentialsAPI.CreateDatabricksSqlWarehouseCredentials(ctx).DatabricksSqlWarehouseCredentialsIn(*body).Execute)
+			if err != nil {
+				return "", resp, err
+			}
+			return out.GetId(), resp, nil
+		},
+		del: func(ctx context.Context, id string) (*http.Response, error) {
+			return api.CredentialsAPI.DeleteDatabricksSqlWarehouseCredentials(ctx, id).Execute()
+		},
+		deleteCmd: "credentials delete databricks-sql-warehouse",
+		listCmd:   "credentials list",
+	}, nil
+}
+
 func buildConnectionsAddSelfHostedAws(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
 	var err error
 	if err := requireAny(cmd, "self-hosted-aws-secret"); err != nil {
@@ -604,16 +884,16 @@ func buildConnectionsAddSelfHostedAws(cmd *cobra.Command, api *sdk.APIClient, co
 			return nil, err
 		}
 	}
-	var databricksWarehouseId string
-	if changed(cmd, "databricks-warehouse-id") {
-		databricksWarehouseId, err = flagString(cmd, "databricks-warehouse-id")
+	var selfHostedAwsExternalId string
+	if changed(cmd, "self-hosted-aws-external-id") {
+		selfHostedAwsExternalId, err = flagString(cmd, "self-hosted-aws-external-id")
 		if err != nil {
 			return nil, err
 		}
 	}
-	var selfHostedAwsExternalId string
-	if changed(cmd, "self-hosted-aws-external-id") {
-		selfHostedAwsExternalId, err = flagString(cmd, "self-hosted-aws-external-id")
+	var sqlWarehouseId string
+	if changed(cmd, "sql-warehouse-id") {
+		sqlWarehouseId, err = flagString(cmd, "sql-warehouse-id")
 		if err != nil {
 			return nil, err
 		}
@@ -628,11 +908,11 @@ func buildConnectionsAddSelfHostedAws(cmd *cobra.Command, api *sdk.APIClient, co
 	if changed(cmd, "bq-project-id") {
 		body.SetBqProjectId(bqProjectId)
 	}
-	if changed(cmd, "databricks-warehouse-id") {
-		body.SetDatabricksWarehouseId(databricksWarehouseId)
-	}
 	if changed(cmd, "self-hosted-aws-external-id") {
 		body.SetExternalId(selfHostedAwsExternalId)
+	}
+	if changed(cmd, "sql-warehouse-id") {
+		body.SetSqlWarehouseId(sqlWarehouseId)
 	}
 	return &connectionsAddCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
@@ -646,11 +926,11 @@ func buildConnectionsAddSelfHostedAws(cmd *cobra.Command, api *sdk.APIClient, co
 			if changed(cmd, "bq-project-id") {
 				candidate.SetBqProjectId(bqProjectId)
 			}
-			if changed(cmd, "databricks-warehouse-id") {
-				candidate.SetDatabricksWarehouseId(databricksWarehouseId)
-			}
 			if changed(cmd, "self-hosted-aws-external-id") {
 				candidate.SetExternalId(selfHostedAwsExternalId)
+			}
+			if changed(cmd, "sql-warehouse-id") {
+				candidate.SetSqlWarehouseId(sqlWarehouseId)
 			}
 			return retryOnTransient(cmd, api.CredentialsAPI.ValidateAwsSecretsManagerCredentials(ctx).AwsSecretsManagerCredentialsValidateIn(*candidate).Execute)
 		},
@@ -685,9 +965,9 @@ func buildConnectionsAddSelfHostedGcp(cmd *cobra.Command, api *sdk.APIClient, co
 			return nil, err
 		}
 	}
-	var databricksWarehouseId string
-	if changed(cmd, "databricks-warehouse-id") {
-		databricksWarehouseId, err = flagString(cmd, "databricks-warehouse-id")
+	var sqlWarehouseId string
+	if changed(cmd, "sql-warehouse-id") {
+		sqlWarehouseId, err = flagString(cmd, "sql-warehouse-id")
 		if err != nil {
 			return nil, err
 		}
@@ -696,8 +976,8 @@ func buildConnectionsAddSelfHostedGcp(cmd *cobra.Command, api *sdk.APIClient, co
 	if changed(cmd, "bq-project-id") {
 		body.SetBqProjectId(bqProjectId)
 	}
-	if changed(cmd, "databricks-warehouse-id") {
-		body.SetDatabricksWarehouseId(databricksWarehouseId)
+	if changed(cmd, "sql-warehouse-id") {
+		body.SetSqlWarehouseId(sqlWarehouseId)
 	}
 	return &connectionsAddCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
@@ -705,8 +985,8 @@ func buildConnectionsAddSelfHostedGcp(cmd *cobra.Command, api *sdk.APIClient, co
 			if changed(cmd, "bq-project-id") {
 				candidate.SetBqProjectId(bqProjectId)
 			}
-			if changed(cmd, "databricks-warehouse-id") {
-				candidate.SetDatabricksWarehouseId(databricksWarehouseId)
+			if changed(cmd, "sql-warehouse-id") {
+				candidate.SetSqlWarehouseId(sqlWarehouseId)
 			}
 			return retryOnTransient(cmd, api.CredentialsAPI.ValidateGcpSecretManagerCredentials(ctx).GcpSecretManagerCredentialsValidateIn(*candidate).Execute)
 		},
@@ -755,9 +1035,9 @@ func buildConnectionsAddSelfHostedAzure(cmd *cobra.Command, api *sdk.APIClient, 
 			return nil, err
 		}
 	}
-	var databricksWarehouseId string
-	if changed(cmd, "databricks-warehouse-id") {
-		databricksWarehouseId, err = flagString(cmd, "databricks-warehouse-id")
+	var sqlWarehouseId string
+	if changed(cmd, "sql-warehouse-id") {
+		sqlWarehouseId, err = flagString(cmd, "sql-warehouse-id")
 		if err != nil {
 			return nil, err
 		}
@@ -772,8 +1052,8 @@ func buildConnectionsAddSelfHostedAzure(cmd *cobra.Command, api *sdk.APIClient, 
 	if changed(cmd, "bq-project-id") {
 		body.SetBqProjectId(bqProjectId)
 	}
-	if changed(cmd, "databricks-warehouse-id") {
-		body.SetDatabricksWarehouseId(databricksWarehouseId)
+	if changed(cmd, "sql-warehouse-id") {
+		body.SetSqlWarehouseId(sqlWarehouseId)
 	}
 	return &connectionsAddCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
@@ -787,8 +1067,8 @@ func buildConnectionsAddSelfHostedAzure(cmd *cobra.Command, api *sdk.APIClient, 
 			if changed(cmd, "bq-project-id") {
 				candidate.SetBqProjectId(bqProjectId)
 			}
-			if changed(cmd, "databricks-warehouse-id") {
-				candidate.SetDatabricksWarehouseId(databricksWarehouseId)
+			if changed(cmd, "sql-warehouse-id") {
+				candidate.SetSqlWarehouseId(sqlWarehouseId)
 			}
 			return retryOnTransient(cmd, api.CredentialsAPI.ValidateAzureKeyVaultCredentials(ctx).AzureKeyVaultCredentialsValidateIn(*candidate).Execute)
 		},
@@ -823,16 +1103,16 @@ func buildConnectionsAddSelfHostedEnvVar(cmd *cobra.Command, api *sdk.APIClient,
 			return nil, err
 		}
 	}
-	var databricksWarehouseId string
-	if changed(cmd, "databricks-warehouse-id") {
-		databricksWarehouseId, err = flagString(cmd, "databricks-warehouse-id")
+	var selfHostedEnvVarKmsKeyId string
+	if changed(cmd, "self-hosted-env-var-kms-key-id") {
+		selfHostedEnvVarKmsKeyId, err = flagString(cmd, "self-hosted-env-var-kms-key-id")
 		if err != nil {
 			return nil, err
 		}
 	}
-	var selfHostedEnvVarKmsKeyId string
-	if changed(cmd, "self-hosted-env-var-kms-key-id") {
-		selfHostedEnvVarKmsKeyId, err = flagString(cmd, "self-hosted-env-var-kms-key-id")
+	var sqlWarehouseId string
+	if changed(cmd, "sql-warehouse-id") {
+		sqlWarehouseId, err = flagString(cmd, "sql-warehouse-id")
 		if err != nil {
 			return nil, err
 		}
@@ -841,11 +1121,11 @@ func buildConnectionsAddSelfHostedEnvVar(cmd *cobra.Command, api *sdk.APIClient,
 	if changed(cmd, "bq-project-id") {
 		body.SetBqProjectId(bqProjectId)
 	}
-	if changed(cmd, "databricks-warehouse-id") {
-		body.SetDatabricksWarehouseId(databricksWarehouseId)
-	}
 	if changed(cmd, "self-hosted-env-var-kms-key-id") {
 		body.SetKmsKeyId(selfHostedEnvVarKmsKeyId)
+	}
+	if changed(cmd, "sql-warehouse-id") {
+		body.SetSqlWarehouseId(sqlWarehouseId)
 	}
 	return &connectionsAddCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
@@ -853,11 +1133,11 @@ func buildConnectionsAddSelfHostedEnvVar(cmd *cobra.Command, api *sdk.APIClient,
 			if changed(cmd, "bq-project-id") {
 				candidate.SetBqProjectId(bqProjectId)
 			}
-			if changed(cmd, "databricks-warehouse-id") {
-				candidate.SetDatabricksWarehouseId(databricksWarehouseId)
-			}
 			if changed(cmd, "self-hosted-env-var-kms-key-id") {
 				candidate.SetKmsKeyId(selfHostedEnvVarKmsKeyId)
+			}
+			if changed(cmd, "sql-warehouse-id") {
+				candidate.SetSqlWarehouseId(sqlWarehouseId)
 			}
 			return retryOnTransient(cmd, api.CredentialsAPI.ValidateEnvVarCredentials(ctx).EnvVarCredentialsValidateIn(*candidate).Execute)
 		},
@@ -892,9 +1172,9 @@ func buildConnectionsAddSelfHostedFile(cmd *cobra.Command, api *sdk.APIClient, c
 			return nil, err
 		}
 	}
-	var databricksWarehouseId string
-	if changed(cmd, "databricks-warehouse-id") {
-		databricksWarehouseId, err = flagString(cmd, "databricks-warehouse-id")
+	var sqlWarehouseId string
+	if changed(cmd, "sql-warehouse-id") {
+		sqlWarehouseId, err = flagString(cmd, "sql-warehouse-id")
 		if err != nil {
 			return nil, err
 		}
@@ -903,8 +1183,8 @@ func buildConnectionsAddSelfHostedFile(cmd *cobra.Command, api *sdk.APIClient, c
 	if changed(cmd, "bq-project-id") {
 		body.SetBqProjectId(bqProjectId)
 	}
-	if changed(cmd, "databricks-warehouse-id") {
-		body.SetDatabricksWarehouseId(databricksWarehouseId)
+	if changed(cmd, "sql-warehouse-id") {
+		body.SetSqlWarehouseId(sqlWarehouseId)
 	}
 	return &connectionsAddCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
@@ -912,8 +1192,8 @@ func buildConnectionsAddSelfHostedFile(cmd *cobra.Command, api *sdk.APIClient, c
 			if changed(cmd, "bq-project-id") {
 				candidate.SetBqProjectId(bqProjectId)
 			}
-			if changed(cmd, "databricks-warehouse-id") {
-				candidate.SetDatabricksWarehouseId(databricksWarehouseId)
+			if changed(cmd, "sql-warehouse-id") {
+				candidate.SetSqlWarehouseId(sqlWarehouseId)
 			}
 			return retryOnTransient(cmd, api.CredentialsAPI.ValidateFileCredentials(ctx).FileCredentialsValidateIn(*candidate).Execute)
 		},
@@ -1122,11 +1402,13 @@ func newConnectionsUpdateCmd() *cobra.Command {
 	cmd.Flags().String("self-hosted-env-var-kms-key-id", "", "AWS KMS key the variable's value is encrypted with. Omit it for a value stored in the clear.")
 	cmd.Flags().String("self-hosted-file-path", "", "Path of the file on the deployment that holds the connection's credentials.")
 	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
-	cmd.Flags().String("databricks-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
+	cmd.Flags().String("sql-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
 	registerConnectionsUpdateFlags(cmd)
 	cmd.AddCommand(newConnectionsUpdateSnowflakeCmd())
 	cmd.AddCommand(newConnectionsUpdateBigqueryCmd())
 	cmd.AddCommand(newConnectionsUpdateRedshiftCmd())
+	cmd.AddCommand(newConnectionsUpdateDatabricksMetastoreSqlWarehouseCmd())
+	cmd.AddCommand(newConnectionsUpdateDatabricksSqlWarehouseCmd())
 	return cmd
 }
 
@@ -1200,6 +1482,62 @@ func newConnectionsUpdateRedshiftCmd() *cobra.Command {
 	cmd.Flags().Bool("ssl-verify-cert", false, "Check the server's certificate against the CA.")
 	cmd.Flags().Bool("ssl-verify-identity", false, "Check the certificate and that it names the host.")
 	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	registerConnectionsUpdateFlags(cmd)
+	return cmd
+}
+
+func newConnectionsUpdateDatabricksMetastoreSqlWarehouseCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "databricks-metastore-sql-warehouse <connection_id>",
+		Short: "Update a databricks-metastore-sql-warehouse connection, and change its credentials",
+		Long:  "Updates a databricks-metastore-sql-warehouse connection, as the update command does, changing its databricks-metastore-sql-warehouse credentials with the flags below.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
+				group:   flagGroup{"databricks-metastore-sql-warehouse", []string{"azure-tenant-id", "azure-workspace-resource-id", "oauth-client-id", "oauth-client-secret", "oauth-client-secret-prompt", "sql-warehouse-id", "token", "token-prompt", "workspace-id", "workspace-url"}},
+				storage: "mc_managed",
+				build:   buildConnectionsUpdateDatabricksMetastoreSqlWarehouse,
+			})
+		},
+	}
+	cmd.Flags().String("azure-tenant-id", "", "Microsoft Entra ID tenant, for a service principal Azure manages. Send it with azure_workspace_resource_id and the OAuth client.")
+	cmd.Flags().String("azure-workspace-resource-id", "", "Azure resource ID of the workspace, for a service principal Azure manages. Send it with azure_tenant_id and the OAuth client.")
+	cmd.Flags().String("oauth-client-id", "", "Client ID of the service principal Monte Carlo signs in as with OAuth. Send it with oauth_client_secret, instead of token.")
+	cmd.Flags().String("oauth-client-secret", "", "OAuth secret of the service principal in oauth_client_id. Stored by Monte Carlo and never returned. Visible in the process list; --oauth-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("oauth-client-secret-prompt", false, "Read --oauth-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("sql-warehouse-id", "", "ID of the Databricks SQL warehouse the connection runs on.")
+	cmd.Flags().String("token", "", "Personal access token or service principal token. Send this, or oauth_client_id and oauth_client_secret. Stored by Monte Carlo and never returned. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
+	cmd.Flags().String("workspace-id", "", "ID of the Databricks workspace.")
+	cmd.Flags().String("workspace-url", "", "URL of the Databricks workspace, or its host name.")
+	registerConnectionsUpdateFlags(cmd)
+	return cmd
+}
+
+func newConnectionsUpdateDatabricksSqlWarehouseCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "databricks-sql-warehouse <connection_id>",
+		Short: "Update a databricks-sql-warehouse connection, and change its credentials",
+		Long:  "Updates a databricks-sql-warehouse connection, as the update command does, changing its databricks-sql-warehouse credentials with the flags below.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
+				group:   flagGroup{"databricks-sql-warehouse", []string{"azure-tenant-id", "azure-workspace-resource-id", "oauth-client-id", "oauth-client-secret", "oauth-client-secret-prompt", "sql-warehouse-id", "token", "token-prompt", "workspace-id", "workspace-url"}},
+				storage: "mc_managed",
+				build:   buildConnectionsUpdateDatabricksSqlWarehouse,
+			})
+		},
+	}
+	cmd.Flags().String("azure-tenant-id", "", "Microsoft Entra ID tenant, for a service principal Azure manages. Send it with azure_workspace_resource_id and the OAuth client.")
+	cmd.Flags().String("azure-workspace-resource-id", "", "Azure resource ID of the workspace, for a service principal Azure manages. Send it with azure_tenant_id and the OAuth client.")
+	cmd.Flags().String("oauth-client-id", "", "Client ID of the service principal Monte Carlo signs in as with OAuth. Send it with oauth_client_secret, instead of token.")
+	cmd.Flags().String("oauth-client-secret", "", "OAuth secret of the service principal in oauth_client_id. Stored by Monte Carlo and never returned. Visible in the process list; --oauth-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("oauth-client-secret-prompt", false, "Read --oauth-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("sql-warehouse-id", "", "ID of the Databricks SQL warehouse the connection runs on.")
+	cmd.Flags().String("token", "", "Personal access token or service principal token. Send this, or oauth_client_id and oauth_client_secret. Stored by Monte Carlo and never returned. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
+	cmd.Flags().String("workspace-id", "", "ID of the Databricks workspace.")
+	cmd.Flags().String("workspace-url", "", "URL of the Databricks workspace, or its host name.")
 	registerConnectionsUpdateFlags(cmd)
 	return cmd
 }
@@ -1584,6 +1922,382 @@ func buildConnectionsUpdateRedshift(cmd *cobra.Command, api *sdk.APIClient, cred
 	}, nil
 }
 
+func buildConnectionsUpdateDatabricksMetastoreSqlWarehouse(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+	var err error
+	var azureTenantId string
+	if changed(cmd, "azure-tenant-id") {
+		azureTenantId, err = flagString(cmd, "azure-tenant-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var azureWorkspaceResourceId string
+	if changed(cmd, "azure-workspace-resource-id") {
+		azureWorkspaceResourceId, err = flagString(cmd, "azure-workspace-resource-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var oauthClientId string
+	if changed(cmd, "oauth-client-id") {
+		oauthClientId, err = flagString(cmd, "oauth-client-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var oauthClientSecret string
+	if changed(cmd, "oauth-client-secret", "oauth-client-secret-prompt") {
+		oauthClientSecret, err = flagSecret(cmd, "oauth-client-secret")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var sqlWarehouseId string
+	if changed(cmd, "sql-warehouse-id") {
+		sqlWarehouseId, err = flagString(cmd, "sql-warehouse-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var token string
+	if changed(cmd, "token", "token-prompt") {
+		token, err = flagSecret(cmd, "token")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var workspaceId string
+	if changed(cmd, "workspace-id") {
+		workspaceId, err = flagString(cmd, "workspace-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var workspaceUrl string
+	if changed(cmd, "workspace-url") {
+		workspaceUrl, err = flagString(cmd, "workspace-url")
+		if err != nil {
+			return nil, err
+		}
+	}
+	patch := sdk.NewDatabricksMetastoreSqlWarehouseCredentialsPatchWithDefaults()
+	if changed(cmd, "azure-tenant-id") {
+		if azureTenantId == "" {
+			patch.SetAzureTenantIdNil()
+		} else {
+			patch.SetAzureTenantId(azureTenantId)
+		}
+	}
+	if changed(cmd, "azure-workspace-resource-id") {
+		if azureWorkspaceResourceId == "" {
+			patch.SetAzureWorkspaceResourceIdNil()
+		} else {
+			patch.SetAzureWorkspaceResourceId(azureWorkspaceResourceId)
+		}
+	}
+	if changed(cmd, "oauth-client-id") {
+		if oauthClientId == "" {
+			patch.SetOauthClientIdNil()
+		} else {
+			patch.SetOauthClientId(oauthClientId)
+		}
+	}
+	if changed(cmd, "oauth-client-secret", "oauth-client-secret-prompt") {
+		if oauthClientSecret == "" {
+			patch.SetOauthClientSecretNil()
+		} else {
+			patch.SetOauthClientSecret(oauthClientSecret)
+		}
+	}
+	if changed(cmd, "sql-warehouse-id") {
+		if sqlWarehouseId == "" {
+			patch.SetSqlWarehouseIdNil()
+		} else {
+			patch.SetSqlWarehouseId(sqlWarehouseId)
+		}
+	}
+	if changed(cmd, "token", "token-prompt") {
+		if token == "" {
+			patch.SetTokenNil()
+		} else {
+			patch.SetToken(token)
+		}
+	}
+	if changed(cmd, "workspace-id") {
+		if workspaceId == "" {
+			patch.SetWorkspaceIdNil()
+		} else {
+			patch.SetWorkspaceId(workspaceId)
+		}
+	}
+	if changed(cmd, "workspace-url") {
+		if workspaceUrl == "" {
+			patch.SetWorkspaceUrlNil()
+		} else {
+			patch.SetWorkspaceUrl(workspaceUrl)
+		}
+	}
+	return &connectionsUpdateCredentials{
+		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
+			stored, resp, err := api.CredentialsAPI.GetDatabricksMetastoreSqlWarehouseCredentials(ctx, credentialsId).Execute()
+			if err != nil {
+				return nil, resp, err
+			}
+			candidate := sdk.NewDatabricksMetastoreSqlWarehouseCredentialsValidateInWithDefaults()
+			var missing []string
+			candidate.SetDeploymentId(deploymentId)
+			if changed(cmd, "workspace-url") {
+				if workspaceUrl != "" {
+					candidate.SetWorkspaceUrl(workspaceUrl)
+				}
+			} else if v, ok := stored.GetWorkspaceUrlOk(); ok && v != nil {
+				candidate.SetWorkspaceUrl(*v)
+			}
+			if changed(cmd, "sql-warehouse-id") {
+				if sqlWarehouseId != "" {
+					candidate.SetSqlWarehouseId(sqlWarehouseId)
+				}
+			} else if v, ok := stored.GetSqlWarehouseIdOk(); ok && v != nil {
+				candidate.SetSqlWarehouseId(*v)
+			}
+			if changed(cmd, "workspace-id") {
+				if workspaceId != "" {
+					candidate.SetWorkspaceId(workspaceId)
+				}
+			} else if v, ok := stored.GetWorkspaceIdOk(); ok && v != nil {
+				candidate.SetWorkspaceId(*v)
+			}
+			if changed(cmd, "azure-tenant-id") {
+				if azureTenantId != "" {
+					candidate.SetAzureTenantId(azureTenantId)
+				}
+			} else if v, ok := stored.GetAzureTenantIdOk(); ok && v != nil {
+				candidate.SetAzureTenantId(*v)
+			}
+			if changed(cmd, "azure-workspace-resource-id") {
+				if azureWorkspaceResourceId != "" {
+					candidate.SetAzureWorkspaceResourceId(azureWorkspaceResourceId)
+				}
+			} else if v, ok := stored.GetAzureWorkspaceResourceIdOk(); ok && v != nil {
+				candidate.SetAzureWorkspaceResourceId(*v)
+			}
+			if changed(cmd, "oauth-client-id") {
+				if oauthClientId != "" {
+					candidate.SetOauthClientId(oauthClientId)
+				}
+			} else if v, ok := stored.GetOauthClientIdOk(); ok && v != nil {
+				candidate.SetOauthClientId(*v)
+			}
+			if changed(cmd, "oauth-client-secret", "oauth-client-secret-prompt") {
+				if oauthClientSecret != "" {
+					candidate.SetOauthClientSecret(oauthClientSecret)
+				}
+			}
+			if changed(cmd, "token", "token-prompt") {
+				if token != "" {
+					candidate.SetToken(token)
+				}
+			}
+			if len(missing) > 0 {
+				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+			}
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateDatabricksMetastoreSqlWarehouseCredentials(ctx).DatabricksMetastoreSqlWarehouseCredentialsValidateIn(*candidate).Execute)
+		},
+		patch: func(ctx context.Context) (*http.Response, error) {
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateDatabricksMetastoreSqlWarehouseCredentials(ctx, credentialsId).DatabricksMetastoreSqlWarehouseCredentialsPatch(*patch).Execute)
+			return resp, err
+		},
+	}, nil
+}
+
+func buildConnectionsUpdateDatabricksSqlWarehouse(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+	var err error
+	var azureTenantId string
+	if changed(cmd, "azure-tenant-id") {
+		azureTenantId, err = flagString(cmd, "azure-tenant-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var azureWorkspaceResourceId string
+	if changed(cmd, "azure-workspace-resource-id") {
+		azureWorkspaceResourceId, err = flagString(cmd, "azure-workspace-resource-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var oauthClientId string
+	if changed(cmd, "oauth-client-id") {
+		oauthClientId, err = flagString(cmd, "oauth-client-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var oauthClientSecret string
+	if changed(cmd, "oauth-client-secret", "oauth-client-secret-prompt") {
+		oauthClientSecret, err = flagSecret(cmd, "oauth-client-secret")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var sqlWarehouseId string
+	if changed(cmd, "sql-warehouse-id") {
+		sqlWarehouseId, err = flagString(cmd, "sql-warehouse-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var token string
+	if changed(cmd, "token", "token-prompt") {
+		token, err = flagSecret(cmd, "token")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var workspaceId string
+	if changed(cmd, "workspace-id") {
+		workspaceId, err = flagString(cmd, "workspace-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var workspaceUrl string
+	if changed(cmd, "workspace-url") {
+		workspaceUrl, err = flagString(cmd, "workspace-url")
+		if err != nil {
+			return nil, err
+		}
+	}
+	patch := sdk.NewDatabricksSqlWarehouseCredentialsPatchWithDefaults()
+	if changed(cmd, "azure-tenant-id") {
+		if azureTenantId == "" {
+			patch.SetAzureTenantIdNil()
+		} else {
+			patch.SetAzureTenantId(azureTenantId)
+		}
+	}
+	if changed(cmd, "azure-workspace-resource-id") {
+		if azureWorkspaceResourceId == "" {
+			patch.SetAzureWorkspaceResourceIdNil()
+		} else {
+			patch.SetAzureWorkspaceResourceId(azureWorkspaceResourceId)
+		}
+	}
+	if changed(cmd, "oauth-client-id") {
+		if oauthClientId == "" {
+			patch.SetOauthClientIdNil()
+		} else {
+			patch.SetOauthClientId(oauthClientId)
+		}
+	}
+	if changed(cmd, "oauth-client-secret", "oauth-client-secret-prompt") {
+		if oauthClientSecret == "" {
+			patch.SetOauthClientSecretNil()
+		} else {
+			patch.SetOauthClientSecret(oauthClientSecret)
+		}
+	}
+	if changed(cmd, "sql-warehouse-id") {
+		if sqlWarehouseId == "" {
+			patch.SetSqlWarehouseIdNil()
+		} else {
+			patch.SetSqlWarehouseId(sqlWarehouseId)
+		}
+	}
+	if changed(cmd, "token", "token-prompt") {
+		if token == "" {
+			patch.SetTokenNil()
+		} else {
+			patch.SetToken(token)
+		}
+	}
+	if changed(cmd, "workspace-id") {
+		if workspaceId == "" {
+			patch.SetWorkspaceIdNil()
+		} else {
+			patch.SetWorkspaceId(workspaceId)
+		}
+	}
+	if changed(cmd, "workspace-url") {
+		if workspaceUrl == "" {
+			patch.SetWorkspaceUrlNil()
+		} else {
+			patch.SetWorkspaceUrl(workspaceUrl)
+		}
+	}
+	return &connectionsUpdateCredentials{
+		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
+			stored, resp, err := api.CredentialsAPI.GetDatabricksSqlWarehouseCredentials(ctx, credentialsId).Execute()
+			if err != nil {
+				return nil, resp, err
+			}
+			candidate := sdk.NewDatabricksSqlWarehouseCredentialsValidateInWithDefaults()
+			var missing []string
+			candidate.SetDeploymentId(deploymentId)
+			if changed(cmd, "workspace-url") {
+				if workspaceUrl != "" {
+					candidate.SetWorkspaceUrl(workspaceUrl)
+				}
+			} else if v, ok := stored.GetWorkspaceUrlOk(); ok && v != nil {
+				candidate.SetWorkspaceUrl(*v)
+			}
+			if changed(cmd, "sql-warehouse-id") {
+				if sqlWarehouseId != "" {
+					candidate.SetSqlWarehouseId(sqlWarehouseId)
+				}
+			} else if v, ok := stored.GetSqlWarehouseIdOk(); ok && v != nil {
+				candidate.SetSqlWarehouseId(*v)
+			}
+			if changed(cmd, "azure-tenant-id") {
+				if azureTenantId != "" {
+					candidate.SetAzureTenantId(azureTenantId)
+				}
+			} else if v, ok := stored.GetAzureTenantIdOk(); ok && v != nil {
+				candidate.SetAzureTenantId(*v)
+			}
+			if changed(cmd, "azure-workspace-resource-id") {
+				if azureWorkspaceResourceId != "" {
+					candidate.SetAzureWorkspaceResourceId(azureWorkspaceResourceId)
+				}
+			} else if v, ok := stored.GetAzureWorkspaceResourceIdOk(); ok && v != nil {
+				candidate.SetAzureWorkspaceResourceId(*v)
+			}
+			if changed(cmd, "oauth-client-id") {
+				if oauthClientId != "" {
+					candidate.SetOauthClientId(oauthClientId)
+				}
+			} else if v, ok := stored.GetOauthClientIdOk(); ok && v != nil {
+				candidate.SetOauthClientId(*v)
+			}
+			if changed(cmd, "oauth-client-secret", "oauth-client-secret-prompt") {
+				if oauthClientSecret != "" {
+					candidate.SetOauthClientSecret(oauthClientSecret)
+				}
+			}
+			if changed(cmd, "token", "token-prompt") {
+				if token != "" {
+					candidate.SetToken(token)
+				}
+			}
+			if changed(cmd, "workspace-id") {
+				if workspaceId != "" {
+					candidate.SetWorkspaceId(workspaceId)
+				}
+			} else if v, ok := stored.GetWorkspaceIdOk(); ok && v != nil {
+				candidate.SetWorkspaceId(*v)
+			}
+			if len(missing) > 0 {
+				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+			}
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateDatabricksSqlWarehouseCredentials(ctx).DatabricksSqlWarehouseCredentialsValidateIn(*candidate).Execute)
+		},
+		patch: func(ctx context.Context) (*http.Response, error) {
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateDatabricksSqlWarehouseCredentials(ctx, credentialsId).DatabricksSqlWarehouseCredentialsPatch(*patch).Execute)
+			return resp, err
+		},
+	}, nil
+}
+
 func buildConnectionsUpdateSelfHostedAws(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var selfHostedAwsAssumableRole string
@@ -1614,16 +2328,16 @@ func buildConnectionsUpdateSelfHostedAws(cmd *cobra.Command, api *sdk.APIClient,
 			return nil, err
 		}
 	}
-	var databricksWarehouseId string
-	if changed(cmd, "databricks-warehouse-id") {
-		databricksWarehouseId, err = flagString(cmd, "databricks-warehouse-id")
+	var selfHostedAwsExternalId string
+	if changed(cmd, "self-hosted-aws-external-id") {
+		selfHostedAwsExternalId, err = flagString(cmd, "self-hosted-aws-external-id")
 		if err != nil {
 			return nil, err
 		}
 	}
-	var selfHostedAwsExternalId string
-	if changed(cmd, "self-hosted-aws-external-id") {
-		selfHostedAwsExternalId, err = flagString(cmd, "self-hosted-aws-external-id")
+	var sqlWarehouseId string
+	if changed(cmd, "sql-warehouse-id") {
+		sqlWarehouseId, err = flagString(cmd, "sql-warehouse-id")
 		if err != nil {
 			return nil, err
 		}
@@ -1657,18 +2371,18 @@ func buildConnectionsUpdateSelfHostedAws(cmd *cobra.Command, api *sdk.APIClient,
 			patch.SetBqProjectId(bqProjectId)
 		}
 	}
-	if changed(cmd, "databricks-warehouse-id") {
-		if databricksWarehouseId == "" {
-			patch.SetDatabricksWarehouseIdNil()
-		} else {
-			patch.SetDatabricksWarehouseId(databricksWarehouseId)
-		}
-	}
 	if changed(cmd, "self-hosted-aws-external-id") {
 		if selfHostedAwsExternalId == "" {
 			patch.SetExternalIdNil()
 		} else {
 			patch.SetExternalId(selfHostedAwsExternalId)
+		}
+	}
+	if changed(cmd, "sql-warehouse-id") {
+		if sqlWarehouseId == "" {
+			patch.SetSqlWarehouseIdNil()
+		} else {
+			patch.SetSqlWarehouseId(sqlWarehouseId)
 		}
 	}
 	return &connectionsUpdateCredentials{
@@ -1709,19 +2423,19 @@ func buildConnectionsUpdateSelfHostedAws(cmd *cobra.Command, api *sdk.APIClient,
 			} else if v, ok := stored.GetBqProjectIdOk(); ok && v != nil {
 				candidate.SetBqProjectId(*v)
 			}
-			if changed(cmd, "databricks-warehouse-id") {
-				if databricksWarehouseId != "" {
-					candidate.SetDatabricksWarehouseId(databricksWarehouseId)
-				}
-			} else if v, ok := stored.GetDatabricksWarehouseIdOk(); ok && v != nil {
-				candidate.SetDatabricksWarehouseId(*v)
-			}
 			if changed(cmd, "self-hosted-aws-external-id") {
 				if selfHostedAwsExternalId != "" {
 					candidate.SetExternalId(selfHostedAwsExternalId)
 				}
 			} else if v, ok := stored.GetExternalIdOk(); ok && v != nil {
 				candidate.SetExternalId(*v)
+			}
+			if changed(cmd, "sql-warehouse-id") {
+				if sqlWarehouseId != "" {
+					candidate.SetSqlWarehouseId(sqlWarehouseId)
+				}
+			} else if v, ok := stored.GetSqlWarehouseIdOk(); ok && v != nil {
+				candidate.SetSqlWarehouseId(*v)
 			}
 			if len(missing) > 0 {
 				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
@@ -1744,16 +2458,16 @@ func buildConnectionsUpdateSelfHostedGcp(cmd *cobra.Command, api *sdk.APIClient,
 			return nil, err
 		}
 	}
-	var databricksWarehouseId string
-	if changed(cmd, "databricks-warehouse-id") {
-		databricksWarehouseId, err = flagString(cmd, "databricks-warehouse-id")
+	var selfHostedGcpGcpSecret string
+	if changed(cmd, "self-hosted-gcp-secret") {
+		selfHostedGcpGcpSecret, err = flagString(cmd, "self-hosted-gcp-secret")
 		if err != nil {
 			return nil, err
 		}
 	}
-	var selfHostedGcpGcpSecret string
-	if changed(cmd, "self-hosted-gcp-secret") {
-		selfHostedGcpGcpSecret, err = flagString(cmd, "self-hosted-gcp-secret")
+	var sqlWarehouseId string
+	if changed(cmd, "sql-warehouse-id") {
+		sqlWarehouseId, err = flagString(cmd, "sql-warehouse-id")
 		if err != nil {
 			return nil, err
 		}
@@ -1766,18 +2480,18 @@ func buildConnectionsUpdateSelfHostedGcp(cmd *cobra.Command, api *sdk.APIClient,
 			patch.SetBqProjectId(bqProjectId)
 		}
 	}
-	if changed(cmd, "databricks-warehouse-id") {
-		if databricksWarehouseId == "" {
-			patch.SetDatabricksWarehouseIdNil()
-		} else {
-			patch.SetDatabricksWarehouseId(databricksWarehouseId)
-		}
-	}
 	if changed(cmd, "self-hosted-gcp-secret") {
 		if selfHostedGcpGcpSecret == "" {
 			patch.SetGcpSecretNil()
 		} else {
 			patch.SetGcpSecret(selfHostedGcpGcpSecret)
+		}
+	}
+	if changed(cmd, "sql-warehouse-id") {
+		if sqlWarehouseId == "" {
+			patch.SetSqlWarehouseIdNil()
+		} else {
+			patch.SetSqlWarehouseId(sqlWarehouseId)
 		}
 	}
 	return &connectionsUpdateCredentials{
@@ -1804,12 +2518,12 @@ func buildConnectionsUpdateSelfHostedGcp(cmd *cobra.Command, api *sdk.APIClient,
 			} else if v, ok := stored.GetBqProjectIdOk(); ok && v != nil {
 				candidate.SetBqProjectId(*v)
 			}
-			if changed(cmd, "databricks-warehouse-id") {
-				if databricksWarehouseId != "" {
-					candidate.SetDatabricksWarehouseId(databricksWarehouseId)
+			if changed(cmd, "sql-warehouse-id") {
+				if sqlWarehouseId != "" {
+					candidate.SetSqlWarehouseId(sqlWarehouseId)
 				}
-			} else if v, ok := stored.GetDatabricksWarehouseIdOk(); ok && v != nil {
-				candidate.SetDatabricksWarehouseId(*v)
+			} else if v, ok := stored.GetSqlWarehouseIdOk(); ok && v != nil {
+				candidate.SetSqlWarehouseId(*v)
 			}
 			if len(missing) > 0 {
 				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
@@ -1853,9 +2567,9 @@ func buildConnectionsUpdateSelfHostedAzure(cmd *cobra.Command, api *sdk.APIClien
 			return nil, err
 		}
 	}
-	var databricksWarehouseId string
-	if changed(cmd, "databricks-warehouse-id") {
-		databricksWarehouseId, err = flagString(cmd, "databricks-warehouse-id")
+	var sqlWarehouseId string
+	if changed(cmd, "sql-warehouse-id") {
+		sqlWarehouseId, err = flagString(cmd, "sql-warehouse-id")
 		if err != nil {
 			return nil, err
 		}
@@ -1889,11 +2603,11 @@ func buildConnectionsUpdateSelfHostedAzure(cmd *cobra.Command, api *sdk.APIClien
 			patch.SetBqProjectId(bqProjectId)
 		}
 	}
-	if changed(cmd, "databricks-warehouse-id") {
-		if databricksWarehouseId == "" {
-			patch.SetDatabricksWarehouseIdNil()
+	if changed(cmd, "sql-warehouse-id") {
+		if sqlWarehouseId == "" {
+			patch.SetSqlWarehouseIdNil()
 		} else {
-			patch.SetDatabricksWarehouseId(databricksWarehouseId)
+			patch.SetSqlWarehouseId(sqlWarehouseId)
 		}
 	}
 	return &connectionsUpdateCredentials{
@@ -1934,12 +2648,12 @@ func buildConnectionsUpdateSelfHostedAzure(cmd *cobra.Command, api *sdk.APIClien
 			} else if v, ok := stored.GetBqProjectIdOk(); ok && v != nil {
 				candidate.SetBqProjectId(*v)
 			}
-			if changed(cmd, "databricks-warehouse-id") {
-				if databricksWarehouseId != "" {
-					candidate.SetDatabricksWarehouseId(databricksWarehouseId)
+			if changed(cmd, "sql-warehouse-id") {
+				if sqlWarehouseId != "" {
+					candidate.SetSqlWarehouseId(sqlWarehouseId)
 				}
-			} else if v, ok := stored.GetDatabricksWarehouseIdOk(); ok && v != nil {
-				candidate.SetDatabricksWarehouseId(*v)
+			} else if v, ok := stored.GetSqlWarehouseIdOk(); ok && v != nil {
+				candidate.SetSqlWarehouseId(*v)
 			}
 			if len(missing) > 0 {
 				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
@@ -1962,13 +2676,6 @@ func buildConnectionsUpdateSelfHostedEnvVar(cmd *cobra.Command, api *sdk.APIClie
 			return nil, err
 		}
 	}
-	var databricksWarehouseId string
-	if changed(cmd, "databricks-warehouse-id") {
-		databricksWarehouseId, err = flagString(cmd, "databricks-warehouse-id")
-		if err != nil {
-			return nil, err
-		}
-	}
 	var selfHostedEnvVarEnvVarName string
 	if changed(cmd, "self-hosted-env-var-name") {
 		selfHostedEnvVarEnvVarName, err = flagString(cmd, "self-hosted-env-var-name")
@@ -1983,19 +2690,19 @@ func buildConnectionsUpdateSelfHostedEnvVar(cmd *cobra.Command, api *sdk.APIClie
 			return nil, err
 		}
 	}
+	var sqlWarehouseId string
+	if changed(cmd, "sql-warehouse-id") {
+		sqlWarehouseId, err = flagString(cmd, "sql-warehouse-id")
+		if err != nil {
+			return nil, err
+		}
+	}
 	patch := sdk.NewEnvVarCredentialsPatchWithDefaults()
 	if changed(cmd, "bq-project-id") {
 		if bqProjectId == "" {
 			patch.SetBqProjectIdNil()
 		} else {
 			patch.SetBqProjectId(bqProjectId)
-		}
-	}
-	if changed(cmd, "databricks-warehouse-id") {
-		if databricksWarehouseId == "" {
-			patch.SetDatabricksWarehouseIdNil()
-		} else {
-			patch.SetDatabricksWarehouseId(databricksWarehouseId)
 		}
 	}
 	if changed(cmd, "self-hosted-env-var-name") {
@@ -2010,6 +2717,13 @@ func buildConnectionsUpdateSelfHostedEnvVar(cmd *cobra.Command, api *sdk.APIClie
 			patch.SetKmsKeyIdNil()
 		} else {
 			patch.SetKmsKeyId(selfHostedEnvVarKmsKeyId)
+		}
+	}
+	if changed(cmd, "sql-warehouse-id") {
+		if sqlWarehouseId == "" {
+			patch.SetSqlWarehouseIdNil()
+		} else {
+			patch.SetSqlWarehouseId(sqlWarehouseId)
 		}
 	}
 	return &connectionsUpdateCredentials{
@@ -2036,19 +2750,19 @@ func buildConnectionsUpdateSelfHostedEnvVar(cmd *cobra.Command, api *sdk.APIClie
 			} else if v, ok := stored.GetBqProjectIdOk(); ok && v != nil {
 				candidate.SetBqProjectId(*v)
 			}
-			if changed(cmd, "databricks-warehouse-id") {
-				if databricksWarehouseId != "" {
-					candidate.SetDatabricksWarehouseId(databricksWarehouseId)
-				}
-			} else if v, ok := stored.GetDatabricksWarehouseIdOk(); ok && v != nil {
-				candidate.SetDatabricksWarehouseId(*v)
-			}
 			if changed(cmd, "self-hosted-env-var-kms-key-id") {
 				if selfHostedEnvVarKmsKeyId != "" {
 					candidate.SetKmsKeyId(selfHostedEnvVarKmsKeyId)
 				}
 			} else if v, ok := stored.GetKmsKeyIdOk(); ok && v != nil {
 				candidate.SetKmsKeyId(*v)
+			}
+			if changed(cmd, "sql-warehouse-id") {
+				if sqlWarehouseId != "" {
+					candidate.SetSqlWarehouseId(sqlWarehouseId)
+				}
+			} else if v, ok := stored.GetSqlWarehouseIdOk(); ok && v != nil {
+				candidate.SetSqlWarehouseId(*v)
 			}
 			if len(missing) > 0 {
 				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
@@ -2071,16 +2785,16 @@ func buildConnectionsUpdateSelfHostedFile(cmd *cobra.Command, api *sdk.APIClient
 			return nil, err
 		}
 	}
-	var databricksWarehouseId string
-	if changed(cmd, "databricks-warehouse-id") {
-		databricksWarehouseId, err = flagString(cmd, "databricks-warehouse-id")
+	var selfHostedFileFilePath string
+	if changed(cmd, "self-hosted-file-path") {
+		selfHostedFileFilePath, err = flagString(cmd, "self-hosted-file-path")
 		if err != nil {
 			return nil, err
 		}
 	}
-	var selfHostedFileFilePath string
-	if changed(cmd, "self-hosted-file-path") {
-		selfHostedFileFilePath, err = flagString(cmd, "self-hosted-file-path")
+	var sqlWarehouseId string
+	if changed(cmd, "sql-warehouse-id") {
+		sqlWarehouseId, err = flagString(cmd, "sql-warehouse-id")
 		if err != nil {
 			return nil, err
 		}
@@ -2093,18 +2807,18 @@ func buildConnectionsUpdateSelfHostedFile(cmd *cobra.Command, api *sdk.APIClient
 			patch.SetBqProjectId(bqProjectId)
 		}
 	}
-	if changed(cmd, "databricks-warehouse-id") {
-		if databricksWarehouseId == "" {
-			patch.SetDatabricksWarehouseIdNil()
-		} else {
-			patch.SetDatabricksWarehouseId(databricksWarehouseId)
-		}
-	}
 	if changed(cmd, "self-hosted-file-path") {
 		if selfHostedFileFilePath == "" {
 			patch.SetFilePathNil()
 		} else {
 			patch.SetFilePath(selfHostedFileFilePath)
+		}
+	}
+	if changed(cmd, "sql-warehouse-id") {
+		if sqlWarehouseId == "" {
+			patch.SetSqlWarehouseIdNil()
+		} else {
+			patch.SetSqlWarehouseId(sqlWarehouseId)
 		}
 	}
 	return &connectionsUpdateCredentials{
@@ -2131,12 +2845,12 @@ func buildConnectionsUpdateSelfHostedFile(cmd *cobra.Command, api *sdk.APIClient
 			} else if v, ok := stored.GetBqProjectIdOk(); ok && v != nil {
 				candidate.SetBqProjectId(*v)
 			}
-			if changed(cmd, "databricks-warehouse-id") {
-				if databricksWarehouseId != "" {
-					candidate.SetDatabricksWarehouseId(databricksWarehouseId)
+			if changed(cmd, "sql-warehouse-id") {
+				if sqlWarehouseId != "" {
+					candidate.SetSqlWarehouseId(sqlWarehouseId)
 				}
-			} else if v, ok := stored.GetDatabricksWarehouseIdOk(); ok && v != nil {
-				candidate.SetDatabricksWarehouseId(*v)
+			} else if v, ok := stored.GetSqlWarehouseIdOk(); ok && v != nil {
+				candidate.SetSqlWarehouseId(*v)
 			}
 			if len(missing) > 0 {
 				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
@@ -2161,7 +2875,7 @@ func runConnectionsUpdate(cmd *cobra.Command, connectionId string, native *conne
 		{"self-hosted-file", []string{"self-hosted-file-path"}},
 	}
 	groupFlags := []string{"self-hosted-aws-assumable-role", "self-hosted-aws-region", "self-hosted-aws-secret", "self-hosted-aws-external-id", "self-hosted-gcp-secret", "self-hosted-azure-akv-secret", "self-hosted-azure-akv-vault-name", "self-hosted-azure-akv-vault-url", "self-hosted-env-var-name", "self-hosted-env-var-kms-key-id", "self-hosted-file-path"}
-	credentialsFlags := []string{"self-hosted-aws-assumable-role", "self-hosted-aws-region", "self-hosted-aws-secret", "self-hosted-aws-external-id", "self-hosted-gcp-secret", "self-hosted-azure-akv-secret", "self-hosted-azure-akv-vault-name", "self-hosted-azure-akv-vault-url", "self-hosted-env-var-name", "self-hosted-env-var-kms-key-id", "self-hosted-file-path", "bq-project-id", "databricks-warehouse-id"}
+	credentialsFlags := []string{"self-hosted-aws-assumable-role", "self-hosted-aws-region", "self-hosted-aws-secret", "self-hosted-aws-external-id", "self-hosted-gcp-secret", "self-hosted-azure-akv-secret", "self-hosted-azure-akv-vault-name", "self-hosted-azure-akv-vault-url", "self-hosted-env-var-name", "self-hosted-env-var-kms-key-id", "self-hosted-file-path", "bq-project-id", "sql-warehouse-id"}
 	if native != nil {
 		groups = []flagGroup{native.group}
 		groupFlags = native.group.flags
