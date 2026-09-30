@@ -30,7 +30,7 @@ type fakeConnectionsAPI struct {
 var createdBodies = map[string]string{
 	"POST /api/v2/warehouses":                  `{"id":"wh-1","name":"n","type":"snowflake","deployment_id":"d","created_time":"2026-09-23T00:00:00Z"}`,
 	"POST /api/v2/credentials/snowflake":       `{"id":"cr-1","connection_type":"snowflake","storage_type":"mc_managed","created_time":"2026-09-23T00:00:00Z","account":"a","user":"u","warehouse":null}`,
-	"POST /api/v2/credentials/self-hosted/aws": `{"id":"cr-2","connection_type":"bigquery","storage_type":"aws_secrets_manager","created_time":"2026-09-23T00:00:00Z","bq_project_id":"p","databricks_warehouse_id":null,"aws_secret":"s","aws_region":null,"assumable_role":null,"external_id":null}`,
+	"POST /api/v2/credentials/self-hosted/aws": `{"id":"cr-2","connection_type":"bigquery","storage_type":"aws_secrets_manager","created_time":"2026-09-23T00:00:00Z","bq_project_id":"p","sql_warehouse_id":null,"aws_secret":"s","aws_region":null,"assumable_role":null,"external_id":null}`,
 	"POST /api/v2/connections":                 `{"id":"cn-1","connection_type":"snowflake","name":"n","warehouse_id":"wh-1","warehouse_name":"n","deployment_id":"d","deployment_name":"d","credentials_id":"cr-1","credentials_storage_type":"mc_managed","job_types":[],"created_time":"2026-09-23T00:00:00Z"}`,
 }
 
@@ -45,8 +45,8 @@ var readBodies = map[string]string{
 	"PATCH /api/v2/connections/cn-1":                 `{"id":"cn-1","credentials_id":"cr-1",` + strings.Replace(connectionOut, `"name":"n"`, `"name":"z"`, 1) + `}`,
 	"GET /api/v2/credentials/snowflake/cr-1":         `{"id":"cr-1","connection_type":"snowflake","storage_type":"mc_managed","created_time":"2026-09-23T00:00:00Z","account":"a","user":"u","warehouse":"w"}`,
 	"PATCH /api/v2/credentials/snowflake/cr-1":       `{"id":"cr-1","connection_type":"snowflake","storage_type":"mc_managed","created_time":"2026-09-23T00:00:00Z","account":"a","user":"u","warehouse":"w"}`,
-	"GET /api/v2/credentials/self-hosted/aws/cr-2":   `{"id":"cr-2","connection_type":"bigquery","storage_type":"aws_secrets_manager","created_time":"2026-09-23T00:00:00Z","bq_project_id":"p","databricks_warehouse_id":null,"aws_secret":"s","aws_region":null,"assumable_role":null,"external_id":null}`,
-	"PATCH /api/v2/credentials/self-hosted/aws/cr-2": `{"id":"cr-2","connection_type":"bigquery","storage_type":"aws_secrets_manager","created_time":"2026-09-23T00:00:00Z","bq_project_id":"p","databricks_warehouse_id":null,"aws_secret":"s","aws_region":null,"assumable_role":null,"external_id":null}`,
+	"GET /api/v2/credentials/self-hosted/aws/cr-2":   `{"id":"cr-2","connection_type":"bigquery","storage_type":"aws_secrets_manager","created_time":"2026-09-23T00:00:00Z","bq_project_id":"p","sql_warehouse_id":null,"aws_secret":"s","aws_region":null,"assumable_role":null,"external_id":null}`,
+	"PATCH /api/v2/credentials/self-hosted/aws/cr-2": `{"id":"cr-2","connection_type":"bigquery","storage_type":"aws_secrets_manager","created_time":"2026-09-23T00:00:00Z","bq_project_id":"p","sql_warehouse_id":null,"aws_secret":"s","aws_region":null,"assumable_role":null,"external_id":null}`,
 }
 
 func newFakeConnectionsAPI(t *testing.T, fail map[string]int) (*fakeConnectionsAPI, *httptest.Server) {
