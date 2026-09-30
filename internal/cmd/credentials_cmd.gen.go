@@ -37,6 +37,8 @@ func newCredentialsCreateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsCreateAwsSecretsManagerCmd())
 	cmd.AddCommand(newCredentialsCreateAzureKeyVaultCmd())
 	cmd.AddCommand(newCredentialsCreateBigqueryCmd())
+	cmd.AddCommand(newCredentialsCreateDatabricksMetastoreSqlWarehouseCmd())
+	cmd.AddCommand(newCredentialsCreateDatabricksSqlWarehouseCmd())
 	cmd.AddCommand(newCredentialsCreateEnvVarCmd())
 	cmd.AddCommand(newCredentialsCreateFileCmd())
 	cmd.AddCommand(newCredentialsCreateGcpSecretManagerCmd())
@@ -87,13 +89,6 @@ func newCredentialsCreateAwsSecretsManagerCmd() *cobra.Command {
 				}
 				body.SetBqProjectId(bqProjectId)
 			}
-			if changed(cmd, "databricks-warehouse-id") {
-				databricksWarehouseId, err := flagString(cmd, "databricks-warehouse-id")
-				if err != nil {
-					return err
-				}
-				body.SetDatabricksWarehouseId(databricksWarehouseId)
-			}
 			if changed(cmd, "external-id") {
 				externalId, err := flagString(cmd, "external-id")
 				if err != nil {
@@ -101,12 +96,19 @@ func newCredentialsCreateAwsSecretsManagerCmd() *cobra.Command {
 				}
 				body.SetExternalId(externalId)
 			}
+			if changed(cmd, "sql-warehouse-id") {
+				sqlWarehouseId, err := flagString(cmd, "sql-warehouse-id")
+				if err != nil {
+					return err
+				}
+				body.SetSqlWarehouseId(sqlWarehouseId)
+			}
 			req = req.AwsSecretsManagerCredentialsIn(*body)
 			out, resp, err := retryOnTransient(cmd, req.Execute)
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "bq_project_id", "databricks_warehouse_id", "aws_secret", "aws_region", "assumable_role", "external_id")
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "bq_project_id", "sql_warehouse_id", "aws_secret", "aws_region", "assumable_role", "external_id")
 		},
 	}
 	cmd.Flags().String("connection-type", "", "The connection type the credentials are for, such as snowflake or bigquery, or one of your custom connector types. Fixed once created.")
@@ -116,8 +118,8 @@ func newCredentialsCreateAwsSecretsManagerCmd() *cobra.Command {
 	cmd.Flags().String("assumable-role", "", "ARN of a role the deployment assumes to read the secret. Omit it to read as itself.")
 	cmd.Flags().String("aws-region", "", "AWS region of the secret. Omit it to use the deployment's own region.")
 	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
-	cmd.Flags().String("databricks-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
 	cmd.Flags().String("external-id", "", "External id the assumed role's trust policy requires, if it requires one.")
+	cmd.Flags().String("sql-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
 	return cmd
 }
 
@@ -163,19 +165,19 @@ func newCredentialsCreateAzureKeyVaultCmd() *cobra.Command {
 				}
 				body.SetBqProjectId(bqProjectId)
 			}
-			if changed(cmd, "databricks-warehouse-id") {
-				databricksWarehouseId, err := flagString(cmd, "databricks-warehouse-id")
+			if changed(cmd, "sql-warehouse-id") {
+				sqlWarehouseId, err := flagString(cmd, "sql-warehouse-id")
 				if err != nil {
 					return err
 				}
-				body.SetDatabricksWarehouseId(databricksWarehouseId)
+				body.SetSqlWarehouseId(sqlWarehouseId)
 			}
 			req = req.AzureKeyVaultCredentialsIn(*body)
 			out, resp, err := retryOnTransient(cmd, req.Execute)
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "bq_project_id", "databricks_warehouse_id", "akv_secret", "akv_vault_name", "akv_vault_url")
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "bq_project_id", "sql_warehouse_id", "akv_secret", "akv_vault_name", "akv_vault_url")
 		},
 	}
 	cmd.Flags().String("connection-type", "", "The connection type the credentials are for, such as snowflake or bigquery, or one of your custom connector types. Fixed once created.")
@@ -185,7 +187,7 @@ func newCredentialsCreateAzureKeyVaultCmd() *cobra.Command {
 	cmd.Flags().String("akv-vault-name", "", "Name of the key vault. Send this, akv_vault_url, or both.")
 	cmd.Flags().String("akv-vault-url", "", "URL of the key vault. Send this, akv_vault_name, or both.")
 	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
-	cmd.Flags().String("databricks-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
+	cmd.Flags().String("sql-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
 	return cmd
 }
 
@@ -222,6 +224,176 @@ func newCredentialsCreateBigqueryCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsCreateDatabricksMetastoreSqlWarehouseCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "databricks-metastore-sql-warehouse",
+		Short: "Create Databricks metadata collection credentials",
+		Long:  "Store Databricks credentials for collecting metadata through a SQL warehouse.\n\nMonte Carlo keeps the token or the OAuth secret and returns everything else. Create the\ncredentials first, then create a connection that references them, on a data lake\nwarehouse. Nothing is checked against Databricks here.\n\nSend `token`, or `oauth_client_id` and `oauth_client_secret`. For a service principal\nAzure manages, add `azure_tenant_id` and `azure_workspace_resource_id` to the OAuth\nclient. An account holds a limited number of credentials; past that the create is\nrefused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreateDatabricksMetastoreSqlWarehouseCredentials(ctx)
+			workspaceUrl, err := flagString(cmd, "workspace-url")
+			if err != nil {
+				return err
+			}
+			sqlWarehouseId, err := flagString(cmd, "sql-warehouse-id")
+			if err != nil {
+				return err
+			}
+			workspaceId, err := flagString(cmd, "workspace-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewDatabricksMetastoreSqlWarehouseCredentialsIn(workspaceUrl, sqlWarehouseId, workspaceId)
+			if changed(cmd, "azure-tenant-id") {
+				azureTenantId, err := flagString(cmd, "azure-tenant-id")
+				if err != nil {
+					return err
+				}
+				body.SetAzureTenantId(azureTenantId)
+			}
+			if changed(cmd, "azure-workspace-resource-id") {
+				azureWorkspaceResourceId, err := flagString(cmd, "azure-workspace-resource-id")
+				if err != nil {
+					return err
+				}
+				body.SetAzureWorkspaceResourceId(azureWorkspaceResourceId)
+			}
+			if changed(cmd, "oauth-client-id") {
+				oauthClientId, err := flagString(cmd, "oauth-client-id")
+				if err != nil {
+					return err
+				}
+				body.SetOauthClientId(oauthClientId)
+			}
+			if changed(cmd, "oauth-client-secret", "oauth-client-secret-prompt") {
+				oauthClientSecret, err := flagSecret(cmd, "oauth-client-secret")
+				if err != nil {
+					return err
+				}
+				body.SetOauthClientSecret(oauthClientSecret)
+			}
+			if changed(cmd, "token", "token-prompt") {
+				token, err := flagSecret(cmd, "token")
+				if err != nil {
+					return err
+				}
+				body.SetToken(token)
+			}
+			req = req.DatabricksMetastoreSqlWarehouseCredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "workspace_url", "sql_warehouse_id", "workspace_id", "oauth_client_id", "azure_tenant_id", "azure_workspace_resource_id")
+		},
+	}
+	cmd.Flags().String("workspace-url", "", "URL of the Databricks workspace, or its host name.")
+	_ = cmd.MarkFlagRequired("workspace-url")
+	cmd.Flags().String("sql-warehouse-id", "", "ID of the Databricks SQL warehouse the connection runs on.")
+	_ = cmd.MarkFlagRequired("sql-warehouse-id")
+	cmd.Flags().String("workspace-id", "", "ID of the Databricks workspace.")
+	_ = cmd.MarkFlagRequired("workspace-id")
+	cmd.Flags().String("azure-tenant-id", "", "Microsoft Entra ID tenant, for a service principal Azure manages. Send it with azure_workspace_resource_id and the OAuth client.")
+	cmd.Flags().String("azure-workspace-resource-id", "", "Azure resource ID of the workspace, for a service principal Azure manages. Send it with azure_tenant_id and the OAuth client.")
+	cmd.Flags().String("oauth-client-id", "", "Client ID of the service principal Monte Carlo signs in as with OAuth. Send it with oauth_client_secret, instead of token.")
+	cmd.Flags().String("oauth-client-secret", "", "OAuth secret of the service principal in oauth_client_id. Stored by Monte Carlo and never returned. Visible in the process list; --oauth-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("oauth-client-secret-prompt", false, "Read --oauth-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("token", "", "Personal access token or service principal token. Send this, or oauth_client_id and oauth_client_secret. Stored by Monte Carlo and never returned. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
+	return cmd
+}
+
+func newCredentialsCreateDatabricksSqlWarehouseCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "databricks-sql-warehouse",
+		Short: "Create Databricks query credentials",
+		Long:  "Store Databricks credentials for running queries on a SQL warehouse.\n\nMonte Carlo keeps the token or the OAuth secret and returns everything else. Create the\ncredentials first, then create a connection that references them. Nothing is checked\nagainst Databricks here.\n\nThe connection goes on a data lake warehouse that already has a metastore connection, such\nas a Databricks metadata collection one. Name that warehouse when creating the connection.\n\nSend `token`, or `oauth_client_id` and `oauth_client_secret`. For a service principal\nAzure manages, add `azure_tenant_id` and `azure_workspace_resource_id` to the OAuth\nclient. An account holds a limited number of credentials; past that the create is\nrefused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreateDatabricksSqlWarehouseCredentials(ctx)
+			workspaceUrl, err := flagString(cmd, "workspace-url")
+			if err != nil {
+				return err
+			}
+			sqlWarehouseId, err := flagString(cmd, "sql-warehouse-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewDatabricksSqlWarehouseCredentialsIn(workspaceUrl, sqlWarehouseId)
+			if changed(cmd, "azure-tenant-id") {
+				azureTenantId, err := flagString(cmd, "azure-tenant-id")
+				if err != nil {
+					return err
+				}
+				body.SetAzureTenantId(azureTenantId)
+			}
+			if changed(cmd, "azure-workspace-resource-id") {
+				azureWorkspaceResourceId, err := flagString(cmd, "azure-workspace-resource-id")
+				if err != nil {
+					return err
+				}
+				body.SetAzureWorkspaceResourceId(azureWorkspaceResourceId)
+			}
+			if changed(cmd, "oauth-client-id") {
+				oauthClientId, err := flagString(cmd, "oauth-client-id")
+				if err != nil {
+					return err
+				}
+				body.SetOauthClientId(oauthClientId)
+			}
+			if changed(cmd, "oauth-client-secret", "oauth-client-secret-prompt") {
+				oauthClientSecret, err := flagSecret(cmd, "oauth-client-secret")
+				if err != nil {
+					return err
+				}
+				body.SetOauthClientSecret(oauthClientSecret)
+			}
+			if changed(cmd, "token", "token-prompt") {
+				token, err := flagSecret(cmd, "token")
+				if err != nil {
+					return err
+				}
+				body.SetToken(token)
+			}
+			if changed(cmd, "workspace-id") {
+				workspaceId, err := flagString(cmd, "workspace-id")
+				if err != nil {
+					return err
+				}
+				body.SetWorkspaceId(workspaceId)
+			}
+			req = req.DatabricksSqlWarehouseCredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "workspace_url", "sql_warehouse_id", "workspace_id", "oauth_client_id", "azure_tenant_id", "azure_workspace_resource_id")
+		},
+	}
+	cmd.Flags().String("workspace-url", "", "URL of the Databricks workspace, or its host name.")
+	_ = cmd.MarkFlagRequired("workspace-url")
+	cmd.Flags().String("sql-warehouse-id", "", "ID of the Databricks SQL warehouse the connection runs on.")
+	_ = cmd.MarkFlagRequired("sql-warehouse-id")
+	cmd.Flags().String("azure-tenant-id", "", "Microsoft Entra ID tenant, for a service principal Azure manages. Send it with azure_workspace_resource_id and the OAuth client.")
+	cmd.Flags().String("azure-workspace-resource-id", "", "Azure resource ID of the workspace, for a service principal Azure manages. Send it with azure_tenant_id and the OAuth client.")
+	cmd.Flags().String("oauth-client-id", "", "Client ID of the service principal Monte Carlo signs in as with OAuth. Send it with oauth_client_secret, instead of token.")
+	cmd.Flags().String("oauth-client-secret", "", "OAuth secret of the service principal in oauth_client_id. Stored by Monte Carlo and never returned. Visible in the process list; --oauth-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("oauth-client-secret-prompt", false, "Read --oauth-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("token", "", "Personal access token or service principal token. Send this, or oauth_client_id and oauth_client_secret. Stored by Monte Carlo and never returned. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
+	cmd.Flags().String("workspace-id", "", "ID of the Databricks workspace.")
+	return cmd
+}
+
 func newCredentialsCreateEnvVarCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "env-var",
@@ -250,13 +422,6 @@ func newCredentialsCreateEnvVarCmd() *cobra.Command {
 				}
 				body.SetBqProjectId(bqProjectId)
 			}
-			if changed(cmd, "databricks-warehouse-id") {
-				databricksWarehouseId, err := flagString(cmd, "databricks-warehouse-id")
-				if err != nil {
-					return err
-				}
-				body.SetDatabricksWarehouseId(databricksWarehouseId)
-			}
 			if changed(cmd, "kms-key-id") {
 				kmsKeyId, err := flagString(cmd, "kms-key-id")
 				if err != nil {
@@ -264,12 +429,19 @@ func newCredentialsCreateEnvVarCmd() *cobra.Command {
 				}
 				body.SetKmsKeyId(kmsKeyId)
 			}
+			if changed(cmd, "sql-warehouse-id") {
+				sqlWarehouseId, err := flagString(cmd, "sql-warehouse-id")
+				if err != nil {
+					return err
+				}
+				body.SetSqlWarehouseId(sqlWarehouseId)
+			}
 			req = req.EnvVarCredentialsIn(*body)
 			out, resp, err := retryOnTransient(cmd, req.Execute)
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "bq_project_id", "databricks_warehouse_id", "env_var_name", "kms_key_id")
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "bq_project_id", "sql_warehouse_id", "env_var_name", "kms_key_id")
 		},
 	}
 	cmd.Flags().String("connection-type", "", "The connection type the credentials are for, such as snowflake or bigquery, or one of your custom connector types. Fixed once created.")
@@ -277,8 +449,8 @@ func newCredentialsCreateEnvVarCmd() *cobra.Command {
 	cmd.Flags().String("env-var-name", "", "Name of the environment variable on the deployment that holds the connection's credentials. Must start with MCD_.")
 	_ = cmd.MarkFlagRequired("env-var-name")
 	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
-	cmd.Flags().String("databricks-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
 	cmd.Flags().String("kms-key-id", "", "AWS KMS key the variable's value is encrypted with. Omit it for a value stored in the clear.")
+	cmd.Flags().String("sql-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
 	return cmd
 }
 
@@ -310,19 +482,19 @@ func newCredentialsCreateFileCmd() *cobra.Command {
 				}
 				body.SetBqProjectId(bqProjectId)
 			}
-			if changed(cmd, "databricks-warehouse-id") {
-				databricksWarehouseId, err := flagString(cmd, "databricks-warehouse-id")
+			if changed(cmd, "sql-warehouse-id") {
+				sqlWarehouseId, err := flagString(cmd, "sql-warehouse-id")
 				if err != nil {
 					return err
 				}
-				body.SetDatabricksWarehouseId(databricksWarehouseId)
+				body.SetSqlWarehouseId(sqlWarehouseId)
 			}
 			req = req.FileCredentialsIn(*body)
 			out, resp, err := retryOnTransient(cmd, req.Execute)
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "bq_project_id", "databricks_warehouse_id", "file_path")
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "bq_project_id", "sql_warehouse_id", "file_path")
 		},
 	}
 	cmd.Flags().String("connection-type", "", "The connection type the credentials are for, such as snowflake or bigquery, or one of your custom connector types. Fixed once created.")
@@ -330,7 +502,7 @@ func newCredentialsCreateFileCmd() *cobra.Command {
 	cmd.Flags().String("file-path", "", "Path of the file on the deployment that holds the connection's credentials.")
 	_ = cmd.MarkFlagRequired("file-path")
 	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
-	cmd.Flags().String("databricks-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
+	cmd.Flags().String("sql-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
 	return cmd
 }
 
@@ -362,19 +534,19 @@ func newCredentialsCreateGcpSecretManagerCmd() *cobra.Command {
 				}
 				body.SetBqProjectId(bqProjectId)
 			}
-			if changed(cmd, "databricks-warehouse-id") {
-				databricksWarehouseId, err := flagString(cmd, "databricks-warehouse-id")
+			if changed(cmd, "sql-warehouse-id") {
+				sqlWarehouseId, err := flagString(cmd, "sql-warehouse-id")
 				if err != nil {
 					return err
 				}
-				body.SetDatabricksWarehouseId(databricksWarehouseId)
+				body.SetSqlWarehouseId(sqlWarehouseId)
 			}
 			req = req.GcpSecretManagerCredentialsIn(*body)
 			out, resp, err := retryOnTransient(cmd, req.Execute)
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "bq_project_id", "databricks_warehouse_id", "gcp_secret")
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "bq_project_id", "sql_warehouse_id", "gcp_secret")
 		},
 	}
 	cmd.Flags().String("connection-type", "", "The connection type the credentials are for, such as snowflake or bigquery, or one of your custom connector types. Fixed once created.")
@@ -382,7 +554,7 @@ func newCredentialsCreateGcpSecretManagerCmd() *cobra.Command {
 	cmd.Flags().String("gcp-secret", "", "Name of the GCP Secret Manager secret holding the connection's credentials.")
 	_ = cmd.MarkFlagRequired("gcp-secret")
 	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
-	cmd.Flags().String("databricks-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
+	cmd.Flags().String("sql-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
 	return cmd
 }
 
@@ -569,6 +741,8 @@ func newCredentialsDeleteCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsDeleteAwsSecretsManagerCmd())
 	cmd.AddCommand(newCredentialsDeleteAzureKeyVaultCmd())
 	cmd.AddCommand(newCredentialsDeleteBigqueryCmd())
+	cmd.AddCommand(newCredentialsDeleteDatabricksMetastoreSqlWarehouseCmd())
+	cmd.AddCommand(newCredentialsDeleteDatabricksSqlWarehouseCmd())
 	cmd.AddCommand(newCredentialsDeleteEnvVarCmd())
 	cmd.AddCommand(newCredentialsDeleteFileCmd())
 	cmd.AddCommand(newCredentialsDeleteGcpSecretManagerCmd())
@@ -640,6 +814,54 @@ func newCredentialsDeleteBigqueryCmd() *cobra.Command {
 				return err
 			}
 			req := api.CredentialsAPI.DeleteBigqueryCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
+func newCredentialsDeleteDatabricksMetastoreSqlWarehouseCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "databricks-metastore-sql-warehouse <credentials_id>",
+		Short: "Delete Databricks metadata collection credentials",
+		Long:  "Delete Databricks metadata collection credentials.\n\nRefused while a connection still uses them. Delete the connection first. Monte Carlo stops\nusing the stored token or OAuth secret. Revoke it in Databricks, or in Microsoft Entra ID\nfor a service principal Azure manages, if the secret itself must be retired.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete databricks-metastore-sql-warehouse credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeleteDatabricksMetastoreSqlWarehouseCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
+func newCredentialsDeleteDatabricksSqlWarehouseCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "databricks-sql-warehouse <credentials_id>",
+		Short: "Delete Databricks query credentials",
+		Long:  "Delete Databricks query credentials.\n\nRefused while a connection still uses them. Delete the connection first. Monte Carlo stops\nusing the stored token or OAuth secret. Revoke it in Databricks, or in Microsoft Entra ID\nfor a service principal Azure manages, if the secret itself must be retired.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete databricks-sql-warehouse credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeleteDatabricksSqlWarehouseCredentials(ctx, args[0])
 			if resp, err := req.Execute(); err != nil {
 				return apiErr(resp, err)
 			}
@@ -777,6 +999,8 @@ func newCredentialsGetCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsGetAwsSecretsManagerCmd())
 	cmd.AddCommand(newCredentialsGetAzureKeyVaultCmd())
 	cmd.AddCommand(newCredentialsGetBigqueryCmd())
+	cmd.AddCommand(newCredentialsGetDatabricksMetastoreSqlWarehouseCmd())
+	cmd.AddCommand(newCredentialsGetDatabricksSqlWarehouseCmd())
 	cmd.AddCommand(newCredentialsGetEnvVarCmd())
 	cmd.AddCommand(newCredentialsGetFileCmd())
 	cmd.AddCommand(newCredentialsGetGcpSecretManagerCmd())
@@ -801,7 +1025,7 @@ func newCredentialsGetAwsSecretsManagerCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "bq_project_id", "databricks_warehouse_id", "aws_secret", "aws_region", "assumable_role", "external_id")
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "bq_project_id", "sql_warehouse_id", "aws_secret", "aws_region", "assumable_role", "external_id")
 		},
 	}
 	return cmd
@@ -823,7 +1047,7 @@ func newCredentialsGetAzureKeyVaultCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "bq_project_id", "databricks_warehouse_id", "akv_secret", "akv_vault_name", "akv_vault_url")
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "bq_project_id", "sql_warehouse_id", "akv_secret", "akv_vault_name", "akv_vault_url")
 		},
 	}
 	return cmd
@@ -851,6 +1075,50 @@ func newCredentialsGetBigqueryCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsGetDatabricksMetastoreSqlWarehouseCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "databricks-metastore-sql-warehouse <credentials_id>",
+		Short: "Get Databricks metadata collection credentials",
+		Long:  "Get one set of Databricks metadata collection credentials, without the secrets.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetDatabricksMetastoreSqlWarehouseCredentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "workspace_url", "sql_warehouse_id", "workspace_id", "oauth_client_id", "azure_tenant_id", "azure_workspace_resource_id")
+		},
+	}
+	return cmd
+}
+
+func newCredentialsGetDatabricksSqlWarehouseCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "databricks-sql-warehouse <credentials_id>",
+		Short: "Get Databricks query credentials",
+		Long:  "Get one set of Databricks query credentials, without the secrets.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetDatabricksSqlWarehouseCredentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "workspace_url", "sql_warehouse_id", "workspace_id", "oauth_client_id", "azure_tenant_id", "azure_workspace_resource_id")
+		},
+	}
+	return cmd
+}
+
 func newCredentialsGetEnvVarCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "env-var <credentials_id>",
@@ -867,7 +1135,7 @@ func newCredentialsGetEnvVarCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "bq_project_id", "databricks_warehouse_id", "env_var_name", "kms_key_id")
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "bq_project_id", "sql_warehouse_id", "env_var_name", "kms_key_id")
 		},
 	}
 	return cmd
@@ -889,7 +1157,7 @@ func newCredentialsGetFileCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "bq_project_id", "databricks_warehouse_id", "file_path")
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "bq_project_id", "sql_warehouse_id", "file_path")
 		},
 	}
 	return cmd
@@ -911,7 +1179,7 @@ func newCredentialsGetGcpSecretManagerCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "bq_project_id", "databricks_warehouse_id", "gcp_secret")
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "bq_project_id", "sql_warehouse_id", "gcp_secret")
 		},
 	}
 	return cmd
@@ -1024,6 +1292,8 @@ func newCredentialsUpdateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsUpdateAwsSecretsManagerCmd())
 	cmd.AddCommand(newCredentialsUpdateAzureKeyVaultCmd())
 	cmd.AddCommand(newCredentialsUpdateBigqueryCmd())
+	cmd.AddCommand(newCredentialsUpdateDatabricksMetastoreSqlWarehouseCmd())
+	cmd.AddCommand(newCredentialsUpdateDatabricksSqlWarehouseCmd())
 	cmd.AddCommand(newCredentialsUpdateEnvVarCmd())
 	cmd.AddCommand(newCredentialsUpdateFileCmd())
 	cmd.AddCommand(newCredentialsUpdateGcpSecretManagerCmd())
@@ -1073,13 +1343,6 @@ func newCredentialsUpdateAwsSecretsManagerCmd() *cobra.Command {
 				}
 				body.SetBqProjectId(bqProjectId)
 			}
-			if changed(cmd, "databricks-warehouse-id") {
-				databricksWarehouseId, err := flagString(cmd, "databricks-warehouse-id")
-				if err != nil {
-					return err
-				}
-				body.SetDatabricksWarehouseId(databricksWarehouseId)
-			}
 			if changed(cmd, "external-id") {
 				externalId, err := flagString(cmd, "external-id")
 				if err != nil {
@@ -1087,20 +1350,27 @@ func newCredentialsUpdateAwsSecretsManagerCmd() *cobra.Command {
 				}
 				body.SetExternalId(externalId)
 			}
+			if changed(cmd, "sql-warehouse-id") {
+				sqlWarehouseId, err := flagString(cmd, "sql-warehouse-id")
+				if err != nil {
+					return err
+				}
+				body.SetSqlWarehouseId(sqlWarehouseId)
+			}
 			req = req.AwsSecretsManagerCredentialsPatch(*body)
 			out, resp, err := retryOnTransient(cmd, req.Execute)
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "bq_project_id", "databricks_warehouse_id", "aws_secret", "aws_region", "assumable_role", "external_id")
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "bq_project_id", "sql_warehouse_id", "aws_secret", "aws_region", "assumable_role", "external_id")
 		},
 	}
 	cmd.Flags().String("assumable-role", "", "ARN of a role the deployment assumes to read the secret. Omit it to read as itself.")
 	cmd.Flags().String("aws-region", "", "AWS region of the secret. Omit it to use the deployment's own region.")
 	cmd.Flags().String("aws-secret", "", "Name or ARN of the AWS Secrets Manager secret holding the connection's credentials.")
 	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
-	cmd.Flags().String("databricks-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
 	cmd.Flags().String("external-id", "", "External id the assumed role's trust policy requires, if it requires one.")
+	cmd.Flags().String("sql-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
 	return cmd
 }
 
@@ -1145,26 +1415,26 @@ func newCredentialsUpdateAzureKeyVaultCmd() *cobra.Command {
 				}
 				body.SetBqProjectId(bqProjectId)
 			}
-			if changed(cmd, "databricks-warehouse-id") {
-				databricksWarehouseId, err := flagString(cmd, "databricks-warehouse-id")
+			if changed(cmd, "sql-warehouse-id") {
+				sqlWarehouseId, err := flagString(cmd, "sql-warehouse-id")
 				if err != nil {
 					return err
 				}
-				body.SetDatabricksWarehouseId(databricksWarehouseId)
+				body.SetSqlWarehouseId(sqlWarehouseId)
 			}
 			req = req.AzureKeyVaultCredentialsPatch(*body)
 			out, resp, err := retryOnTransient(cmd, req.Execute)
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "bq_project_id", "databricks_warehouse_id", "akv_secret", "akv_vault_name", "akv_vault_url")
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "bq_project_id", "sql_warehouse_id", "akv_secret", "akv_vault_name", "akv_vault_url")
 		},
 	}
 	cmd.Flags().String("akv-secret", "", "Name of the Azure Key Vault secret holding the connection's credentials.")
 	cmd.Flags().String("akv-vault-name", "", "Name of the key vault. Send this, akv_vault_url, or both.")
 	cmd.Flags().String("akv-vault-url", "", "URL of the key vault. Send this, akv_vault_name, or both.")
 	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
-	cmd.Flags().String("databricks-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
+	cmd.Flags().String("sql-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
 	return cmd
 }
 
@@ -1201,6 +1471,186 @@ func newCredentialsUpdateBigqueryCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsUpdateDatabricksMetastoreSqlWarehouseCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "databricks-metastore-sql-warehouse <credentials_id>",
+		Short: "Update Databricks metadata collection credentials",
+		Long:  "Change Databricks metadata collection credentials in place.\n\nEvery connection using the credentials picks up the change. Send only the fields to\nchange. Sending `token` drops the stored OAuth client and its Azure fields. Sending the\nOAuth client drops the stored token. Sending an empty body returns the credentials as\nthey are.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdateDatabricksMetastoreSqlWarehouseCredentials(ctx, args[0])
+			body := sdk.NewDatabricksMetastoreSqlWarehouseCredentialsPatch()
+			if changed(cmd, "azure-tenant-id") {
+				azureTenantId, err := flagString(cmd, "azure-tenant-id")
+				if err != nil {
+					return err
+				}
+				body.SetAzureTenantId(azureTenantId)
+			}
+			if changed(cmd, "azure-workspace-resource-id") {
+				azureWorkspaceResourceId, err := flagString(cmd, "azure-workspace-resource-id")
+				if err != nil {
+					return err
+				}
+				body.SetAzureWorkspaceResourceId(azureWorkspaceResourceId)
+			}
+			if changed(cmd, "oauth-client-id") {
+				oauthClientId, err := flagString(cmd, "oauth-client-id")
+				if err != nil {
+					return err
+				}
+				body.SetOauthClientId(oauthClientId)
+			}
+			if changed(cmd, "oauth-client-secret", "oauth-client-secret-prompt") {
+				oauthClientSecret, err := flagSecret(cmd, "oauth-client-secret")
+				if err != nil {
+					return err
+				}
+				body.SetOauthClientSecret(oauthClientSecret)
+			}
+			if changed(cmd, "sql-warehouse-id") {
+				sqlWarehouseId, err := flagString(cmd, "sql-warehouse-id")
+				if err != nil {
+					return err
+				}
+				body.SetSqlWarehouseId(sqlWarehouseId)
+			}
+			if changed(cmd, "token", "token-prompt") {
+				token, err := flagSecret(cmd, "token")
+				if err != nil {
+					return err
+				}
+				body.SetToken(token)
+			}
+			if changed(cmd, "workspace-id") {
+				workspaceId, err := flagString(cmd, "workspace-id")
+				if err != nil {
+					return err
+				}
+				body.SetWorkspaceId(workspaceId)
+			}
+			if changed(cmd, "workspace-url") {
+				workspaceUrl, err := flagString(cmd, "workspace-url")
+				if err != nil {
+					return err
+				}
+				body.SetWorkspaceUrl(workspaceUrl)
+			}
+			req = req.DatabricksMetastoreSqlWarehouseCredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "workspace_url", "sql_warehouse_id", "workspace_id", "oauth_client_id", "azure_tenant_id", "azure_workspace_resource_id")
+		},
+	}
+	cmd.Flags().String("azure-tenant-id", "", "Microsoft Entra ID tenant, for a service principal Azure manages. Send it with azure_workspace_resource_id and the OAuth client.")
+	cmd.Flags().String("azure-workspace-resource-id", "", "Azure resource ID of the workspace, for a service principal Azure manages. Send it with azure_tenant_id and the OAuth client.")
+	cmd.Flags().String("oauth-client-id", "", "Client ID of the service principal Monte Carlo signs in as with OAuth. Send it with oauth_client_secret, instead of token.")
+	cmd.Flags().String("oauth-client-secret", "", "OAuth secret of the service principal in oauth_client_id. Stored by Monte Carlo and never returned. Visible in the process list; --oauth-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("oauth-client-secret-prompt", false, "Read --oauth-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("sql-warehouse-id", "", "ID of the Databricks SQL warehouse the connection runs on.")
+	cmd.Flags().String("token", "", "Personal access token or service principal token. Send this, or oauth_client_id and oauth_client_secret. Stored by Monte Carlo and never returned. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
+	cmd.Flags().String("workspace-id", "", "ID of the Databricks workspace.")
+	cmd.Flags().String("workspace-url", "", "URL of the Databricks workspace, or its host name.")
+	return cmd
+}
+
+func newCredentialsUpdateDatabricksSqlWarehouseCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "databricks-sql-warehouse <credentials_id>",
+		Short: "Update Databricks query credentials",
+		Long:  "Change Databricks query credentials in place.\n\nEvery connection using the credentials picks up the change. Send only the fields to\nchange. Sending `token` drops the stored OAuth client and its Azure fields. Sending the\nOAuth client drops the stored token. Sending an empty body returns the credentials as\nthey are.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdateDatabricksSqlWarehouseCredentials(ctx, args[0])
+			body := sdk.NewDatabricksSqlWarehouseCredentialsPatch()
+			if changed(cmd, "azure-tenant-id") {
+				azureTenantId, err := flagString(cmd, "azure-tenant-id")
+				if err != nil {
+					return err
+				}
+				body.SetAzureTenantId(azureTenantId)
+			}
+			if changed(cmd, "azure-workspace-resource-id") {
+				azureWorkspaceResourceId, err := flagString(cmd, "azure-workspace-resource-id")
+				if err != nil {
+					return err
+				}
+				body.SetAzureWorkspaceResourceId(azureWorkspaceResourceId)
+			}
+			if changed(cmd, "oauth-client-id") {
+				oauthClientId, err := flagString(cmd, "oauth-client-id")
+				if err != nil {
+					return err
+				}
+				body.SetOauthClientId(oauthClientId)
+			}
+			if changed(cmd, "oauth-client-secret", "oauth-client-secret-prompt") {
+				oauthClientSecret, err := flagSecret(cmd, "oauth-client-secret")
+				if err != nil {
+					return err
+				}
+				body.SetOauthClientSecret(oauthClientSecret)
+			}
+			if changed(cmd, "sql-warehouse-id") {
+				sqlWarehouseId, err := flagString(cmd, "sql-warehouse-id")
+				if err != nil {
+					return err
+				}
+				body.SetSqlWarehouseId(sqlWarehouseId)
+			}
+			if changed(cmd, "token", "token-prompt") {
+				token, err := flagSecret(cmd, "token")
+				if err != nil {
+					return err
+				}
+				body.SetToken(token)
+			}
+			if changed(cmd, "workspace-id") {
+				workspaceId, err := flagString(cmd, "workspace-id")
+				if err != nil {
+					return err
+				}
+				body.SetWorkspaceId(workspaceId)
+			}
+			if changed(cmd, "workspace-url") {
+				workspaceUrl, err := flagString(cmd, "workspace-url")
+				if err != nil {
+					return err
+				}
+				body.SetWorkspaceUrl(workspaceUrl)
+			}
+			req = req.DatabricksSqlWarehouseCredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "workspace_url", "sql_warehouse_id", "workspace_id", "oauth_client_id", "azure_tenant_id", "azure_workspace_resource_id")
+		},
+	}
+	cmd.Flags().String("azure-tenant-id", "", "Microsoft Entra ID tenant, for a service principal Azure manages. Send it with azure_workspace_resource_id and the OAuth client.")
+	cmd.Flags().String("azure-workspace-resource-id", "", "Azure resource ID of the workspace, for a service principal Azure manages. Send it with azure_tenant_id and the OAuth client.")
+	cmd.Flags().String("oauth-client-id", "", "Client ID of the service principal Monte Carlo signs in as with OAuth. Send it with oauth_client_secret, instead of token.")
+	cmd.Flags().String("oauth-client-secret", "", "OAuth secret of the service principal in oauth_client_id. Stored by Monte Carlo and never returned. Visible in the process list; --oauth-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("oauth-client-secret-prompt", false, "Read --oauth-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("sql-warehouse-id", "", "ID of the Databricks SQL warehouse the connection runs on.")
+	cmd.Flags().String("token", "", "Personal access token or service principal token. Send this, or oauth_client_id and oauth_client_secret. Stored by Monte Carlo and never returned. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
+	cmd.Flags().String("workspace-id", "", "ID of the Databricks workspace.")
+	cmd.Flags().String("workspace-url", "", "URL of the Databricks workspace, or its host name.")
+	return cmd
+}
+
 func newCredentialsUpdateEnvVarCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "env-var <credentials_id>",
@@ -1221,13 +1671,6 @@ func newCredentialsUpdateEnvVarCmd() *cobra.Command {
 				}
 				body.SetBqProjectId(bqProjectId)
 			}
-			if changed(cmd, "databricks-warehouse-id") {
-				databricksWarehouseId, err := flagString(cmd, "databricks-warehouse-id")
-				if err != nil {
-					return err
-				}
-				body.SetDatabricksWarehouseId(databricksWarehouseId)
-			}
 			if changed(cmd, "env-var-name") {
 				envVarName, err := flagString(cmd, "env-var-name")
 				if err != nil {
@@ -1242,18 +1685,25 @@ func newCredentialsUpdateEnvVarCmd() *cobra.Command {
 				}
 				body.SetKmsKeyId(kmsKeyId)
 			}
+			if changed(cmd, "sql-warehouse-id") {
+				sqlWarehouseId, err := flagString(cmd, "sql-warehouse-id")
+				if err != nil {
+					return err
+				}
+				body.SetSqlWarehouseId(sqlWarehouseId)
+			}
 			req = req.EnvVarCredentialsPatch(*body)
 			out, resp, err := retryOnTransient(cmd, req.Execute)
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "bq_project_id", "databricks_warehouse_id", "env_var_name", "kms_key_id")
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "bq_project_id", "sql_warehouse_id", "env_var_name", "kms_key_id")
 		},
 	}
 	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
-	cmd.Flags().String("databricks-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
 	cmd.Flags().String("env-var-name", "", "Name of the environment variable on the deployment that holds the connection's credentials. Must start with MCD_.")
 	cmd.Flags().String("kms-key-id", "", "AWS KMS key the variable's value is encrypted with. Omit it for a value stored in the clear.")
+	cmd.Flags().String("sql-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
 	return cmd
 }
 
@@ -1277,13 +1727,6 @@ func newCredentialsUpdateFileCmd() *cobra.Command {
 				}
 				body.SetBqProjectId(bqProjectId)
 			}
-			if changed(cmd, "databricks-warehouse-id") {
-				databricksWarehouseId, err := flagString(cmd, "databricks-warehouse-id")
-				if err != nil {
-					return err
-				}
-				body.SetDatabricksWarehouseId(databricksWarehouseId)
-			}
 			if changed(cmd, "file-path") {
 				filePath, err := flagString(cmd, "file-path")
 				if err != nil {
@@ -1291,17 +1734,24 @@ func newCredentialsUpdateFileCmd() *cobra.Command {
 				}
 				body.SetFilePath(filePath)
 			}
+			if changed(cmd, "sql-warehouse-id") {
+				sqlWarehouseId, err := flagString(cmd, "sql-warehouse-id")
+				if err != nil {
+					return err
+				}
+				body.SetSqlWarehouseId(sqlWarehouseId)
+			}
 			req = req.FileCredentialsPatch(*body)
 			out, resp, err := retryOnTransient(cmd, req.Execute)
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "bq_project_id", "databricks_warehouse_id", "file_path")
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "bq_project_id", "sql_warehouse_id", "file_path")
 		},
 	}
 	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
-	cmd.Flags().String("databricks-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
 	cmd.Flags().String("file-path", "", "Path of the file on the deployment that holds the connection's credentials.")
+	cmd.Flags().String("sql-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
 	return cmd
 }
 
@@ -1325,13 +1775,6 @@ func newCredentialsUpdateGcpSecretManagerCmd() *cobra.Command {
 				}
 				body.SetBqProjectId(bqProjectId)
 			}
-			if changed(cmd, "databricks-warehouse-id") {
-				databricksWarehouseId, err := flagString(cmd, "databricks-warehouse-id")
-				if err != nil {
-					return err
-				}
-				body.SetDatabricksWarehouseId(databricksWarehouseId)
-			}
 			if changed(cmd, "gcp-secret") {
 				gcpSecret, err := flagString(cmd, "gcp-secret")
 				if err != nil {
@@ -1339,17 +1782,24 @@ func newCredentialsUpdateGcpSecretManagerCmd() *cobra.Command {
 				}
 				body.SetGcpSecret(gcpSecret)
 			}
+			if changed(cmd, "sql-warehouse-id") {
+				sqlWarehouseId, err := flagString(cmd, "sql-warehouse-id")
+				if err != nil {
+					return err
+				}
+				body.SetSqlWarehouseId(sqlWarehouseId)
+			}
 			req = req.GcpSecretManagerCredentialsPatch(*body)
 			out, resp, err := retryOnTransient(cmd, req.Execute)
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "bq_project_id", "databricks_warehouse_id", "gcp_secret")
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "bq_project_id", "sql_warehouse_id", "gcp_secret")
 		},
 	}
 	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
-	cmd.Flags().String("databricks-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
 	cmd.Flags().String("gcp-secret", "", "Name of the GCP Secret Manager secret holding the connection's credentials.")
+	cmd.Flags().String("sql-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
 	return cmd
 }
 
@@ -1532,6 +1982,8 @@ func newCredentialsValidateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsValidateAwsSecretsManagerCmd())
 	cmd.AddCommand(newCredentialsValidateAzureKeyVaultCmd())
 	cmd.AddCommand(newCredentialsValidateBigqueryCmd())
+	cmd.AddCommand(newCredentialsValidateDatabricksMetastoreSqlWarehouseCmd())
+	cmd.AddCommand(newCredentialsValidateDatabricksSqlWarehouseCmd())
 	cmd.AddCommand(newCredentialsValidateEnvVarCmd())
 	cmd.AddCommand(newCredentialsValidateFileCmd())
 	cmd.AddCommand(newCredentialsValidateGcpSecretManagerCmd())
@@ -1586,19 +2038,19 @@ func newCredentialsValidateAwsSecretsManagerCmd() *cobra.Command {
 				}
 				body.SetBqProjectId(bqProjectId)
 			}
-			if changed(cmd, "databricks-warehouse-id") {
-				databricksWarehouseId, err := flagString(cmd, "databricks-warehouse-id")
-				if err != nil {
-					return err
-				}
-				body.SetDatabricksWarehouseId(databricksWarehouseId)
-			}
 			if changed(cmd, "external-id") {
 				externalId, err := flagString(cmd, "external-id")
 				if err != nil {
 					return err
 				}
 				body.SetExternalId(externalId)
+			}
+			if changed(cmd, "sql-warehouse-id") {
+				sqlWarehouseId, err := flagString(cmd, "sql-warehouse-id")
+				if err != nil {
+					return err
+				}
+				body.SetSqlWarehouseId(sqlWarehouseId)
 			}
 			req = req.AwsSecretsManagerCredentialsValidateIn(*body)
 			out, resp, err := retryOnTransient(cmd, req.Execute)
@@ -1647,8 +2099,8 @@ func newCredentialsValidateAwsSecretsManagerCmd() *cobra.Command {
 	cmd.Flags().String("assumable-role", "", "ARN of a role the deployment assumes to read the secret. Omit it to read as itself.")
 	cmd.Flags().String("aws-region", "", "AWS region of the secret. Omit it to use the deployment's own region.")
 	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
-	cmd.Flags().String("databricks-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
 	cmd.Flags().String("external-id", "", "External id the assumed role's trust policy requires, if it requires one.")
+	cmd.Flags().String("sql-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }
@@ -1699,12 +2151,12 @@ func newCredentialsValidateAzureKeyVaultCmd() *cobra.Command {
 				}
 				body.SetBqProjectId(bqProjectId)
 			}
-			if changed(cmd, "databricks-warehouse-id") {
-				databricksWarehouseId, err := flagString(cmd, "databricks-warehouse-id")
+			if changed(cmd, "sql-warehouse-id") {
+				sqlWarehouseId, err := flagString(cmd, "sql-warehouse-id")
 				if err != nil {
 					return err
 				}
-				body.SetDatabricksWarehouseId(databricksWarehouseId)
+				body.SetSqlWarehouseId(sqlWarehouseId)
 			}
 			req = req.AzureKeyVaultCredentialsValidateIn(*body)
 			out, resp, err := retryOnTransient(cmd, req.Execute)
@@ -1753,7 +2205,7 @@ func newCredentialsValidateAzureKeyVaultCmd() *cobra.Command {
 	cmd.Flags().String("akv-vault-name", "", "Name of the key vault. Send this, akv_vault_url, or both.")
 	cmd.Flags().String("akv-vault-url", "", "URL of the key vault. Send this, akv_vault_name, or both.")
 	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
-	cmd.Flags().String("databricks-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
+	cmd.Flags().String("sql-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }
@@ -1828,6 +2280,250 @@ func newCredentialsValidateBigqueryCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsValidateDatabricksMetastoreSqlWarehouseCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "databricks-metastore-sql-warehouse",
+		Short: "Validate Databricks metadata collection credentials",
+		Long:  "Check candidate Databricks metadata collection credentials against Databricks.\n\nNo credentials are created. Send the values you would create the credentials with, and a\ndeployment to run them from, and the checks run against your Databricks workspace.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateDatabricksMetastoreSqlWarehouseCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			workspaceUrl, err := flagString(cmd, "workspace-url")
+			if err != nil {
+				return err
+			}
+			sqlWarehouseId, err := flagString(cmd, "sql-warehouse-id")
+			if err != nil {
+				return err
+			}
+			workspaceId, err := flagString(cmd, "workspace-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewDatabricksMetastoreSqlWarehouseCredentialsValidateIn(deploymentId, workspaceUrl, sqlWarehouseId, workspaceId)
+			if changed(cmd, "azure-tenant-id") {
+				azureTenantId, err := flagString(cmd, "azure-tenant-id")
+				if err != nil {
+					return err
+				}
+				body.SetAzureTenantId(azureTenantId)
+			}
+			if changed(cmd, "azure-workspace-resource-id") {
+				azureWorkspaceResourceId, err := flagString(cmd, "azure-workspace-resource-id")
+				if err != nil {
+					return err
+				}
+				body.SetAzureWorkspaceResourceId(azureWorkspaceResourceId)
+			}
+			if changed(cmd, "oauth-client-id") {
+				oauthClientId, err := flagString(cmd, "oauth-client-id")
+				if err != nil {
+					return err
+				}
+				body.SetOauthClientId(oauthClientId)
+			}
+			if changed(cmd, "oauth-client-secret", "oauth-client-secret-prompt") {
+				oauthClientSecret, err := flagSecret(cmd, "oauth-client-secret")
+				if err != nil {
+					return err
+				}
+				body.SetOauthClientSecret(oauthClientSecret)
+			}
+			if changed(cmd, "token", "token-prompt") {
+				token, err := flagSecret(cmd, "token")
+				if err != nil {
+					return err
+				}
+				body.SetToken(token)
+			}
+			req = req.DatabricksMetastoreSqlWarehouseCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return fmt.Errorf("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("workspace-url", "", "URL of the Databricks workspace, or its host name.")
+	_ = cmd.MarkFlagRequired("workspace-url")
+	cmd.Flags().String("sql-warehouse-id", "", "ID of the Databricks SQL warehouse the connection runs on.")
+	_ = cmd.MarkFlagRequired("sql-warehouse-id")
+	cmd.Flags().String("workspace-id", "", "ID of the Databricks workspace.")
+	_ = cmd.MarkFlagRequired("workspace-id")
+	cmd.Flags().String("azure-tenant-id", "", "Microsoft Entra ID tenant, for a service principal Azure manages. Send it with azure_workspace_resource_id and the OAuth client.")
+	cmd.Flags().String("azure-workspace-resource-id", "", "Azure resource ID of the workspace, for a service principal Azure manages. Send it with azure_tenant_id and the OAuth client.")
+	cmd.Flags().String("oauth-client-id", "", "Client ID of the service principal Monte Carlo signs in as with OAuth. Send it with oauth_client_secret, instead of token.")
+	cmd.Flags().String("oauth-client-secret", "", "OAuth secret of the service principal in oauth_client_id. Used for this check and not kept. Visible in the process list; --oauth-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("oauth-client-secret-prompt", false, "Read --oauth-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("token", "", "Personal access token or service principal token. Send this, or oauth_client_id and oauth_client_secret. Used for this check and not kept. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateDatabricksSqlWarehouseCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "databricks-sql-warehouse",
+		Short: "Validate Databricks query credentials",
+		Long:  "Check candidate Databricks query credentials against Databricks.\n\nNo credentials are created. Send the values you would create the credentials with, and a\ndeployment to run them from, and the checks run against your Databricks workspace.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateDatabricksSqlWarehouseCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			workspaceUrl, err := flagString(cmd, "workspace-url")
+			if err != nil {
+				return err
+			}
+			sqlWarehouseId, err := flagString(cmd, "sql-warehouse-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewDatabricksSqlWarehouseCredentialsValidateIn(deploymentId, workspaceUrl, sqlWarehouseId)
+			if changed(cmd, "azure-tenant-id") {
+				azureTenantId, err := flagString(cmd, "azure-tenant-id")
+				if err != nil {
+					return err
+				}
+				body.SetAzureTenantId(azureTenantId)
+			}
+			if changed(cmd, "azure-workspace-resource-id") {
+				azureWorkspaceResourceId, err := flagString(cmd, "azure-workspace-resource-id")
+				if err != nil {
+					return err
+				}
+				body.SetAzureWorkspaceResourceId(azureWorkspaceResourceId)
+			}
+			if changed(cmd, "oauth-client-id") {
+				oauthClientId, err := flagString(cmd, "oauth-client-id")
+				if err != nil {
+					return err
+				}
+				body.SetOauthClientId(oauthClientId)
+			}
+			if changed(cmd, "oauth-client-secret", "oauth-client-secret-prompt") {
+				oauthClientSecret, err := flagSecret(cmd, "oauth-client-secret")
+				if err != nil {
+					return err
+				}
+				body.SetOauthClientSecret(oauthClientSecret)
+			}
+			if changed(cmd, "token", "token-prompt") {
+				token, err := flagSecret(cmd, "token")
+				if err != nil {
+					return err
+				}
+				body.SetToken(token)
+			}
+			if changed(cmd, "workspace-id") {
+				workspaceId, err := flagString(cmd, "workspace-id")
+				if err != nil {
+					return err
+				}
+				body.SetWorkspaceId(workspaceId)
+			}
+			req = req.DatabricksSqlWarehouseCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return fmt.Errorf("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("workspace-url", "", "URL of the Databricks workspace, or its host name.")
+	_ = cmd.MarkFlagRequired("workspace-url")
+	cmd.Flags().String("sql-warehouse-id", "", "ID of the Databricks SQL warehouse the connection runs on.")
+	_ = cmd.MarkFlagRequired("sql-warehouse-id")
+	cmd.Flags().String("azure-tenant-id", "", "Microsoft Entra ID tenant, for a service principal Azure manages. Send it with azure_workspace_resource_id and the OAuth client.")
+	cmd.Flags().String("azure-workspace-resource-id", "", "Azure resource ID of the workspace, for a service principal Azure manages. Send it with azure_tenant_id and the OAuth client.")
+	cmd.Flags().String("oauth-client-id", "", "Client ID of the service principal Monte Carlo signs in as with OAuth. Send it with oauth_client_secret, instead of token.")
+	cmd.Flags().String("oauth-client-secret", "", "OAuth secret of the service principal in oauth_client_id. Used for this check and not kept. Visible in the process list; --oauth-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("oauth-client-secret-prompt", false, "Read --oauth-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("token", "", "Personal access token or service principal token. Send this, or oauth_client_id and oauth_client_secret. Used for this check and not kept. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
+	cmd.Flags().String("workspace-id", "", "ID of the Databricks workspace.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
 func newCredentialsValidateEnvVarCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "env-var",
@@ -1860,19 +2556,19 @@ func newCredentialsValidateEnvVarCmd() *cobra.Command {
 				}
 				body.SetBqProjectId(bqProjectId)
 			}
-			if changed(cmd, "databricks-warehouse-id") {
-				databricksWarehouseId, err := flagString(cmd, "databricks-warehouse-id")
-				if err != nil {
-					return err
-				}
-				body.SetDatabricksWarehouseId(databricksWarehouseId)
-			}
 			if changed(cmd, "kms-key-id") {
 				kmsKeyId, err := flagString(cmd, "kms-key-id")
 				if err != nil {
 					return err
 				}
 				body.SetKmsKeyId(kmsKeyId)
+			}
+			if changed(cmd, "sql-warehouse-id") {
+				sqlWarehouseId, err := flagString(cmd, "sql-warehouse-id")
+				if err != nil {
+					return err
+				}
+				body.SetSqlWarehouseId(sqlWarehouseId)
 			}
 			req = req.EnvVarCredentialsValidateIn(*body)
 			out, resp, err := retryOnTransient(cmd, req.Execute)
@@ -1919,8 +2615,8 @@ func newCredentialsValidateEnvVarCmd() *cobra.Command {
 	cmd.Flags().String("env-var-name", "", "Name of the environment variable on the deployment that holds the connection's credentials. Must start with MCD_.")
 	_ = cmd.MarkFlagRequired("env-var-name")
 	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
-	cmd.Flags().String("databricks-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
 	cmd.Flags().String("kms-key-id", "", "AWS KMS key the variable's value is encrypted with. Omit it for a value stored in the clear.")
+	cmd.Flags().String("sql-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }
@@ -1957,12 +2653,12 @@ func newCredentialsValidateFileCmd() *cobra.Command {
 				}
 				body.SetBqProjectId(bqProjectId)
 			}
-			if changed(cmd, "databricks-warehouse-id") {
-				databricksWarehouseId, err := flagString(cmd, "databricks-warehouse-id")
+			if changed(cmd, "sql-warehouse-id") {
+				sqlWarehouseId, err := flagString(cmd, "sql-warehouse-id")
 				if err != nil {
 					return err
 				}
-				body.SetDatabricksWarehouseId(databricksWarehouseId)
+				body.SetSqlWarehouseId(sqlWarehouseId)
 			}
 			req = req.FileCredentialsValidateIn(*body)
 			out, resp, err := retryOnTransient(cmd, req.Execute)
@@ -2009,7 +2705,7 @@ func newCredentialsValidateFileCmd() *cobra.Command {
 	cmd.Flags().String("file-path", "", "Path of the file on the deployment that holds the connection's credentials.")
 	_ = cmd.MarkFlagRequired("file-path")
 	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
-	cmd.Flags().String("databricks-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
+	cmd.Flags().String("sql-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }
@@ -2046,12 +2742,12 @@ func newCredentialsValidateGcpSecretManagerCmd() *cobra.Command {
 				}
 				body.SetBqProjectId(bqProjectId)
 			}
-			if changed(cmd, "databricks-warehouse-id") {
-				databricksWarehouseId, err := flagString(cmd, "databricks-warehouse-id")
+			if changed(cmd, "sql-warehouse-id") {
+				sqlWarehouseId, err := flagString(cmd, "sql-warehouse-id")
 				if err != nil {
 					return err
 				}
-				body.SetDatabricksWarehouseId(databricksWarehouseId)
+				body.SetSqlWarehouseId(sqlWarehouseId)
 			}
 			req = req.GcpSecretManagerCredentialsValidateIn(*body)
 			out, resp, err := retryOnTransient(cmd, req.Execute)
@@ -2098,7 +2794,7 @@ func newCredentialsValidateGcpSecretManagerCmd() *cobra.Command {
 	cmd.Flags().String("gcp-secret", "", "Name of the GCP Secret Manager secret holding the connection's credentials.")
 	_ = cmd.MarkFlagRequired("gcp-secret")
 	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
-	cmd.Flags().String("databricks-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
+	cmd.Flags().String("sql-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }
