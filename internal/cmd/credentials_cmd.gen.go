@@ -35,15 +35,27 @@ func newCredentialsCreateCmd() *cobra.Command {
 		Short: "Create credential",
 	}
 	cmd.AddCommand(newCredentialsCreateAwsSecretsManagerCmd())
+	cmd.AddCommand(newCredentialsCreateAzureDedicatedSqlPoolCmd())
 	cmd.AddCommand(newCredentialsCreateAzureKeyVaultCmd())
+	cmd.AddCommand(newCredentialsCreateAzureSqlDatabaseCmd())
 	cmd.AddCommand(newCredentialsCreateBigqueryCmd())
+	cmd.AddCommand(newCredentialsCreateClickhouseCmd())
 	cmd.AddCommand(newCredentialsCreateDatabricksMetastoreSqlWarehouseCmd())
 	cmd.AddCommand(newCredentialsCreateDatabricksSqlWarehouseCmd())
+	cmd.AddCommand(newCredentialsCreateDb2Cmd())
 	cmd.AddCommand(newCredentialsCreateEnvVarCmd())
 	cmd.AddCommand(newCredentialsCreateFileCmd())
 	cmd.AddCommand(newCredentialsCreateGcpSecretManagerCmd())
+	cmd.AddCommand(newCredentialsCreateMariadbCmd())
+	cmd.AddCommand(newCredentialsCreateMysqlCmd())
+	cmd.AddCommand(newCredentialsCreateOracleCmd())
+	cmd.AddCommand(newCredentialsCreatePostgresCmd())
 	cmd.AddCommand(newCredentialsCreateRedshiftCmd())
+	cmd.AddCommand(newCredentialsCreateSapHanaCmd())
 	cmd.AddCommand(newCredentialsCreateSnowflakeCmd())
+	cmd.AddCommand(newCredentialsCreateStarburstEnterpriseCmd())
+	cmd.AddCommand(newCredentialsCreateStarburstGalaxyCmd())
+	cmd.AddCommand(newCredentialsCreateTeradataCmd())
 	return cmd
 }
 
@@ -123,6 +135,63 @@ func newCredentialsCreateAwsSecretsManagerCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsCreateAzureDedicatedSqlPoolCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "azure-dedicated-sql-pool",
+		Short: "Create Azure Dedicated SQL Pool credentials",
+		Long:  "Store an Azure Dedicated SQL Pool login for connections to use.\n\nMonte Carlo keeps the password and returns everything else. Create the credentials first, then\ncreate a connection that references them. Nothing is checked against Azure Dedicated SQL Pool\nhere.\n\nAn account holds a limited number of credentials; past that the create is refused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "password", "password-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreateAzureDedicatedSqlPoolCredentials(ctx)
+			host, err := flagString(cmd, "host")
+			if err != nil {
+				return err
+			}
+			port, err := flagInt(cmd, "port")
+			if err != nil {
+				return err
+			}
+			user, err := flagString(cmd, "user")
+			if err != nil {
+				return err
+			}
+			password, err := flagSecret(cmd, "password")
+			if err != nil {
+				return err
+			}
+			dbName, err := flagString(cmd, "db-name")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewAzureDedicatedSqlPoolCredentialsIn(host, port, user, password, dbName)
+			req = req.AzureDedicatedSqlPoolCredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user")
+		},
+	}
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	_ = cmd.MarkFlagRequired("host")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	_ = cmd.MarkFlagRequired("port")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	_ = cmd.MarkFlagRequired("user")
+	cmd.Flags().String("password", "", "Password of the database user. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	_ = cmd.MarkFlagRequired("db-name")
+	return cmd
+}
+
 func newCredentialsCreateAzureKeyVaultCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "azure-key-vault",
@@ -191,6 +260,63 @@ func newCredentialsCreateAzureKeyVaultCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsCreateAzureSqlDatabaseCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "azure-sql-database",
+		Short: "Create Azure SQL Database credentials",
+		Long:  "Store an Azure SQL Database login for connections to use.\n\nMonte Carlo keeps the password and returns everything else. Create the credentials first, then\ncreate a connection that references them. Nothing is checked against Azure SQL Database here.\n\nAn account holds a limited number of credentials; past that the create is refused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "password", "password-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreateAzureSqlDatabaseCredentials(ctx)
+			host, err := flagString(cmd, "host")
+			if err != nil {
+				return err
+			}
+			port, err := flagInt(cmd, "port")
+			if err != nil {
+				return err
+			}
+			user, err := flagString(cmd, "user")
+			if err != nil {
+				return err
+			}
+			password, err := flagSecret(cmd, "password")
+			if err != nil {
+				return err
+			}
+			dbName, err := flagString(cmd, "db-name")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewAzureSqlDatabaseCredentialsIn(host, port, user, password, dbName)
+			req = req.AzureSqlDatabaseCredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user")
+		},
+	}
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	_ = cmd.MarkFlagRequired("host")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	_ = cmd.MarkFlagRequired("port")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	_ = cmd.MarkFlagRequired("user")
+	cmd.Flags().String("password", "", "Password of the database user. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	_ = cmd.MarkFlagRequired("db-name")
+	return cmd
+}
+
 func newCredentialsCreateBigqueryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "bigquery",
@@ -221,6 +347,65 @@ func newCredentialsCreateBigqueryCmd() *cobra.Command {
 	}
 	cmd.Flags().String("service-account-key", "", "The service account's JSON key file, as its text. Stored by Monte Carlo and never returned. Visible in the process list; --service-account-key-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("service-account-key-prompt", false, "Read --service-account-key from a hidden prompt instead of the command line.")
+	return cmd
+}
+
+func newCredentialsCreateClickhouseCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "clickhouse",
+		Short: "Create ClickHouse credentials",
+		Long:  "Store a ClickHouse login for connections to use.\n\nMonte Carlo keeps the password and returns everything else. Create the credentials first, then\ncreate a connection that references them. Nothing is checked against ClickHouse here.\n\nAn account holds a limited number of credentials; past that the create is refused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "password", "password-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreateClickhouseCredentials(ctx)
+			host, err := flagString(cmd, "host")
+			if err != nil {
+				return err
+			}
+			port, err := flagInt(cmd, "port")
+			if err != nil {
+				return err
+			}
+			user, err := flagString(cmd, "user")
+			if err != nil {
+				return err
+			}
+			password, err := flagSecret(cmd, "password")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewClickHouseCredentialsIn(host, port, user, password)
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			req = req.ClickHouseCredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user")
+		},
+	}
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	_ = cmd.MarkFlagRequired("host")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	_ = cmd.MarkFlagRequired("port")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	_ = cmd.MarkFlagRequired("user")
+	cmd.Flags().String("password", "", "Password of the database user. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
 	return cmd
 }
 
@@ -394,6 +579,81 @@ func newCredentialsCreateDatabricksSqlWarehouseCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsCreateDb2Cmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "db2",
+		Short: "Create Db2 credentials",
+		Long:  "Store a Db2 login for connections to use.\n\nMonte Carlo keeps the password and returns everything else. Create the credentials first, then\ncreate a connection that references them. Nothing is checked against Db2 here.\n\nSend `ssl_ca_data` to check the server against your own CA, or `ssl_disabled` to connect without\nTLS. The two cannot be combined. An account holds a limited number of credentials; past that the\ncreate is refused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "password", "password-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreateDb2Credentials(ctx)
+			host, err := flagString(cmd, "host")
+			if err != nil {
+				return err
+			}
+			port, err := flagInt(cmd, "port")
+			if err != nil {
+				return err
+			}
+			user, err := flagString(cmd, "user")
+			if err != nil {
+				return err
+			}
+			password, err := flagSecret(cmd, "password")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewDb2CredentialsIn(host, port, user, password)
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "ssl-ca-data") {
+				sslCaData, err := flagString(cmd, "ssl-ca-data")
+				if err != nil {
+					return err
+				}
+				body.SetSslCaData(sslCaData)
+			}
+			if changed(cmd, "ssl-disabled") {
+				sslDisabled, err := flagBool(cmd, "ssl-disabled")
+				if err != nil {
+					return err
+				}
+				body.SetSslDisabled(sslDisabled)
+			}
+			req = req.Db2CredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user", "ssl_ca_data", "ssl_disabled")
+		},
+	}
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	_ = cmd.MarkFlagRequired("host")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	_ = cmd.MarkFlagRequired("port")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	_ = cmd.MarkFlagRequired("user")
+	cmd.Flags().String("password", "", "Password of the database user. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM text of the CA certificate the server's certificate is checked against.")
+	cmd.Flags().Bool("ssl-disabled", false, "Connect without TLS.")
+	return cmd
+}
+
 func newCredentialsCreateEnvVarCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "env-var",
@@ -558,6 +818,366 @@ func newCredentialsCreateGcpSecretManagerCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsCreateMariadbCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "mariadb",
+		Short: "Create MariaDB credentials",
+		Long:  "Store a MariaDB login for connections to use.\n\nMonte Carlo keeps the password and returns everything else. Create the credentials first, then\ncreate a connection that references them. Nothing is checked against MariaDB here.\n\nAn account holds a limited number of credentials; past that the create is refused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "password", "password-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreateMariadbCredentials(ctx)
+			host, err := flagString(cmd, "host")
+			if err != nil {
+				return err
+			}
+			port, err := flagInt(cmd, "port")
+			if err != nil {
+				return err
+			}
+			user, err := flagString(cmd, "user")
+			if err != nil {
+				return err
+			}
+			password, err := flagSecret(cmd, "password")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewMariaDbCredentialsIn(host, port, user, password)
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			req = req.MariaDbCredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user")
+		},
+	}
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	_ = cmd.MarkFlagRequired("host")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	_ = cmd.MarkFlagRequired("port")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	_ = cmd.MarkFlagRequired("user")
+	cmd.Flags().String("password", "", "Password of the database user. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	return cmd
+}
+
+func newCredentialsCreateMysqlCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "mysql",
+		Short: "Create MySQL credentials",
+		Long:  "Store a MySQL login for connections to use.\n\nMonte Carlo keeps the password and returns everything else. Create the credentials first, then\ncreate a connection that references them. Nothing is checked against MySQL here.\n\nSend `ssl_ca_data` to check the server against your own CA, or `ssl_disabled` to connect without\nTLS. The two cannot be combined. An account holds a limited number of credentials; past that the\ncreate is refused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "password", "password-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreateMysqlCredentials(ctx)
+			host, err := flagString(cmd, "host")
+			if err != nil {
+				return err
+			}
+			port, err := flagInt(cmd, "port")
+			if err != nil {
+				return err
+			}
+			user, err := flagString(cmd, "user")
+			if err != nil {
+				return err
+			}
+			password, err := flagSecret(cmd, "password")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewMySqlCredentialsIn(host, port, user, password)
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "ssl-ca-data") {
+				sslCaData, err := flagString(cmd, "ssl-ca-data")
+				if err != nil {
+					return err
+				}
+				body.SetSslCaData(sslCaData)
+			}
+			if changed(cmd, "ssl-disabled") {
+				sslDisabled, err := flagBool(cmd, "ssl-disabled")
+				if err != nil {
+					return err
+				}
+				body.SetSslDisabled(sslDisabled)
+			}
+			if changed(cmd, "ssl-skip-cert-verification") {
+				sslSkipCertVerification, err := flagBool(cmd, "ssl-skip-cert-verification")
+				if err != nil {
+					return err
+				}
+				body.SetSslSkipCertVerification(sslSkipCertVerification)
+			}
+			if changed(cmd, "ssl-verify-cert") {
+				sslVerifyCert, err := flagBool(cmd, "ssl-verify-cert")
+				if err != nil {
+					return err
+				}
+				body.SetSslVerifyCert(sslVerifyCert)
+			}
+			if changed(cmd, "ssl-verify-identity") {
+				sslVerifyIdentity, err := flagBool(cmd, "ssl-verify-identity")
+				if err != nil {
+					return err
+				}
+				body.SetSslVerifyIdentity(sslVerifyIdentity)
+			}
+			req = req.MySqlCredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user", "ssl_ca_data", "ssl_disabled", "ssl_verify_cert", "ssl_verify_identity", "ssl_skip_cert_verification")
+		},
+	}
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	_ = cmd.MarkFlagRequired("host")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	_ = cmd.MarkFlagRequired("port")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	_ = cmd.MarkFlagRequired("user")
+	cmd.Flags().String("password", "", "Password of the database user. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM text of the CA certificate the server's certificate is checked against.")
+	cmd.Flags().Bool("ssl-disabled", false, "Connect without TLS.")
+	cmd.Flags().Bool("ssl-skip-cert-verification", false, "Encrypt the connection without checking the server's certificate.")
+	cmd.Flags().Bool("ssl-verify-cert", false, "Check the server's certificate against the CA.")
+	cmd.Flags().Bool("ssl-verify-identity", false, "Check the certificate and that it names the host.")
+	return cmd
+}
+
+func newCredentialsCreateOracleCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "oracle",
+		Short: "Create Oracle credentials",
+		Long:  "Store an Oracle login for connections to use.\n\nMonte Carlo keeps the password and returns everything else. Create the credentials first, then\ncreate a connection that references them. Nothing is checked against Oracle here.\n\nSend `ssl_ca_data` to check the server against your own CA, or `ssl_disabled` to connect without\nTLS. The two cannot be combined. An account holds a limited number of credentials; past that the\ncreate is refused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "password", "password-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreateOracleCredentials(ctx)
+			host, err := flagString(cmd, "host")
+			if err != nil {
+				return err
+			}
+			port, err := flagInt(cmd, "port")
+			if err != nil {
+				return err
+			}
+			user, err := flagString(cmd, "user")
+			if err != nil {
+				return err
+			}
+			password, err := flagSecret(cmd, "password")
+			if err != nil {
+				return err
+			}
+			dbName, err := flagString(cmd, "db-name")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewOracleCredentialsIn(host, port, user, password, dbName)
+			if changed(cmd, "ssl-ca-data") {
+				sslCaData, err := flagString(cmd, "ssl-ca-data")
+				if err != nil {
+					return err
+				}
+				body.SetSslCaData(sslCaData)
+			}
+			if changed(cmd, "ssl-disabled") {
+				sslDisabled, err := flagBool(cmd, "ssl-disabled")
+				if err != nil {
+					return err
+				}
+				body.SetSslDisabled(sslDisabled)
+			}
+			if changed(cmd, "ssl-skip-cert-verification") {
+				sslSkipCertVerification, err := flagBool(cmd, "ssl-skip-cert-verification")
+				if err != nil {
+					return err
+				}
+				body.SetSslSkipCertVerification(sslSkipCertVerification)
+			}
+			if changed(cmd, "ssl-verify-cert") {
+				sslVerifyCert, err := flagBool(cmd, "ssl-verify-cert")
+				if err != nil {
+					return err
+				}
+				body.SetSslVerifyCert(sslVerifyCert)
+			}
+			if changed(cmd, "ssl-verify-identity") {
+				sslVerifyIdentity, err := flagBool(cmd, "ssl-verify-identity")
+				if err != nil {
+					return err
+				}
+				body.SetSslVerifyIdentity(sslVerifyIdentity)
+			}
+			req = req.OracleCredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user", "ssl_ca_data", "ssl_disabled", "ssl_verify_cert", "ssl_verify_identity", "ssl_skip_cert_verification")
+		},
+	}
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	_ = cmd.MarkFlagRequired("host")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	_ = cmd.MarkFlagRequired("port")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	_ = cmd.MarkFlagRequired("user")
+	cmd.Flags().String("password", "", "Password of the database user. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	_ = cmd.MarkFlagRequired("db-name")
+	cmd.Flags().String("ssl-ca-data", "", "PEM text of the CA certificate the server's certificate is checked against.")
+	cmd.Flags().Bool("ssl-disabled", false, "Connect without TLS.")
+	cmd.Flags().Bool("ssl-skip-cert-verification", false, "Encrypt the connection without checking the server's certificate.")
+	cmd.Flags().Bool("ssl-verify-cert", false, "Check the server's certificate against the CA.")
+	cmd.Flags().Bool("ssl-verify-identity", false, "Check the certificate and that it names the host.")
+	return cmd
+}
+
+func newCredentialsCreatePostgresCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "postgres",
+		Short: "Create PostgreSQL credentials",
+		Long:  "Store a PostgreSQL login for connections to use.\n\nMonte Carlo keeps the password and returns everything else. Create the credentials first, then\ncreate a connection that references them. Nothing is checked against PostgreSQL here.\n\nSend `ssl_ca_data` to check the server against your own CA, or `ssl_disabled` to connect without\nTLS. The two cannot be combined. An account holds a limited number of credentials; past that the\ncreate is refused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "password", "password-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreatePostgresCredentials(ctx)
+			host, err := flagString(cmd, "host")
+			if err != nil {
+				return err
+			}
+			port, err := flagInt(cmd, "port")
+			if err != nil {
+				return err
+			}
+			user, err := flagString(cmd, "user")
+			if err != nil {
+				return err
+			}
+			password, err := flagSecret(cmd, "password")
+			if err != nil {
+				return err
+			}
+			dbName, err := flagString(cmd, "db-name")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewPostgresCredentialsIn(host, port, user, password, dbName)
+			if changed(cmd, "rds-proxy") {
+				rdsProxy, err := flagBool(cmd, "rds-proxy")
+				if err != nil {
+					return err
+				}
+				body.SetRdsProxy(rdsProxy)
+			}
+			if changed(cmd, "ssl-ca-data") {
+				sslCaData, err := flagString(cmd, "ssl-ca-data")
+				if err != nil {
+					return err
+				}
+				body.SetSslCaData(sslCaData)
+			}
+			if changed(cmd, "ssl-disabled") {
+				sslDisabled, err := flagBool(cmd, "ssl-disabled")
+				if err != nil {
+					return err
+				}
+				body.SetSslDisabled(sslDisabled)
+			}
+			if changed(cmd, "ssl-skip-cert-verification") {
+				sslSkipCertVerification, err := flagBool(cmd, "ssl-skip-cert-verification")
+				if err != nil {
+					return err
+				}
+				body.SetSslSkipCertVerification(sslSkipCertVerification)
+			}
+			if changed(cmd, "ssl-verify-cert") {
+				sslVerifyCert, err := flagBool(cmd, "ssl-verify-cert")
+				if err != nil {
+					return err
+				}
+				body.SetSslVerifyCert(sslVerifyCert)
+			}
+			if changed(cmd, "ssl-verify-identity") {
+				sslVerifyIdentity, err := flagBool(cmd, "ssl-verify-identity")
+				if err != nil {
+					return err
+				}
+				body.SetSslVerifyIdentity(sslVerifyIdentity)
+			}
+			req = req.PostgresCredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user", "ssl_ca_data", "ssl_disabled", "ssl_verify_cert", "ssl_verify_identity", "ssl_skip_cert_verification", "rds_proxy")
+		},
+	}
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	_ = cmd.MarkFlagRequired("host")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	_ = cmd.MarkFlagRequired("port")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	_ = cmd.MarkFlagRequired("user")
+	cmd.Flags().String("password", "", "Password of the database user. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	_ = cmd.MarkFlagRequired("db-name")
+	cmd.Flags().Bool("rds-proxy", false, "Whether host is an Amazon RDS Proxy endpoint.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM text of the CA certificate the server's certificate is checked against.")
+	cmd.Flags().Bool("ssl-disabled", false, "Connect without TLS.")
+	cmd.Flags().Bool("ssl-skip-cert-verification", false, "Encrypt the connection without checking the server's certificate.")
+	cmd.Flags().Bool("ssl-verify-cert", false, "Check the server's certificate against the CA.")
+	cmd.Flags().Bool("ssl-verify-identity", false, "Check the certificate and that it names the host.")
+	return cmd
+}
+
 func newCredentialsCreateRedshiftCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "redshift",
@@ -655,6 +1275,63 @@ func newCredentialsCreateRedshiftCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsCreateSapHanaCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "sap-hana",
+		Short: "Create SAP HANA credentials",
+		Long:  "Store a SAP HANA login for connections to use.\n\nMonte Carlo keeps the password and returns everything else. Create the credentials first, then\ncreate a connection that references them. Nothing is checked against SAP HANA here.\n\nAn account holds a limited number of credentials; past that the create is refused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "password", "password-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreateSapHanaCredentials(ctx)
+			host, err := flagString(cmd, "host")
+			if err != nil {
+				return err
+			}
+			port, err := flagInt(cmd, "port")
+			if err != nil {
+				return err
+			}
+			user, err := flagString(cmd, "user")
+			if err != nil {
+				return err
+			}
+			password, err := flagSecret(cmd, "password")
+			if err != nil {
+				return err
+			}
+			dbName, err := flagString(cmd, "db-name")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewSapHanaCredentialsIn(host, port, user, password, dbName)
+			req = req.SapHanaCredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user")
+		},
+	}
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	_ = cmd.MarkFlagRequired("host")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	_ = cmd.MarkFlagRequired("port")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	_ = cmd.MarkFlagRequired("user")
+	cmd.Flags().String("password", "", "Password of the database user. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	_ = cmd.MarkFlagRequired("db-name")
+	return cmd
+}
+
 func newCredentialsCreateSnowflakeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "snowflake",
@@ -717,6 +1394,241 @@ func newCredentialsCreateSnowflakeCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsCreateStarburstEnterpriseCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "starburst-enterprise",
+		Short: "Create Starburst Enterprise credentials",
+		Long:  "Store a Starburst Enterprise login for connections to use.\n\nMonte Carlo keeps the password and returns everything else. Create the credentials first, then\ncreate a connection that references them. Nothing is checked against Starburst Enterprise here.\n\nThe connection always uses TLS. Send `ssl_ca_data` to check the server against your own CA, or\n`ssl_disabled` to skip the certificate check. The two cannot be combined. An account holds a\nlimited number of credentials; past that the create is refused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "password", "password-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreateStarburstEnterpriseCredentials(ctx)
+			host, err := flagString(cmd, "host")
+			if err != nil {
+				return err
+			}
+			port, err := flagInt(cmd, "port")
+			if err != nil {
+				return err
+			}
+			user, err := flagString(cmd, "user")
+			if err != nil {
+				return err
+			}
+			password, err := flagSecret(cmd, "password")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewStarburstEnterpriseCredentialsIn(host, port, user, password)
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "ssl-ca-data") {
+				sslCaData, err := flagString(cmd, "ssl-ca-data")
+				if err != nil {
+					return err
+				}
+				body.SetSslCaData(sslCaData)
+			}
+			if changed(cmd, "ssl-disabled") {
+				sslDisabled, err := flagBool(cmd, "ssl-disabled")
+				if err != nil {
+					return err
+				}
+				body.SetSslDisabled(sslDisabled)
+			}
+			req = req.StarburstEnterpriseCredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user", "ssl_ca_data", "ssl_disabled")
+		},
+	}
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	_ = cmd.MarkFlagRequired("host")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	_ = cmd.MarkFlagRequired("port")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	_ = cmd.MarkFlagRequired("user")
+	cmd.Flags().String("password", "", "Password of the database user. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM text of the CA certificate the server's certificate is checked against.")
+	cmd.Flags().Bool("ssl-disabled", false, "Skip the check of the server's certificate. The connection always uses TLS.")
+	return cmd
+}
+
+func newCredentialsCreateStarburstGalaxyCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "starburst-galaxy",
+		Short: "Create Starburst Galaxy credentials",
+		Long:  "Store a Starburst Galaxy login for connections to use.\n\nMonte Carlo keeps the password and returns everything else. Create the credentials first, then\ncreate a connection that references them. Nothing is checked against Starburst Galaxy here.\n\nAn account holds a limited number of credentials; past that the create is refused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "password", "password-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreateStarburstGalaxyCredentials(ctx)
+			host, err := flagString(cmd, "host")
+			if err != nil {
+				return err
+			}
+			port, err := flagInt(cmd, "port")
+			if err != nil {
+				return err
+			}
+			user, err := flagString(cmd, "user")
+			if err != nil {
+				return err
+			}
+			password, err := flagSecret(cmd, "password")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewStarburstGalaxyCredentialsIn(host, port, user, password)
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			req = req.StarburstGalaxyCredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user")
+		},
+	}
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	_ = cmd.MarkFlagRequired("host")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	_ = cmd.MarkFlagRequired("port")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	_ = cmd.MarkFlagRequired("user")
+	cmd.Flags().String("password", "", "Password of the database user. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	return cmd
+}
+
+func newCredentialsCreateTeradataCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "teradata",
+		Short: "Create Teradata credentials",
+		Long:  "Store a Teradata login for connections to use.\n\nMonte Carlo keeps the password and returns everything else. Create the credentials first, then\ncreate a connection that references them. Nothing is checked against Teradata here.\n\nSend `ssl_ca_data` to check the server against your own CA. `td_sslmode` decides whether the\nconnection uses TLS. An account holds a limited number of credentials; past that the create is\nrefused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "password", "password-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreateTeradataCredentials(ctx)
+			host, err := flagString(cmd, "host")
+			if err != nil {
+				return err
+			}
+			port, err := flagInt(cmd, "port")
+			if err != nil {
+				return err
+			}
+			user, err := flagString(cmd, "user")
+			if err != nil {
+				return err
+			}
+			password, err := flagSecret(cmd, "password")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewTeradataCredentialsIn(host, port, user, password)
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "ssl-ca-data") {
+				sslCaData, err := flagString(cmd, "ssl-ca-data")
+				if err != nil {
+					return err
+				}
+				body.SetSslCaData(sslCaData)
+			}
+			if changed(cmd, "ssl-disabled") {
+				sslDisabled, err := flagBool(cmd, "ssl-disabled")
+				if err != nil {
+					return err
+				}
+				body.SetSslDisabled(sslDisabled)
+			}
+			if changed(cmd, "td-logmech") {
+				tdLogmechValue, err := flagString(cmd, "td-logmech")
+				if err != nil {
+					return err
+				}
+				tdLogmech, err := sdk.NewTeradataLogonMechanismFromValue(tdLogmechValue)
+				if err != nil {
+					return err
+				}
+				body.SetTdLogmech(*tdLogmech)
+			}
+			if changed(cmd, "td-sslmode") {
+				tdSslmodeValue, err := flagString(cmd, "td-sslmode")
+				if err != nil {
+					return err
+				}
+				tdSslmode, err := sdk.NewTeradataSslModeFromValue(tdSslmodeValue)
+				if err != nil {
+					return err
+				}
+				body.SetTdSslmode(*tdSslmode)
+			}
+			req = req.TeradataCredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user", "ssl_ca_data", "ssl_disabled", "td_sslmode", "td_logmech")
+		},
+	}
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	_ = cmd.MarkFlagRequired("host")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	_ = cmd.MarkFlagRequired("port")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	_ = cmd.MarkFlagRequired("user")
+	cmd.Flags().String("password", "", "Password of the database user. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM text of the CA certificate the server's certificate is checked against.")
+	cmd.Flags().Bool("ssl-disabled", false, "Do not check the server against ssl_ca_data. td_sslmode decides whether the connection uses TLS.")
+	cmd.Flags().String("td-logmech", "", "How Teradata authenticates the user.")
+	_ = cmd.RegisterFlagCompletionFunc("td-logmech", enumCompletion(sdk.AllowedTeradataLogonMechanismEnumValues))
+	cmd.Flags().String("td-sslmode", "", "How the connection to Teradata uses TLS.")
+	_ = cmd.RegisterFlagCompletionFunc("td-sslmode", enumCompletion(sdk.AllowedTeradataSslModeEnumValues))
+	return cmd
+}
+
 func newCredentialsDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <credentials_id>",
@@ -739,15 +1651,27 @@ func newCredentialsDeleteCmd() *cobra.Command {
 		},
 	}
 	cmd.AddCommand(newCredentialsDeleteAwsSecretsManagerCmd())
+	cmd.AddCommand(newCredentialsDeleteAzureDedicatedSqlPoolCmd())
 	cmd.AddCommand(newCredentialsDeleteAzureKeyVaultCmd())
+	cmd.AddCommand(newCredentialsDeleteAzureSqlDatabaseCmd())
 	cmd.AddCommand(newCredentialsDeleteBigqueryCmd())
+	cmd.AddCommand(newCredentialsDeleteClickhouseCmd())
 	cmd.AddCommand(newCredentialsDeleteDatabricksMetastoreSqlWarehouseCmd())
 	cmd.AddCommand(newCredentialsDeleteDatabricksSqlWarehouseCmd())
+	cmd.AddCommand(newCredentialsDeleteDb2Cmd())
 	cmd.AddCommand(newCredentialsDeleteEnvVarCmd())
 	cmd.AddCommand(newCredentialsDeleteFileCmd())
 	cmd.AddCommand(newCredentialsDeleteGcpSecretManagerCmd())
+	cmd.AddCommand(newCredentialsDeleteMariadbCmd())
+	cmd.AddCommand(newCredentialsDeleteMysqlCmd())
+	cmd.AddCommand(newCredentialsDeleteOracleCmd())
+	cmd.AddCommand(newCredentialsDeletePostgresCmd())
 	cmd.AddCommand(newCredentialsDeleteRedshiftCmd())
+	cmd.AddCommand(newCredentialsDeleteSapHanaCmd())
 	cmd.AddCommand(newCredentialsDeleteSnowflakeCmd())
+	cmd.AddCommand(newCredentialsDeleteStarburstEnterpriseCmd())
+	cmd.AddCommand(newCredentialsDeleteStarburstGalaxyCmd())
+	cmd.AddCommand(newCredentialsDeleteTeradataCmd())
 	return cmd
 }
 
@@ -766,6 +1690,30 @@ func newCredentialsDeleteAwsSecretsManagerCmd() *cobra.Command {
 				return err
 			}
 			req := api.CredentialsAPI.DeleteAwsSecretsManagerCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
+func newCredentialsDeleteAzureDedicatedSqlPoolCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "azure-dedicated-sql-pool <credentials_id>",
+		Short: "Delete Azure Dedicated SQL Pool credentials",
+		Long:  "Delete Azure Dedicated SQL Pool credentials.\n\nRefused while a connection still uses them. Delete the connection first. Monte Carlo stops using\nthe stored password. Change it in Azure Dedicated SQL Pool if the password itself must be\nretired.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete azure-dedicated-sql-pool credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeleteAzureDedicatedSqlPoolCredentials(ctx, args[0])
 			if resp, err := req.Execute(); err != nil {
 				return apiErr(resp, err)
 			}
@@ -799,6 +1747,30 @@ func newCredentialsDeleteAzureKeyVaultCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsDeleteAzureSqlDatabaseCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "azure-sql-database <credentials_id>",
+		Short: "Delete Azure SQL Database credentials",
+		Long:  "Delete Azure SQL Database credentials.\n\nRefused while a connection still uses them. Delete the connection first. Monte Carlo stops using\nthe stored password. Change it in Azure SQL Database if the password itself must be retired.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete azure-sql-database credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeleteAzureSqlDatabaseCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
 func newCredentialsDeleteBigqueryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "bigquery <credentials_id>",
@@ -814,6 +1786,30 @@ func newCredentialsDeleteBigqueryCmd() *cobra.Command {
 				return err
 			}
 			req := api.CredentialsAPI.DeleteBigqueryCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
+func newCredentialsDeleteClickhouseCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "clickhouse <credentials_id>",
+		Short: "Delete ClickHouse credentials",
+		Long:  "Delete ClickHouse credentials.\n\nRefused while a connection still uses them. Delete the connection first. Monte Carlo stops using\nthe stored password. Change it in ClickHouse if the password itself must be retired.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete clickhouse credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeleteClickhouseCredentials(ctx, args[0])
 			if resp, err := req.Execute(); err != nil {
 				return apiErr(resp, err)
 			}
@@ -862,6 +1858,30 @@ func newCredentialsDeleteDatabricksSqlWarehouseCmd() *cobra.Command {
 				return err
 			}
 			req := api.CredentialsAPI.DeleteDatabricksSqlWarehouseCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
+func newCredentialsDeleteDb2Cmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "db2 <credentials_id>",
+		Short: "Delete Db2 credentials",
+		Long:  "Delete Db2 credentials.\n\nRefused while a connection still uses them. Delete the connection first. Monte Carlo stops using\nthe stored password. Change it in Db2 if the password itself must be retired.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete db2 credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeleteDb2Credentials(ctx, args[0])
 			if resp, err := req.Execute(); err != nil {
 				return apiErr(resp, err)
 			}
@@ -943,6 +1963,102 @@ func newCredentialsDeleteGcpSecretManagerCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsDeleteMariadbCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "mariadb <credentials_id>",
+		Short: "Delete MariaDB credentials",
+		Long:  "Delete MariaDB credentials.\n\nRefused while a connection still uses them. Delete the connection first. Monte Carlo stops using\nthe stored password. Change it in MariaDB if the password itself must be retired.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete mariadb credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeleteMariadbCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
+func newCredentialsDeleteMysqlCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "mysql <credentials_id>",
+		Short: "Delete MySQL credentials",
+		Long:  "Delete MySQL credentials.\n\nRefused while a connection still uses them. Delete the connection first. Monte Carlo stops using\nthe stored password. Change it in MySQL if the password itself must be retired.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete mysql credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeleteMysqlCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
+func newCredentialsDeleteOracleCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "oracle <credentials_id>",
+		Short: "Delete Oracle credentials",
+		Long:  "Delete Oracle credentials.\n\nRefused while a connection still uses them. Delete the connection first. Monte Carlo stops using\nthe stored password. Change it in Oracle if the password itself must be retired.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete oracle credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeleteOracleCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
+func newCredentialsDeletePostgresCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "postgres <credentials_id>",
+		Short: "Delete PostgreSQL credentials",
+		Long:  "Delete PostgreSQL credentials.\n\nRefused while a connection still uses them. Delete the connection first. Monte Carlo stops using\nthe stored password. Change it in PostgreSQL if the password itself must be retired.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete postgres credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeletePostgresCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
 func newCredentialsDeleteRedshiftCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "redshift <credentials_id>",
@@ -958,6 +2074,30 @@ func newCredentialsDeleteRedshiftCmd() *cobra.Command {
 				return err
 			}
 			req := api.CredentialsAPI.DeleteRedshiftCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
+func newCredentialsDeleteSapHanaCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "sap-hana <credentials_id>",
+		Short: "Delete SAP HANA credentials",
+		Long:  "Delete SAP HANA credentials.\n\nRefused while a connection still uses them. Delete the connection first. Monte Carlo stops using\nthe stored password. Change it in SAP HANA if the password itself must be retired.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete sap-hana credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeleteSapHanaCredentials(ctx, args[0])
 			if resp, err := req.Execute(); err != nil {
 				return apiErr(resp, err)
 			}
@@ -991,21 +2131,105 @@ func newCredentialsDeleteSnowflakeCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsDeleteStarburstEnterpriseCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "starburst-enterprise <credentials_id>",
+		Short: "Delete Starburst Enterprise credentials",
+		Long:  "Delete Starburst Enterprise credentials.\n\nRefused while a connection still uses them. Delete the connection first. Monte Carlo stops using\nthe stored password. Change it in Starburst Enterprise if the password itself must be retired.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete starburst-enterprise credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeleteStarburstEnterpriseCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
+func newCredentialsDeleteStarburstGalaxyCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "starburst-galaxy <credentials_id>",
+		Short: "Delete Starburst Galaxy credentials",
+		Long:  "Delete Starburst Galaxy credentials.\n\nRefused while a connection still uses them. Delete the connection first. Monte Carlo stops using\nthe stored password. Change it in Starburst Galaxy if the password itself must be retired.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete starburst-galaxy credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeleteStarburstGalaxyCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
+func newCredentialsDeleteTeradataCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "teradata <credentials_id>",
+		Short: "Delete Teradata credentials",
+		Long:  "Delete Teradata credentials.\n\nRefused while a connection still uses them. Delete the connection first. Monte Carlo stops using\nthe stored password. Change it where Teradata checks it if the password itself must be\nretired.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete teradata credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeleteTeradataCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
 func newCredentialsGetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "get",
 		Short: "Get credential",
 	}
 	cmd.AddCommand(newCredentialsGetAwsSecretsManagerCmd())
+	cmd.AddCommand(newCredentialsGetAzureDedicatedSqlPoolCmd())
 	cmd.AddCommand(newCredentialsGetAzureKeyVaultCmd())
+	cmd.AddCommand(newCredentialsGetAzureSqlDatabaseCmd())
 	cmd.AddCommand(newCredentialsGetBigqueryCmd())
+	cmd.AddCommand(newCredentialsGetClickhouseCmd())
 	cmd.AddCommand(newCredentialsGetDatabricksMetastoreSqlWarehouseCmd())
 	cmd.AddCommand(newCredentialsGetDatabricksSqlWarehouseCmd())
+	cmd.AddCommand(newCredentialsGetDb2Cmd())
 	cmd.AddCommand(newCredentialsGetEnvVarCmd())
 	cmd.AddCommand(newCredentialsGetFileCmd())
 	cmd.AddCommand(newCredentialsGetGcpSecretManagerCmd())
+	cmd.AddCommand(newCredentialsGetMariadbCmd())
+	cmd.AddCommand(newCredentialsGetMysqlCmd())
+	cmd.AddCommand(newCredentialsGetOracleCmd())
+	cmd.AddCommand(newCredentialsGetPostgresCmd())
 	cmd.AddCommand(newCredentialsGetRedshiftCmd())
+	cmd.AddCommand(newCredentialsGetSapHanaCmd())
 	cmd.AddCommand(newCredentialsGetSnowflakeCmd())
+	cmd.AddCommand(newCredentialsGetStarburstEnterpriseCmd())
+	cmd.AddCommand(newCredentialsGetStarburstGalaxyCmd())
+	cmd.AddCommand(newCredentialsGetTeradataCmd())
 	return cmd
 }
 
@@ -1026,6 +2250,28 @@ func newCredentialsGetAwsSecretsManagerCmd() *cobra.Command {
 				return apiErr(resp, err)
 			}
 			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "bq_project_id", "sql_warehouse_id", "aws_secret", "aws_region", "assumable_role", "external_id")
+		},
+	}
+	return cmd
+}
+
+func newCredentialsGetAzureDedicatedSqlPoolCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "azure-dedicated-sql-pool <credentials_id>",
+		Short: "Get Azure Dedicated SQL Pool credentials",
+		Long:  "Get one set of Azure Dedicated SQL Pool credentials, without the password.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetAzureDedicatedSqlPoolCredentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user")
 		},
 	}
 	return cmd
@@ -1053,6 +2299,28 @@ func newCredentialsGetAzureKeyVaultCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsGetAzureSqlDatabaseCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "azure-sql-database <credentials_id>",
+		Short: "Get Azure SQL Database credentials",
+		Long:  "Get one set of Azure SQL Database credentials, without the password.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetAzureSqlDatabaseCredentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user")
+		},
+	}
+	return cmd
+}
+
 func newCredentialsGetBigqueryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "bigquery <credentials_id>",
@@ -1070,6 +2338,28 @@ func newCredentialsGetBigqueryCmd() *cobra.Command {
 				return apiErr(resp, err)
 			}
 			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "project_id", "client_email")
+		},
+	}
+	return cmd
+}
+
+func newCredentialsGetClickhouseCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "clickhouse <credentials_id>",
+		Short: "Get ClickHouse credentials",
+		Long:  "Get one set of ClickHouse credentials, without the password.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetClickhouseCredentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user")
 		},
 	}
 	return cmd
@@ -1114,6 +2404,28 @@ func newCredentialsGetDatabricksSqlWarehouseCmd() *cobra.Command {
 				return apiErr(resp, err)
 			}
 			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "workspace_url", "sql_warehouse_id", "workspace_id", "oauth_client_id", "azure_tenant_id", "azure_workspace_resource_id")
+		},
+	}
+	return cmd
+}
+
+func newCredentialsGetDb2Cmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "db2 <credentials_id>",
+		Short: "Get Db2 credentials",
+		Long:  "Get one set of Db2 credentials, without the password.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetDb2Credentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user", "ssl_ca_data", "ssl_disabled")
 		},
 	}
 	return cmd
@@ -1185,6 +2497,94 @@ func newCredentialsGetGcpSecretManagerCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsGetMariadbCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "mariadb <credentials_id>",
+		Short: "Get MariaDB credentials",
+		Long:  "Get one set of MariaDB credentials, without the password.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetMariadbCredentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user")
+		},
+	}
+	return cmd
+}
+
+func newCredentialsGetMysqlCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "mysql <credentials_id>",
+		Short: "Get MySQL credentials",
+		Long:  "Get one set of MySQL credentials, without the password.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetMysqlCredentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user", "ssl_ca_data", "ssl_disabled", "ssl_verify_cert", "ssl_verify_identity", "ssl_skip_cert_verification")
+		},
+	}
+	return cmd
+}
+
+func newCredentialsGetOracleCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "oracle <credentials_id>",
+		Short: "Get Oracle credentials",
+		Long:  "Get one set of Oracle credentials, without the password.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetOracleCredentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user", "ssl_ca_data", "ssl_disabled", "ssl_verify_cert", "ssl_verify_identity", "ssl_skip_cert_verification")
+		},
+	}
+	return cmd
+}
+
+func newCredentialsGetPostgresCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "postgres <credentials_id>",
+		Short: "Get PostgreSQL credentials",
+		Long:  "Get one set of PostgreSQL credentials, without the password.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetPostgresCredentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user", "ssl_ca_data", "ssl_disabled", "ssl_verify_cert", "ssl_verify_identity", "ssl_skip_cert_verification", "rds_proxy")
+		},
+	}
+	return cmd
+}
+
 func newCredentialsGetRedshiftCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "redshift <credentials_id>",
@@ -1207,6 +2607,28 @@ func newCredentialsGetRedshiftCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsGetSapHanaCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "sap-hana <credentials_id>",
+		Short: "Get SAP HANA credentials",
+		Long:  "Get one set of SAP HANA credentials, without the password.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetSapHanaCredentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user")
+		},
+	}
+	return cmd
+}
+
 func newCredentialsGetSnowflakeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "snowflake <credentials_id>",
@@ -1224,6 +2646,72 @@ func newCredentialsGetSnowflakeCmd() *cobra.Command {
 				return apiErr(resp, err)
 			}
 			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "account", "user", "warehouse")
+		},
+	}
+	return cmd
+}
+
+func newCredentialsGetStarburstEnterpriseCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "starburst-enterprise <credentials_id>",
+		Short: "Get Starburst Enterprise credentials",
+		Long:  "Get one set of Starburst Enterprise credentials, without the password.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetStarburstEnterpriseCredentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user", "ssl_ca_data", "ssl_disabled")
+		},
+	}
+	return cmd
+}
+
+func newCredentialsGetStarburstGalaxyCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "starburst-galaxy <credentials_id>",
+		Short: "Get Starburst Galaxy credentials",
+		Long:  "Get one set of Starburst Galaxy credentials, without the password.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetStarburstGalaxyCredentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user")
+		},
+	}
+	return cmd
+}
+
+func newCredentialsGetTeradataCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "teradata <credentials_id>",
+		Short: "Get Teradata credentials",
+		Long:  "Get one set of Teradata credentials, without the password.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetTeradataCredentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user", "ssl_ca_data", "ssl_disabled", "td_sslmode", "td_logmech")
 		},
 	}
 	return cmd
@@ -1290,15 +2778,27 @@ func newCredentialsUpdateCmd() *cobra.Command {
 		Short: "Update credential",
 	}
 	cmd.AddCommand(newCredentialsUpdateAwsSecretsManagerCmd())
+	cmd.AddCommand(newCredentialsUpdateAzureDedicatedSqlPoolCmd())
 	cmd.AddCommand(newCredentialsUpdateAzureKeyVaultCmd())
+	cmd.AddCommand(newCredentialsUpdateAzureSqlDatabaseCmd())
 	cmd.AddCommand(newCredentialsUpdateBigqueryCmd())
+	cmd.AddCommand(newCredentialsUpdateClickhouseCmd())
 	cmd.AddCommand(newCredentialsUpdateDatabricksMetastoreSqlWarehouseCmd())
 	cmd.AddCommand(newCredentialsUpdateDatabricksSqlWarehouseCmd())
+	cmd.AddCommand(newCredentialsUpdateDb2Cmd())
 	cmd.AddCommand(newCredentialsUpdateEnvVarCmd())
 	cmd.AddCommand(newCredentialsUpdateFileCmd())
 	cmd.AddCommand(newCredentialsUpdateGcpSecretManagerCmd())
+	cmd.AddCommand(newCredentialsUpdateMariadbCmd())
+	cmd.AddCommand(newCredentialsUpdateMysqlCmd())
+	cmd.AddCommand(newCredentialsUpdateOracleCmd())
+	cmd.AddCommand(newCredentialsUpdatePostgresCmd())
 	cmd.AddCommand(newCredentialsUpdateRedshiftCmd())
+	cmd.AddCommand(newCredentialsUpdateSapHanaCmd())
 	cmd.AddCommand(newCredentialsUpdateSnowflakeCmd())
+	cmd.AddCommand(newCredentialsUpdateStarburstEnterpriseCmd())
+	cmd.AddCommand(newCredentialsUpdateStarburstGalaxyCmd())
+	cmd.AddCommand(newCredentialsUpdateTeradataCmd())
 	return cmd
 }
 
@@ -1374,6 +2874,71 @@ func newCredentialsUpdateAwsSecretsManagerCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsUpdateAzureDedicatedSqlPoolCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "azure-dedicated-sql-pool <credentials_id>",
+		Short: "Update Azure Dedicated SQL Pool credentials",
+		Long:  "Change Azure Dedicated SQL Pool credentials in place.\n\nEvery connection using the credentials picks up the change. Send only the fields to change: a\nfield left out is unchanged, and `password` set to null is unchanged. Sending an empty body\nreturns the credentials as they are.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdateAzureDedicatedSqlPoolCredentials(ctx, args[0])
+			body := sdk.NewAzureDedicatedSqlPoolCredentialsPatch()
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "user") {
+				user, err := flagString(cmd, "user")
+				if err != nil {
+					return err
+				}
+				body.SetUser(user)
+			}
+			req = req.AzureDedicatedSqlPoolCredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user")
+		},
+	}
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	return cmd
+}
+
 func newCredentialsUpdateAzureKeyVaultCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "azure-key-vault <credentials_id>",
@@ -1438,6 +3003,71 @@ func newCredentialsUpdateAzureKeyVaultCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsUpdateAzureSqlDatabaseCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "azure-sql-database <credentials_id>",
+		Short: "Update Azure SQL Database credentials",
+		Long:  "Change Azure SQL Database credentials in place.\n\nEvery connection using the credentials picks up the change. Send only the fields to change: a\nfield left out is unchanged, and `password` set to null is unchanged. Sending an empty body\nreturns the credentials as they are.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdateAzureSqlDatabaseCredentials(ctx, args[0])
+			body := sdk.NewAzureSqlDatabaseCredentialsPatch()
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "user") {
+				user, err := flagString(cmd, "user")
+				if err != nil {
+					return err
+				}
+				body.SetUser(user)
+			}
+			req = req.AzureSqlDatabaseCredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user")
+		},
+	}
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	return cmd
+}
+
 func newCredentialsUpdateBigqueryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "bigquery <credentials_id>",
@@ -1468,6 +3098,71 @@ func newCredentialsUpdateBigqueryCmd() *cobra.Command {
 	}
 	cmd.Flags().String("service-account-key", "", "New JSON key file, as its text. Replaces the stored key whole. Visible in the process list; --service-account-key-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("service-account-key-prompt", false, "Read --service-account-key from a hidden prompt instead of the command line.")
+	return cmd
+}
+
+func newCredentialsUpdateClickhouseCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "clickhouse <credentials_id>",
+		Short: "Update ClickHouse credentials",
+		Long:  "Change ClickHouse credentials in place.\n\nEvery connection using the credentials picks up the change. Send only the fields to change: a\nfield left out is unchanged, `db_name` set to null is cleared, and `password` set to null is\nunchanged. Sending an empty body returns the credentials as they are.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdateClickhouseCredentials(ctx, args[0])
+			body := sdk.NewClickHouseCredentialsPatch()
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "user") {
+				user, err := flagString(cmd, "user")
+				if err != nil {
+					return err
+				}
+				body.SetUser(user)
+			}
+			req = req.ClickHouseCredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user")
+		},
+	}
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
 	return cmd
 }
 
@@ -1651,6 +3346,87 @@ func newCredentialsUpdateDatabricksSqlWarehouseCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsUpdateDb2Cmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "db2 <credentials_id>",
+		Short: "Update Db2 credentials",
+		Long:  "Change Db2 credentials in place.\n\nEvery connection using the credentials picks up the change. Send only the fields to change: a\nfield left out is unchanged, `db_name` or an `ssl_*` field set to null is cleared, and\n`password` set to null is unchanged. Sending an empty body returns the credentials as they\nare.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdateDb2Credentials(ctx, args[0])
+			body := sdk.NewDb2CredentialsPatch()
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "ssl-ca-data") {
+				sslCaData, err := flagString(cmd, "ssl-ca-data")
+				if err != nil {
+					return err
+				}
+				body.SetSslCaData(sslCaData)
+			}
+			if changed(cmd, "ssl-disabled") {
+				sslDisabled, err := flagBool(cmd, "ssl-disabled")
+				if err != nil {
+					return err
+				}
+				body.SetSslDisabled(sslDisabled)
+			}
+			if changed(cmd, "user") {
+				user, err := flagString(cmd, "user")
+				if err != nil {
+					return err
+				}
+				body.SetUser(user)
+			}
+			req = req.Db2CredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user", "ssl_ca_data", "ssl_disabled")
+		},
+	}
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM text of the CA certificate the server's certificate is checked against.")
+	cmd.Flags().Bool("ssl-disabled", false, "Connect without TLS.")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	return cmd
+}
+
 func newCredentialsUpdateEnvVarCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "env-var <credentials_id>",
@@ -1803,6 +3579,394 @@ func newCredentialsUpdateGcpSecretManagerCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsUpdateMariadbCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "mariadb <credentials_id>",
+		Short: "Update MariaDB credentials",
+		Long:  "Change MariaDB credentials in place.\n\nEvery connection using the credentials picks up the change. Send only the fields to change: a\nfield left out is unchanged, `db_name` set to null is cleared, and `password` set to null is\nunchanged. Sending an empty body returns the credentials as they are.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdateMariadbCredentials(ctx, args[0])
+			body := sdk.NewMariaDbCredentialsPatch()
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "user") {
+				user, err := flagString(cmd, "user")
+				if err != nil {
+					return err
+				}
+				body.SetUser(user)
+			}
+			req = req.MariaDbCredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user")
+		},
+	}
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	return cmd
+}
+
+func newCredentialsUpdateMysqlCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "mysql <credentials_id>",
+		Short: "Update MySQL credentials",
+		Long:  "Change MySQL credentials in place.\n\nEvery connection using the credentials picks up the change. Send only the fields to change: a\nfield left out is unchanged, `db_name` or an `ssl_*` field set to null is cleared, and\n`password` set to null is unchanged. Sending an empty body returns the credentials as they\nare.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdateMysqlCredentials(ctx, args[0])
+			body := sdk.NewMySqlCredentialsPatch()
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "ssl-ca-data") {
+				sslCaData, err := flagString(cmd, "ssl-ca-data")
+				if err != nil {
+					return err
+				}
+				body.SetSslCaData(sslCaData)
+			}
+			if changed(cmd, "ssl-disabled") {
+				sslDisabled, err := flagBool(cmd, "ssl-disabled")
+				if err != nil {
+					return err
+				}
+				body.SetSslDisabled(sslDisabled)
+			}
+			if changed(cmd, "ssl-skip-cert-verification") {
+				sslSkipCertVerification, err := flagBool(cmd, "ssl-skip-cert-verification")
+				if err != nil {
+					return err
+				}
+				body.SetSslSkipCertVerification(sslSkipCertVerification)
+			}
+			if changed(cmd, "ssl-verify-cert") {
+				sslVerifyCert, err := flagBool(cmd, "ssl-verify-cert")
+				if err != nil {
+					return err
+				}
+				body.SetSslVerifyCert(sslVerifyCert)
+			}
+			if changed(cmd, "ssl-verify-identity") {
+				sslVerifyIdentity, err := flagBool(cmd, "ssl-verify-identity")
+				if err != nil {
+					return err
+				}
+				body.SetSslVerifyIdentity(sslVerifyIdentity)
+			}
+			if changed(cmd, "user") {
+				user, err := flagString(cmd, "user")
+				if err != nil {
+					return err
+				}
+				body.SetUser(user)
+			}
+			req = req.MySqlCredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user", "ssl_ca_data", "ssl_disabled", "ssl_verify_cert", "ssl_verify_identity", "ssl_skip_cert_verification")
+		},
+	}
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM text of the CA certificate the server's certificate is checked against.")
+	cmd.Flags().Bool("ssl-disabled", false, "Connect without TLS.")
+	cmd.Flags().Bool("ssl-skip-cert-verification", false, "Encrypt the connection without checking the server's certificate.")
+	cmd.Flags().Bool("ssl-verify-cert", false, "Check the server's certificate against the CA.")
+	cmd.Flags().Bool("ssl-verify-identity", false, "Check the certificate and that it names the host.")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	return cmd
+}
+
+func newCredentialsUpdateOracleCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "oracle <credentials_id>",
+		Short: "Update Oracle credentials",
+		Long:  "Change Oracle credentials in place.\n\nEvery connection using the credentials picks up the change. Send only the fields to change: a\nfield left out is unchanged, an `ssl_*` field set to null is cleared, and `password` set to null\nis unchanged. Sending an empty body returns the credentials as they are.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdateOracleCredentials(ctx, args[0])
+			body := sdk.NewOracleCredentialsPatch()
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "ssl-ca-data") {
+				sslCaData, err := flagString(cmd, "ssl-ca-data")
+				if err != nil {
+					return err
+				}
+				body.SetSslCaData(sslCaData)
+			}
+			if changed(cmd, "ssl-disabled") {
+				sslDisabled, err := flagBool(cmd, "ssl-disabled")
+				if err != nil {
+					return err
+				}
+				body.SetSslDisabled(sslDisabled)
+			}
+			if changed(cmd, "ssl-skip-cert-verification") {
+				sslSkipCertVerification, err := flagBool(cmd, "ssl-skip-cert-verification")
+				if err != nil {
+					return err
+				}
+				body.SetSslSkipCertVerification(sslSkipCertVerification)
+			}
+			if changed(cmd, "ssl-verify-cert") {
+				sslVerifyCert, err := flagBool(cmd, "ssl-verify-cert")
+				if err != nil {
+					return err
+				}
+				body.SetSslVerifyCert(sslVerifyCert)
+			}
+			if changed(cmd, "ssl-verify-identity") {
+				sslVerifyIdentity, err := flagBool(cmd, "ssl-verify-identity")
+				if err != nil {
+					return err
+				}
+				body.SetSslVerifyIdentity(sslVerifyIdentity)
+			}
+			if changed(cmd, "user") {
+				user, err := flagString(cmd, "user")
+				if err != nil {
+					return err
+				}
+				body.SetUser(user)
+			}
+			req = req.OracleCredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user", "ssl_ca_data", "ssl_disabled", "ssl_verify_cert", "ssl_verify_identity", "ssl_skip_cert_verification")
+		},
+	}
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM text of the CA certificate the server's certificate is checked against.")
+	cmd.Flags().Bool("ssl-disabled", false, "Connect without TLS.")
+	cmd.Flags().Bool("ssl-skip-cert-verification", false, "Encrypt the connection without checking the server's certificate.")
+	cmd.Flags().Bool("ssl-verify-cert", false, "Check the server's certificate against the CA.")
+	cmd.Flags().Bool("ssl-verify-identity", false, "Check the certificate and that it names the host.")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	return cmd
+}
+
+func newCredentialsUpdatePostgresCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "postgres <credentials_id>",
+		Short: "Update PostgreSQL credentials",
+		Long:  "Change PostgreSQL credentials in place.\n\nEvery connection using the credentials picks up the change. Send only the fields to change: a\nfield left out is unchanged, a setting or an `ssl_*` field set to null is cleared, and\n`password` set to null is unchanged. Sending an empty body returns the credentials as they are.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdatePostgresCredentials(ctx, args[0])
+			body := sdk.NewPostgresCredentialsPatch()
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "rds-proxy") {
+				rdsProxy, err := flagBool(cmd, "rds-proxy")
+				if err != nil {
+					return err
+				}
+				body.SetRdsProxy(rdsProxy)
+			}
+			if changed(cmd, "ssl-ca-data") {
+				sslCaData, err := flagString(cmd, "ssl-ca-data")
+				if err != nil {
+					return err
+				}
+				body.SetSslCaData(sslCaData)
+			}
+			if changed(cmd, "ssl-disabled") {
+				sslDisabled, err := flagBool(cmd, "ssl-disabled")
+				if err != nil {
+					return err
+				}
+				body.SetSslDisabled(sslDisabled)
+			}
+			if changed(cmd, "ssl-skip-cert-verification") {
+				sslSkipCertVerification, err := flagBool(cmd, "ssl-skip-cert-verification")
+				if err != nil {
+					return err
+				}
+				body.SetSslSkipCertVerification(sslSkipCertVerification)
+			}
+			if changed(cmd, "ssl-verify-cert") {
+				sslVerifyCert, err := flagBool(cmd, "ssl-verify-cert")
+				if err != nil {
+					return err
+				}
+				body.SetSslVerifyCert(sslVerifyCert)
+			}
+			if changed(cmd, "ssl-verify-identity") {
+				sslVerifyIdentity, err := flagBool(cmd, "ssl-verify-identity")
+				if err != nil {
+					return err
+				}
+				body.SetSslVerifyIdentity(sslVerifyIdentity)
+			}
+			if changed(cmd, "user") {
+				user, err := flagString(cmd, "user")
+				if err != nil {
+					return err
+				}
+				body.SetUser(user)
+			}
+			req = req.PostgresCredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user", "ssl_ca_data", "ssl_disabled", "ssl_verify_cert", "ssl_verify_identity", "ssl_skip_cert_verification", "rds_proxy")
+		},
+	}
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	cmd.Flags().Bool("rds-proxy", false, "Whether host is an Amazon RDS Proxy endpoint.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM text of the CA certificate the server's certificate is checked against.")
+	cmd.Flags().Bool("ssl-disabled", false, "Connect without TLS.")
+	cmd.Flags().Bool("ssl-skip-cert-verification", false, "Encrypt the connection without checking the server's certificate.")
+	cmd.Flags().Bool("ssl-verify-cert", false, "Check the server's certificate against the CA.")
+	cmd.Flags().Bool("ssl-verify-identity", false, "Check the certificate and that it names the host.")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	return cmd
+}
+
 func newCredentialsUpdateRedshiftCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "redshift <credentials_id>",
@@ -1908,6 +4072,71 @@ func newCredentialsUpdateRedshiftCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsUpdateSapHanaCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "sap-hana <credentials_id>",
+		Short: "Update SAP HANA credentials",
+		Long:  "Change SAP HANA credentials in place.\n\nEvery connection using the credentials picks up the change. Send only the fields to change: a\nfield left out is unchanged, and `password` set to null is unchanged. Sending an empty body\nreturns the credentials as they are.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdateSapHanaCredentials(ctx, args[0])
+			body := sdk.NewSapHanaCredentialsPatch()
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "user") {
+				user, err := flagString(cmd, "user")
+				if err != nil {
+					return err
+				}
+				body.SetUser(user)
+			}
+			req = req.SapHanaCredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user")
+		},
+	}
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	return cmd
+}
+
 func newCredentialsUpdateSnowflakeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "snowflake <credentials_id>",
@@ -1974,21 +4203,286 @@ func newCredentialsUpdateSnowflakeCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsUpdateStarburstEnterpriseCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "starburst-enterprise <credentials_id>",
+		Short: "Update Starburst Enterprise credentials",
+		Long:  "Change Starburst Enterprise credentials in place.\n\nEvery connection using the credentials picks up the change. Send only the fields to change: a\nfield left out is unchanged, `db_name` or an `ssl_*` field set to null is cleared, and\n`password` set to null is unchanged. Sending an empty body returns the credentials as they\nare.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdateStarburstEnterpriseCredentials(ctx, args[0])
+			body := sdk.NewStarburstEnterpriseCredentialsPatch()
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "ssl-ca-data") {
+				sslCaData, err := flagString(cmd, "ssl-ca-data")
+				if err != nil {
+					return err
+				}
+				body.SetSslCaData(sslCaData)
+			}
+			if changed(cmd, "ssl-disabled") {
+				sslDisabled, err := flagBool(cmd, "ssl-disabled")
+				if err != nil {
+					return err
+				}
+				body.SetSslDisabled(sslDisabled)
+			}
+			if changed(cmd, "user") {
+				user, err := flagString(cmd, "user")
+				if err != nil {
+					return err
+				}
+				body.SetUser(user)
+			}
+			req = req.StarburstEnterpriseCredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user", "ssl_ca_data", "ssl_disabled")
+		},
+	}
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM text of the CA certificate the server's certificate is checked against.")
+	cmd.Flags().Bool("ssl-disabled", false, "Skip the check of the server's certificate. The connection always uses TLS.")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	return cmd
+}
+
+func newCredentialsUpdateStarburstGalaxyCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "starburst-galaxy <credentials_id>",
+		Short: "Update Starburst Galaxy credentials",
+		Long:  "Change Starburst Galaxy credentials in place.\n\nEvery connection using the credentials picks up the change. Send only the fields to change: a\nfield left out is unchanged, `db_name` set to null is cleared, and `password` set to null is\nunchanged. Sending an empty body returns the credentials as they are.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdateStarburstGalaxyCredentials(ctx, args[0])
+			body := sdk.NewStarburstGalaxyCredentialsPatch()
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "user") {
+				user, err := flagString(cmd, "user")
+				if err != nil {
+					return err
+				}
+				body.SetUser(user)
+			}
+			req = req.StarburstGalaxyCredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user")
+		},
+	}
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	return cmd
+}
+
+func newCredentialsUpdateTeradataCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "teradata <credentials_id>",
+		Short: "Update Teradata credentials",
+		Long:  "Change Teradata credentials in place.\n\nEvery connection using the credentials picks up the change. Send only the fields to change: a\nfield left out is unchanged, `db_name`, a setting or an `ssl_*` field set to null is cleared,\nand `password` set to null is unchanged. Sending an empty body returns the credentials as\nthey are.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdateTeradataCredentials(ctx, args[0])
+			body := sdk.NewTeradataCredentialsPatch()
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "ssl-ca-data") {
+				sslCaData, err := flagString(cmd, "ssl-ca-data")
+				if err != nil {
+					return err
+				}
+				body.SetSslCaData(sslCaData)
+			}
+			if changed(cmd, "ssl-disabled") {
+				sslDisabled, err := flagBool(cmd, "ssl-disabled")
+				if err != nil {
+					return err
+				}
+				body.SetSslDisabled(sslDisabled)
+			}
+			if changed(cmd, "td-logmech") {
+				tdLogmechValue, err := flagString(cmd, "td-logmech")
+				if err != nil {
+					return err
+				}
+				tdLogmech, err := sdk.NewTeradataLogonMechanismFromValue(tdLogmechValue)
+				if err != nil {
+					return err
+				}
+				body.SetTdLogmech(*tdLogmech)
+			}
+			if changed(cmd, "td-sslmode") {
+				tdSslmodeValue, err := flagString(cmd, "td-sslmode")
+				if err != nil {
+					return err
+				}
+				tdSslmode, err := sdk.NewTeradataSslModeFromValue(tdSslmodeValue)
+				if err != nil {
+					return err
+				}
+				body.SetTdSslmode(*tdSslmode)
+			}
+			if changed(cmd, "user") {
+				user, err := flagString(cmd, "user")
+				if err != nil {
+					return err
+				}
+				body.SetUser(user)
+			}
+			req = req.TeradataCredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user", "ssl_ca_data", "ssl_disabled", "td_sslmode", "td_logmech")
+		},
+	}
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM text of the CA certificate the server's certificate is checked against.")
+	cmd.Flags().Bool("ssl-disabled", false, "Do not check the server against ssl_ca_data. td_sslmode decides whether the connection uses TLS.")
+	cmd.Flags().String("td-logmech", "", "How Teradata authenticates the user.")
+	_ = cmd.RegisterFlagCompletionFunc("td-logmech", enumCompletion(sdk.AllowedTeradataLogonMechanismEnumValues))
+	cmd.Flags().String("td-sslmode", "", "How the connection to Teradata uses TLS.")
+	_ = cmd.RegisterFlagCompletionFunc("td-sslmode", enumCompletion(sdk.AllowedTeradataSslModeEnumValues))
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	return cmd
+}
+
 func newCredentialsValidateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "validate",
 		Short: "Validate credential",
 	}
 	cmd.AddCommand(newCredentialsValidateAwsSecretsManagerCmd())
+	cmd.AddCommand(newCredentialsValidateAzureDedicatedSqlPoolCmd())
 	cmd.AddCommand(newCredentialsValidateAzureKeyVaultCmd())
+	cmd.AddCommand(newCredentialsValidateAzureSqlDatabaseCmd())
 	cmd.AddCommand(newCredentialsValidateBigqueryCmd())
+	cmd.AddCommand(newCredentialsValidateClickhouseCmd())
 	cmd.AddCommand(newCredentialsValidateDatabricksMetastoreSqlWarehouseCmd())
 	cmd.AddCommand(newCredentialsValidateDatabricksSqlWarehouseCmd())
+	cmd.AddCommand(newCredentialsValidateDb2Cmd())
 	cmd.AddCommand(newCredentialsValidateEnvVarCmd())
 	cmd.AddCommand(newCredentialsValidateFileCmd())
 	cmd.AddCommand(newCredentialsValidateGcpSecretManagerCmd())
+	cmd.AddCommand(newCredentialsValidateMariadbCmd())
+	cmd.AddCommand(newCredentialsValidateMysqlCmd())
+	cmd.AddCommand(newCredentialsValidateOracleCmd())
+	cmd.AddCommand(newCredentialsValidatePostgresCmd())
 	cmd.AddCommand(newCredentialsValidateRedshiftCmd())
+	cmd.AddCommand(newCredentialsValidateSapHanaCmd())
 	cmd.AddCommand(newCredentialsValidateSnowflakeCmd())
+	cmd.AddCommand(newCredentialsValidateStarburstEnterpriseCmd())
+	cmd.AddCommand(newCredentialsValidateStarburstGalaxyCmd())
+	cmd.AddCommand(newCredentialsValidateTeradataCmd())
 	return cmd
 }
 
@@ -2105,6 +4599,100 @@ func newCredentialsValidateAwsSecretsManagerCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsValidateAzureDedicatedSqlPoolCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "azure-dedicated-sql-pool",
+		Short: "Validate Azure Dedicated SQL Pool credentials",
+		Long:  "Check a candidate Azure Dedicated SQL Pool login against Azure Dedicated SQL Pool.\n\nNo credentials are created. Send the values you would create the credentials with, and a\ndeployment to run them from, and the checks run against your Azure Dedicated SQL Pool.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "password", "password-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateAzureDedicatedSqlPoolCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			host, err := flagString(cmd, "host")
+			if err != nil {
+				return err
+			}
+			port, err := flagInt(cmd, "port")
+			if err != nil {
+				return err
+			}
+			user, err := flagString(cmd, "user")
+			if err != nil {
+				return err
+			}
+			password, err := flagSecret(cmd, "password")
+			if err != nil {
+				return err
+			}
+			dbName, err := flagString(cmd, "db-name")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewAzureDedicatedSqlPoolCredentialsValidateIn(deploymentId, host, port, user, password, dbName)
+			req = req.AzureDedicatedSqlPoolCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return fmt.Errorf("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	_ = cmd.MarkFlagRequired("host")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	_ = cmd.MarkFlagRequired("port")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	_ = cmd.MarkFlagRequired("user")
+	cmd.Flags().String("password", "", "Password of the database user. Used for this check and not kept. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	_ = cmd.MarkFlagRequired("db-name")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
 func newCredentialsValidateAzureKeyVaultCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "azure-key-vault",
@@ -2210,6 +4798,100 @@ func newCredentialsValidateAzureKeyVaultCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsValidateAzureSqlDatabaseCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "azure-sql-database",
+		Short: "Validate Azure SQL Database credentials",
+		Long:  "Check a candidate Azure SQL Database login against Azure SQL Database.\n\nNo credentials are created. Send the values you would create the credentials with, and a\ndeployment to run them from, and the checks run against your Azure SQL Database.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "password", "password-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateAzureSqlDatabaseCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			host, err := flagString(cmd, "host")
+			if err != nil {
+				return err
+			}
+			port, err := flagInt(cmd, "port")
+			if err != nil {
+				return err
+			}
+			user, err := flagString(cmd, "user")
+			if err != nil {
+				return err
+			}
+			password, err := flagSecret(cmd, "password")
+			if err != nil {
+				return err
+			}
+			dbName, err := flagString(cmd, "db-name")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewAzureSqlDatabaseCredentialsValidateIn(deploymentId, host, port, user, password, dbName)
+			req = req.AzureSqlDatabaseCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return fmt.Errorf("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	_ = cmd.MarkFlagRequired("host")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	_ = cmd.MarkFlagRequired("port")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	_ = cmd.MarkFlagRequired("user")
+	cmd.Flags().String("password", "", "Password of the database user. Used for this check and not kept. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	_ = cmd.MarkFlagRequired("db-name")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
 func newCredentialsValidateBigqueryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "bigquery",
@@ -2276,6 +4958,102 @@ func newCredentialsValidateBigqueryCmd() *cobra.Command {
 	_ = cmd.MarkFlagRequired("deployment-id")
 	cmd.Flags().String("service-account-key", "", "The service account's JSON key file, as its text. Used for this check and not kept. Visible in the process list; --service-account-key-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("service-account-key-prompt", false, "Read --service-account-key from a hidden prompt instead of the command line.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateClickhouseCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "clickhouse",
+		Short: "Validate ClickHouse credentials",
+		Long:  "Check a candidate ClickHouse login against ClickHouse.\n\nNo credentials are created. Send the values you would create the credentials with, and a\ndeployment to run them from, and the checks run against your ClickHouse database.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "password", "password-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateClickhouseCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			host, err := flagString(cmd, "host")
+			if err != nil {
+				return err
+			}
+			port, err := flagInt(cmd, "port")
+			if err != nil {
+				return err
+			}
+			user, err := flagString(cmd, "user")
+			if err != nil {
+				return err
+			}
+			password, err := flagSecret(cmd, "password")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewClickHouseCredentialsValidateIn(deploymentId, host, port, user, password)
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			req = req.ClickHouseCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return fmt.Errorf("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	_ = cmd.MarkFlagRequired("host")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	_ = cmd.MarkFlagRequired("port")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	_ = cmd.MarkFlagRequired("user")
+	cmd.Flags().String("password", "", "Password of the database user. Used for this check and not kept. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }
@@ -2520,6 +5298,118 @@ func newCredentialsValidateDatabricksSqlWarehouseCmd() *cobra.Command {
 	cmd.Flags().String("token", "", "Personal access token or service principal token. Send this, or oauth_client_id and oauth_client_secret. Used for this check and not kept. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
 	cmd.Flags().String("workspace-id", "", "ID of the Databricks workspace.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateDb2Cmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "db2",
+		Short: "Validate Db2 credentials",
+		Long:  "Check a candidate Db2 login against Db2.\n\nNo credentials are created. Send the values you would create the credentials with, and a\ndeployment to run them from, and the checks run against your Db2 database.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "password", "password-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateDb2Credentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			host, err := flagString(cmd, "host")
+			if err != nil {
+				return err
+			}
+			port, err := flagInt(cmd, "port")
+			if err != nil {
+				return err
+			}
+			user, err := flagString(cmd, "user")
+			if err != nil {
+				return err
+			}
+			password, err := flagSecret(cmd, "password")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewDb2CredentialsValidateIn(deploymentId, host, port, user, password)
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "ssl-ca-data") {
+				sslCaData, err := flagString(cmd, "ssl-ca-data")
+				if err != nil {
+					return err
+				}
+				body.SetSslCaData(sslCaData)
+			}
+			if changed(cmd, "ssl-disabled") {
+				sslDisabled, err := flagBool(cmd, "ssl-disabled")
+				if err != nil {
+					return err
+				}
+				body.SetSslDisabled(sslDisabled)
+			}
+			req = req.Db2CredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return fmt.Errorf("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	_ = cmd.MarkFlagRequired("host")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	_ = cmd.MarkFlagRequired("port")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	_ = cmd.MarkFlagRequired("user")
+	cmd.Flags().String("password", "", "Password of the database user. Used for this check and not kept. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM text of the CA certificate the server's certificate is checked against.")
+	cmd.Flags().Bool("ssl-disabled", false, "Connect without TLS.")
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }
@@ -2799,6 +5689,514 @@ func newCredentialsValidateGcpSecretManagerCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsValidateMariadbCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "mariadb",
+		Short: "Validate MariaDB credentials",
+		Long:  "Check a candidate MariaDB login against MariaDB.\n\nNo credentials are created. Send the values you would create the credentials with, and a\ndeployment to run them from, and the checks run against your MariaDB database.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "password", "password-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateMariadbCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			host, err := flagString(cmd, "host")
+			if err != nil {
+				return err
+			}
+			port, err := flagInt(cmd, "port")
+			if err != nil {
+				return err
+			}
+			user, err := flagString(cmd, "user")
+			if err != nil {
+				return err
+			}
+			password, err := flagSecret(cmd, "password")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewMariaDbCredentialsValidateIn(deploymentId, host, port, user, password)
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			req = req.MariaDbCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return fmt.Errorf("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	_ = cmd.MarkFlagRequired("host")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	_ = cmd.MarkFlagRequired("port")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	_ = cmd.MarkFlagRequired("user")
+	cmd.Flags().String("password", "", "Password of the database user. Used for this check and not kept. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateMysqlCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "mysql",
+		Short: "Validate MySQL credentials",
+		Long:  "Check a candidate MySQL login against MySQL.\n\nNo credentials are created. Send the values you would create the credentials with, and a\ndeployment to run them from, and the checks run against your MySQL database.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "password", "password-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateMysqlCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			host, err := flagString(cmd, "host")
+			if err != nil {
+				return err
+			}
+			port, err := flagInt(cmd, "port")
+			if err != nil {
+				return err
+			}
+			user, err := flagString(cmd, "user")
+			if err != nil {
+				return err
+			}
+			password, err := flagSecret(cmd, "password")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewMySqlCredentialsValidateIn(deploymentId, host, port, user, password)
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "ssl-ca-data") {
+				sslCaData, err := flagString(cmd, "ssl-ca-data")
+				if err != nil {
+					return err
+				}
+				body.SetSslCaData(sslCaData)
+			}
+			if changed(cmd, "ssl-disabled") {
+				sslDisabled, err := flagBool(cmd, "ssl-disabled")
+				if err != nil {
+					return err
+				}
+				body.SetSslDisabled(sslDisabled)
+			}
+			if changed(cmd, "ssl-skip-cert-verification") {
+				sslSkipCertVerification, err := flagBool(cmd, "ssl-skip-cert-verification")
+				if err != nil {
+					return err
+				}
+				body.SetSslSkipCertVerification(sslSkipCertVerification)
+			}
+			if changed(cmd, "ssl-verify-cert") {
+				sslVerifyCert, err := flagBool(cmd, "ssl-verify-cert")
+				if err != nil {
+					return err
+				}
+				body.SetSslVerifyCert(sslVerifyCert)
+			}
+			if changed(cmd, "ssl-verify-identity") {
+				sslVerifyIdentity, err := flagBool(cmd, "ssl-verify-identity")
+				if err != nil {
+					return err
+				}
+				body.SetSslVerifyIdentity(sslVerifyIdentity)
+			}
+			req = req.MySqlCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return fmt.Errorf("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	_ = cmd.MarkFlagRequired("host")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	_ = cmd.MarkFlagRequired("port")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	_ = cmd.MarkFlagRequired("user")
+	cmd.Flags().String("password", "", "Password of the database user. Used for this check and not kept. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM text of the CA certificate the server's certificate is checked against.")
+	cmd.Flags().Bool("ssl-disabled", false, "Connect without TLS.")
+	cmd.Flags().Bool("ssl-skip-cert-verification", false, "Encrypt the connection without checking the server's certificate.")
+	cmd.Flags().Bool("ssl-verify-cert", false, "Check the server's certificate against the CA.")
+	cmd.Flags().Bool("ssl-verify-identity", false, "Check the certificate and that it names the host.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateOracleCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "oracle",
+		Short: "Validate Oracle credentials",
+		Long:  "Check a candidate Oracle login against Oracle.\n\nNo credentials are created. Send the values you would create the credentials with, and a\ndeployment to run them from, and the checks run against your Oracle database.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "password", "password-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateOracleCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			host, err := flagString(cmd, "host")
+			if err != nil {
+				return err
+			}
+			port, err := flagInt(cmd, "port")
+			if err != nil {
+				return err
+			}
+			user, err := flagString(cmd, "user")
+			if err != nil {
+				return err
+			}
+			password, err := flagSecret(cmd, "password")
+			if err != nil {
+				return err
+			}
+			dbName, err := flagString(cmd, "db-name")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewOracleCredentialsValidateIn(deploymentId, host, port, user, password, dbName)
+			if changed(cmd, "ssl-ca-data") {
+				sslCaData, err := flagString(cmd, "ssl-ca-data")
+				if err != nil {
+					return err
+				}
+				body.SetSslCaData(sslCaData)
+			}
+			if changed(cmd, "ssl-disabled") {
+				sslDisabled, err := flagBool(cmd, "ssl-disabled")
+				if err != nil {
+					return err
+				}
+				body.SetSslDisabled(sslDisabled)
+			}
+			if changed(cmd, "ssl-skip-cert-verification") {
+				sslSkipCertVerification, err := flagBool(cmd, "ssl-skip-cert-verification")
+				if err != nil {
+					return err
+				}
+				body.SetSslSkipCertVerification(sslSkipCertVerification)
+			}
+			if changed(cmd, "ssl-verify-cert") {
+				sslVerifyCert, err := flagBool(cmd, "ssl-verify-cert")
+				if err != nil {
+					return err
+				}
+				body.SetSslVerifyCert(sslVerifyCert)
+			}
+			if changed(cmd, "ssl-verify-identity") {
+				sslVerifyIdentity, err := flagBool(cmd, "ssl-verify-identity")
+				if err != nil {
+					return err
+				}
+				body.SetSslVerifyIdentity(sslVerifyIdentity)
+			}
+			req = req.OracleCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return fmt.Errorf("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	_ = cmd.MarkFlagRequired("host")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	_ = cmd.MarkFlagRequired("port")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	_ = cmd.MarkFlagRequired("user")
+	cmd.Flags().String("password", "", "Password of the database user. Used for this check and not kept. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	_ = cmd.MarkFlagRequired("db-name")
+	cmd.Flags().String("ssl-ca-data", "", "PEM text of the CA certificate the server's certificate is checked against.")
+	cmd.Flags().Bool("ssl-disabled", false, "Connect without TLS.")
+	cmd.Flags().Bool("ssl-skip-cert-verification", false, "Encrypt the connection without checking the server's certificate.")
+	cmd.Flags().Bool("ssl-verify-cert", false, "Check the server's certificate against the CA.")
+	cmd.Flags().Bool("ssl-verify-identity", false, "Check the certificate and that it names the host.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidatePostgresCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "postgres",
+		Short: "Validate PostgreSQL credentials",
+		Long:  "Check a candidate PostgreSQL login against PostgreSQL.\n\nNo credentials are created. Send the values you would create the credentials with, and a\ndeployment to run them from, and the checks run against your PostgreSQL database.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "password", "password-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidatePostgresCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			host, err := flagString(cmd, "host")
+			if err != nil {
+				return err
+			}
+			port, err := flagInt(cmd, "port")
+			if err != nil {
+				return err
+			}
+			user, err := flagString(cmd, "user")
+			if err != nil {
+				return err
+			}
+			password, err := flagSecret(cmd, "password")
+			if err != nil {
+				return err
+			}
+			dbName, err := flagString(cmd, "db-name")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewPostgresCredentialsValidateIn(deploymentId, host, port, user, password, dbName)
+			if changed(cmd, "rds-proxy") {
+				rdsProxy, err := flagBool(cmd, "rds-proxy")
+				if err != nil {
+					return err
+				}
+				body.SetRdsProxy(rdsProxy)
+			}
+			if changed(cmd, "ssl-ca-data") {
+				sslCaData, err := flagString(cmd, "ssl-ca-data")
+				if err != nil {
+					return err
+				}
+				body.SetSslCaData(sslCaData)
+			}
+			if changed(cmd, "ssl-disabled") {
+				sslDisabled, err := flagBool(cmd, "ssl-disabled")
+				if err != nil {
+					return err
+				}
+				body.SetSslDisabled(sslDisabled)
+			}
+			if changed(cmd, "ssl-skip-cert-verification") {
+				sslSkipCertVerification, err := flagBool(cmd, "ssl-skip-cert-verification")
+				if err != nil {
+					return err
+				}
+				body.SetSslSkipCertVerification(sslSkipCertVerification)
+			}
+			if changed(cmd, "ssl-verify-cert") {
+				sslVerifyCert, err := flagBool(cmd, "ssl-verify-cert")
+				if err != nil {
+					return err
+				}
+				body.SetSslVerifyCert(sslVerifyCert)
+			}
+			if changed(cmd, "ssl-verify-identity") {
+				sslVerifyIdentity, err := flagBool(cmd, "ssl-verify-identity")
+				if err != nil {
+					return err
+				}
+				body.SetSslVerifyIdentity(sslVerifyIdentity)
+			}
+			req = req.PostgresCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return fmt.Errorf("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	_ = cmd.MarkFlagRequired("host")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	_ = cmd.MarkFlagRequired("port")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	_ = cmd.MarkFlagRequired("user")
+	cmd.Flags().String("password", "", "Password of the database user. Used for this check and not kept. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	_ = cmd.MarkFlagRequired("db-name")
+	cmd.Flags().Bool("rds-proxy", false, "Whether host is an Amazon RDS Proxy endpoint.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM text of the CA certificate the server's certificate is checked against.")
+	cmd.Flags().Bool("ssl-disabled", false, "Connect without TLS.")
+	cmd.Flags().Bool("ssl-skip-cert-verification", false, "Encrypt the connection without checking the server's certificate.")
+	cmd.Flags().Bool("ssl-verify-cert", false, "Check the server's certificate against the CA.")
+	cmd.Flags().Bool("ssl-verify-identity", false, "Check the certificate and that it names the host.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
 func newCredentialsValidateRedshiftCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "redshift",
@@ -2933,6 +6331,100 @@ func newCredentialsValidateRedshiftCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsValidateSapHanaCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "sap-hana",
+		Short: "Validate SAP HANA credentials",
+		Long:  "Check a candidate SAP HANA login against SAP HANA.\n\nNo credentials are created. Send the values you would create the credentials with, and a\ndeployment to run them from, and the checks run against your SAP HANA database.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "password", "password-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateSapHanaCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			host, err := flagString(cmd, "host")
+			if err != nil {
+				return err
+			}
+			port, err := flagInt(cmd, "port")
+			if err != nil {
+				return err
+			}
+			user, err := flagString(cmd, "user")
+			if err != nil {
+				return err
+			}
+			password, err := flagSecret(cmd, "password")
+			if err != nil {
+				return err
+			}
+			dbName, err := flagString(cmd, "db-name")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewSapHanaCredentialsValidateIn(deploymentId, host, port, user, password, dbName)
+			req = req.SapHanaCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return fmt.Errorf("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	_ = cmd.MarkFlagRequired("host")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	_ = cmd.MarkFlagRequired("port")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	_ = cmd.MarkFlagRequired("user")
+	cmd.Flags().String("password", "", "Password of the database user. Used for this check and not kept. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	_ = cmd.MarkFlagRequired("db-name")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
 func newCredentialsValidateSnowflakeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "snowflake",
@@ -3028,6 +6520,352 @@ func newCredentialsValidateSnowflakeCmd() *cobra.Command {
 	cmd.Flags().String("private-key-passphrase", "", "Passphrase the private key is encrypted with. Omit it for an unencrypted key. Never returned. Visible in the process list; --private-key-passphrase-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("private-key-passphrase-prompt", false, "Read --private-key-passphrase from a hidden prompt instead of the command line.")
 	cmd.Flags().String("warehouse", "", "Snowflake virtual warehouse to run queries in. Omit it to use the user's default.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateStarburstEnterpriseCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "starburst-enterprise",
+		Short: "Validate Starburst Enterprise credentials",
+		Long:  "Check a candidate Starburst Enterprise login against Starburst Enterprise.\n\nNo credentials are created. Send the values you would create the credentials with, and a\ndeployment to run them from, and the checks run against your Starburst Enterprise database.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "password", "password-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateStarburstEnterpriseCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			host, err := flagString(cmd, "host")
+			if err != nil {
+				return err
+			}
+			port, err := flagInt(cmd, "port")
+			if err != nil {
+				return err
+			}
+			user, err := flagString(cmd, "user")
+			if err != nil {
+				return err
+			}
+			password, err := flagSecret(cmd, "password")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewStarburstEnterpriseCredentialsValidateIn(deploymentId, host, port, user, password)
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "ssl-ca-data") {
+				sslCaData, err := flagString(cmd, "ssl-ca-data")
+				if err != nil {
+					return err
+				}
+				body.SetSslCaData(sslCaData)
+			}
+			if changed(cmd, "ssl-disabled") {
+				sslDisabled, err := flagBool(cmd, "ssl-disabled")
+				if err != nil {
+					return err
+				}
+				body.SetSslDisabled(sslDisabled)
+			}
+			req = req.StarburstEnterpriseCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return fmt.Errorf("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	_ = cmd.MarkFlagRequired("host")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	_ = cmd.MarkFlagRequired("port")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	_ = cmd.MarkFlagRequired("user")
+	cmd.Flags().String("password", "", "Password of the database user. Used for this check and not kept. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM text of the CA certificate the server's certificate is checked against.")
+	cmd.Flags().Bool("ssl-disabled", false, "Skip the check of the server's certificate. The connection always uses TLS.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateStarburstGalaxyCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "starburst-galaxy",
+		Short: "Validate Starburst Galaxy credentials",
+		Long:  "Check a candidate Starburst Galaxy login against Starburst Galaxy.\n\nNo credentials are created. Send the values you would create the credentials with, and a\ndeployment to run them from, and the checks run against your Starburst Galaxy database.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "password", "password-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateStarburstGalaxyCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			host, err := flagString(cmd, "host")
+			if err != nil {
+				return err
+			}
+			port, err := flagInt(cmd, "port")
+			if err != nil {
+				return err
+			}
+			user, err := flagString(cmd, "user")
+			if err != nil {
+				return err
+			}
+			password, err := flagSecret(cmd, "password")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewStarburstGalaxyCredentialsValidateIn(deploymentId, host, port, user, password)
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			req = req.StarburstGalaxyCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return fmt.Errorf("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	_ = cmd.MarkFlagRequired("host")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	_ = cmd.MarkFlagRequired("port")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	_ = cmd.MarkFlagRequired("user")
+	cmd.Flags().String("password", "", "Password of the database user. Used for this check and not kept. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateTeradataCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "teradata",
+		Short: "Validate Teradata credentials",
+		Long:  "Check a candidate Teradata login against Teradata.\n\nNo credentials are created. Send the values you would create the credentials with, and a\ndeployment to run them from, and the checks run against your Teradata database.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "password", "password-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateTeradataCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			host, err := flagString(cmd, "host")
+			if err != nil {
+				return err
+			}
+			port, err := flagInt(cmd, "port")
+			if err != nil {
+				return err
+			}
+			user, err := flagString(cmd, "user")
+			if err != nil {
+				return err
+			}
+			password, err := flagSecret(cmd, "password")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewTeradataCredentialsValidateIn(deploymentId, host, port, user, password)
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "ssl-ca-data") {
+				sslCaData, err := flagString(cmd, "ssl-ca-data")
+				if err != nil {
+					return err
+				}
+				body.SetSslCaData(sslCaData)
+			}
+			if changed(cmd, "ssl-disabled") {
+				sslDisabled, err := flagBool(cmd, "ssl-disabled")
+				if err != nil {
+					return err
+				}
+				body.SetSslDisabled(sslDisabled)
+			}
+			if changed(cmd, "td-logmech") {
+				tdLogmechValue, err := flagString(cmd, "td-logmech")
+				if err != nil {
+					return err
+				}
+				tdLogmech, err := sdk.NewTeradataLogonMechanismFromValue(tdLogmechValue)
+				if err != nil {
+					return err
+				}
+				body.SetTdLogmech(*tdLogmech)
+			}
+			if changed(cmd, "td-sslmode") {
+				tdSslmodeValue, err := flagString(cmd, "td-sslmode")
+				if err != nil {
+					return err
+				}
+				tdSslmode, err := sdk.NewTeradataSslModeFromValue(tdSslmodeValue)
+				if err != nil {
+					return err
+				}
+				body.SetTdSslmode(*tdSslmode)
+			}
+			req = req.TeradataCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return fmt.Errorf("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	_ = cmd.MarkFlagRequired("host")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	_ = cmd.MarkFlagRequired("port")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	_ = cmd.MarkFlagRequired("user")
+	cmd.Flags().String("password", "", "Password of the database user. Used for this check and not kept. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM text of the CA certificate the server's certificate is checked against.")
+	cmd.Flags().Bool("ssl-disabled", false, "Do not check the server against ssl_ca_data. td_sslmode decides whether the connection uses TLS.")
+	cmd.Flags().String("td-logmech", "", "How Teradata authenticates the user.")
+	_ = cmd.RegisterFlagCompletionFunc("td-logmech", enumCompletion(sdk.AllowedTeradataLogonMechanismEnumValues))
+	cmd.Flags().String("td-sslmode", "", "How the connection to Teradata uses TLS.")
+	_ = cmd.RegisterFlagCompletionFunc("td-sslmode", enumCompletion(sdk.AllowedTeradataSslModeEnumValues))
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }
