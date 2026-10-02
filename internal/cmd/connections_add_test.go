@@ -31,10 +31,16 @@ var createdBodies = map[string]string{
 	"POST /api/v2/warehouses":                  `{"id":"wh-1","name":"n","type":"snowflake","deployment_id":"d","created_time":"2026-09-23T00:00:00Z"}`,
 	"POST /api/v2/credentials/snowflake":       `{"id":"cr-1","connection_type":"snowflake","storage_type":"mc_managed","created_time":"2026-09-23T00:00:00Z","account":"a","user":"u","warehouse":null}`,
 	"POST /api/v2/credentials/self-hosted/aws": `{"id":"cr-2","connection_type":"bigquery","storage_type":"aws_secrets_manager","created_time":"2026-09-23T00:00:00Z","bq_project_id":"p","sql_warehouse_id":null,"aws_secret":"s","aws_region":null,"assumable_role":null,"external_id":null}`,
-	"POST /api/v2/connections":                 `{"id":"cn-1","connection_type":"snowflake","name":"n","warehouse_id":"wh-1","warehouse_name":"n","deployment_id":"d","deployment_name":"d","credentials_id":"cr-1","credentials_storage_type":"mc_managed","job_types":[],"created_time":"2026-09-23T00:00:00Z"}`,
+	"POST /api/v2/bi-containers":               `{"id":"bc-1","type":"tableau","name":"n","deployment_id":"d","deployment_name":"d","created_time":"2026-09-23T00:00:00Z"}`,
+	"POST /api/v2/credentials/tableau":         `{"id":"cr-3","connection_type":"tableau","storage_type":"mc_managed","created_time":"2026-09-23T00:00:00Z","server_name":"s","site_name":null,"verify_ssl":null,"username":"u","token_name":null,"connected_app_client_id":null,"connected_app_secret_id":null}`,
+	"POST /api/v2/connections":                 `{"id":"cn-1","connection_type":"snowflake","name":"n","warehouse_id":"wh-1","warehouse_name":"n","bi_container_id":null,"bi_container_name":null,"deployment_id":"d","deployment_name":"d","credentials_id":"cr-1","credentials_storage_type":"mc_managed","job_types":[],"created_time":"2026-09-23T00:00:00Z"}`,
 }
 
-const connectionOut = `"connection_type":"snowflake","name":"n","warehouse_id":"wh-1","warehouse_name":"n",` +
+const connectionOut = `"connection_type":"snowflake","name":"n","warehouse_id":"wh-1","warehouse_name":"n","bi_container_id":null,"bi_container_name":null,` +
+	`"deployment_id":"d","deployment_name":"d","credentials_storage_type":"mc_managed","job_types":[],"created_time":"2026-09-23T00:00:00Z"`
+
+// biConnectionOut is a connection on a BI container, which has no warehouse.
+const biConnectionOut = `"connection_type":"tableau","name":"n","warehouse_id":null,"warehouse_name":null,"bi_container_id":"bc-1","bi_container_name":"b",` +
 	`"deployment_id":"d","deployment_name":"d","credentials_storage_type":"mc_managed","job_types":[],"created_time":"2026-09-23T00:00:00Z"`
 
 // readBodies answers the reads and updates connections update sends.
@@ -43,6 +49,9 @@ var readBodies = map[string]string{
 	"GET /api/v2/connections/cn-2":                   `{"id":"cn-2","credentials_id":"cr-2",` + strings.Replace(strings.Replace(connectionOut, `"snowflake"`, `"bigquery"`, 1), `"mc_managed"`, `"aws_secrets_manager"`, 1) + `}`,
 	"GET /api/v2/connections/cn-3":                   `{"id":"cn-3","credentials_id":null,` + connectionOut + `}`,
 	"PATCH /api/v2/connections/cn-1":                 `{"id":"cn-1","credentials_id":"cr-1",` + strings.Replace(connectionOut, `"name":"n"`, `"name":"z"`, 1) + `}`,
+	"GET /api/v2/connections/cn-4":                   `{"id":"cn-4","credentials_id":"cr-3",` + biConnectionOut + `}`,
+	"GET /api/v2/bi-containers/bc-9":                 `{"id":"bc-9","type":"tableau","name":"b","deployment_id":"d9","deployment_name":"d9","created_time":"2026-09-23T00:00:00Z"}`,
+	"GET /api/v2/bi-containers/bc-0":                 `{"id":"bc-0","type":"tableau","name":"b","deployment_id":null,"deployment_name":null,"created_time":"2026-09-23T00:00:00Z"}`,
 	"GET /api/v2/credentials/snowflake/cr-1":         `{"id":"cr-1","connection_type":"snowflake","storage_type":"mc_managed","created_time":"2026-09-23T00:00:00Z","account":"a","user":"u","warehouse":"w"}`,
 	"PATCH /api/v2/credentials/snowflake/cr-1":       `{"id":"cr-1","connection_type":"snowflake","storage_type":"mc_managed","created_time":"2026-09-23T00:00:00Z","account":"a","user":"u","warehouse":"w"}`,
 	"GET /api/v2/credentials/self-hosted/aws/cr-2":   `{"id":"cr-2","connection_type":"bigquery","storage_type":"aws_secrets_manager","created_time":"2026-09-23T00:00:00Z","bq_project_id":"p","sql_warehouse_id":null,"aws_secret":"s","aws_region":null,"assumable_role":null,"external_id":null}`,
