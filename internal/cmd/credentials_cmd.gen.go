@@ -46,15 +46,19 @@ func newCredentialsCreateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsCreateEnvVarCmd())
 	cmd.AddCommand(newCredentialsCreateFileCmd())
 	cmd.AddCommand(newCredentialsCreateGcpSecretManagerCmd())
+	cmd.AddCommand(newCredentialsCreateLookerCmd())
+	cmd.AddCommand(newCredentialsCreateLookerGitCloneCmd())
 	cmd.AddCommand(newCredentialsCreateMariadbCmd())
 	cmd.AddCommand(newCredentialsCreateMysqlCmd())
 	cmd.AddCommand(newCredentialsCreateOracleCmd())
 	cmd.AddCommand(newCredentialsCreatePostgresCmd())
+	cmd.AddCommand(newCredentialsCreatePowerBiCmd())
 	cmd.AddCommand(newCredentialsCreateRedshiftCmd())
 	cmd.AddCommand(newCredentialsCreateSapHanaCmd())
 	cmd.AddCommand(newCredentialsCreateSnowflakeCmd())
 	cmd.AddCommand(newCredentialsCreateStarburstEnterpriseCmd())
 	cmd.AddCommand(newCredentialsCreateStarburstGalaxyCmd())
+	cmd.AddCommand(newCredentialsCreateTableauCmd())
 	cmd.AddCommand(newCredentialsCreateTeradataCmd())
 	return cmd
 }
@@ -818,6 +822,131 @@ func newCredentialsCreateGcpSecretManagerCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsCreateLookerCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "looker",
+		Short: "Create Looker credentials",
+		Long:  "Store Looker API credentials.\n\nMonte Carlo keeps the client secret and returns everything else. Create the credentials\nfirst, then create a connection that references them, on a Looker BI container. Nothing is\nchecked against Looker here. An account holds a limited number of credentials; past that\nthe create is refused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "api-client-secret", "api-client-secret-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreateLookerCredentials(ctx)
+			baseUrl, err := flagString(cmd, "base-url")
+			if err != nil {
+				return err
+			}
+			apiClientId, err := flagString(cmd, "api-client-id")
+			if err != nil {
+				return err
+			}
+			apiClientSecret, err := flagSecret(cmd, "api-client-secret")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewLookerCredentialsIn(baseUrl, apiClientId, apiClientSecret)
+			if changed(cmd, "verify-ssl") {
+				verifySsl, err := flagBool(cmd, "verify-ssl")
+				if err != nil {
+					return err
+				}
+				body.SetVerifySsl(verifySsl)
+			}
+			req = req.LookerCredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "base_url", "api_client_id", "verify_ssl")
+		},
+	}
+	cmd.Flags().String("base-url", "", "URL of the Looker API, such as https://acme.cloud.looker.com.")
+	_ = cmd.MarkFlagRequired("base-url")
+	cmd.Flags().String("api-client-id", "", "Client ID of the Looker API key.")
+	_ = cmd.MarkFlagRequired("api-client-id")
+	cmd.Flags().String("api-client-secret", "", "Client secret of the Looker API key. Stored by Monte Carlo and never returned. Visible in the process list; --api-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("api-client-secret-prompt", false, "Read --api-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().Bool("verify-ssl", false, "Whether to verify Looker's TLS certificate. Verified when left out.")
+	return cmd
+}
+
+func newCredentialsCreateLookerGitCloneCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "looker-git-clone",
+		Short: "Create LookML repository credentials",
+		Long:  "Store credentials for cloning a LookML repository.\n\nMonte Carlo keeps the token or the SSH key and returns everything else. Create the\ncredentials first, then create a connection that references them, on the Looker BI\ncontainer that holds the Looker API connection. Nothing is checked against the\nrepository here.\n\nSend `username` and `token` for an HTTPS clone, or `ssh_key` for an SSH clone. An account\nholds a limited number of credentials; past that the create is refused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreateLookerGitCloneCredentials(ctx)
+			repoUrl, err := flagString(cmd, "repo-url")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewLookerGitCloneCredentialsIn(repoUrl)
+			if changed(cmd, "ssh-key", "ssh-key-prompt") {
+				sshKey, err := flagSecret(cmd, "ssh-key")
+				if err != nil {
+					return err
+				}
+				body.SetSshKey(sshKey)
+			}
+			if changed(cmd, "ssl-ca-data") {
+				sslCaData, err := flagString(cmd, "ssl-ca-data")
+				if err != nil {
+					return err
+				}
+				body.SetSslCaData(sslCaData)
+			}
+			if changed(cmd, "ssl-skip-cert-verification") {
+				sslSkipCertVerification, err := flagBool(cmd, "ssl-skip-cert-verification")
+				if err != nil {
+					return err
+				}
+				body.SetSslSkipCertVerification(sslSkipCertVerification)
+			}
+			if changed(cmd, "token", "token-prompt") {
+				token, err := flagSecret(cmd, "token")
+				if err != nil {
+					return err
+				}
+				body.SetToken(token)
+			}
+			if changed(cmd, "username") {
+				username, err := flagString(cmd, "username")
+				if err != nil {
+					return err
+				}
+				body.SetUsername(username)
+			}
+			req = req.LookerGitCloneCredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "repo_url", "username", "ssl_ca_data", "ssl_skip_cert_verification")
+		},
+	}
+	cmd.Flags().String("repo-url", "", "Clone URL of the LookML repository, over HTTPS or SSH.")
+	_ = cmd.MarkFlagRequired("repo-url")
+	cmd.Flags().String("ssh-key", "", "Private key for an SSH clone, as PEM text including its BEGIN and END lines. Send this or username and token. Stored by Monte Carlo and never returned. Visible in the process list; --ssh-key-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("ssh-key-prompt", false, "Read --ssh-key from a hidden prompt instead of the command line.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM certificate of the CA that signed the git server's certificate.")
+	cmd.Flags().Bool("ssl-skip-cert-verification", false, "Skip verifying the git server's TLS certificate.")
+	cmd.Flags().String("token", "", "Access token of username, for an HTTPS clone. Send this or ssh_key. Stored by Monte Carlo and never returned. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
+	cmd.Flags().String("username", "", "Git user for an HTTPS clone. Send it with token.")
+	return cmd
+}
+
 func newCredentialsCreateMariadbCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mariadb",
@@ -1178,6 +1307,79 @@ func newCredentialsCreatePostgresCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsCreatePowerBiCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "power-bi",
+		Short: "Create Power BI credentials",
+		Long:  "Store Power BI credentials.\n\nMonte Carlo keeps the client secret or the password and returns everything else. Create\nthe credentials first, then create a connection that references them, on a Power BI BI\ncontainer. Nothing is checked against Power BI here.\n\n`auth_mode` decides what else to send: `app_client_secret` for `service_principal`, or\n`username` and `password` for `primary_user`. An account holds a limited number of\ncredentials; past that the create is refused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreatePowerBiCredentials(ctx)
+			tenantId, err := flagString(cmd, "tenant-id")
+			if err != nil {
+				return err
+			}
+			appClientId, err := flagString(cmd, "app-client-id")
+			if err != nil {
+				return err
+			}
+			authModeValue, err := flagString(cmd, "auth-mode")
+			if err != nil {
+				return err
+			}
+			authMode, err := sdk.NewPowerBiAuthModeFromValue(authModeValue)
+			if err != nil {
+				return err
+			}
+			body := sdk.NewPowerBiCredentialsIn(tenantId, appClientId, *authMode)
+			if changed(cmd, "app-client-secret", "app-client-secret-prompt") {
+				appClientSecret, err := flagSecret(cmd, "app-client-secret")
+				if err != nil {
+					return err
+				}
+				body.SetAppClientSecret(appClientSecret)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "username") {
+				username, err := flagString(cmd, "username")
+				if err != nil {
+					return err
+				}
+				body.SetUsername(username)
+			}
+			req = req.PowerBiCredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "tenant_id", "app_client_id", "auth_mode", "username")
+		},
+	}
+	cmd.Flags().String("tenant-id", "", "Microsoft Entra ID tenant the Power BI service belongs to.")
+	_ = cmd.MarkFlagRequired("tenant-id")
+	cmd.Flags().String("app-client-id", "", "Client ID of the Entra ID app registration Monte Carlo signs in with.")
+	_ = cmd.MarkFlagRequired("app-client-id")
+	cmd.Flags().String("auth-mode", "", "How Monte Carlo signs in. service_principal takes app_client_secret. primary_user takes username and password.")
+	_ = cmd.RegisterFlagCompletionFunc("auth-mode", enumCompletion(sdk.AllowedPowerBiAuthModeEnumValues))
+	_ = cmd.MarkFlagRequired("auth-mode")
+	cmd.Flags().String("app-client-secret", "", "Secret of the app registration, for service_principal. Stored by Monte Carlo and never returned. Visible in the process list; --app-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("app-client-secret-prompt", false, "Read --app-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("password", "", "Password of username, for primary_user. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("username", "", "User Monte Carlo signs in as, for primary_user.")
+	return cmd
+}
+
 func newCredentialsCreateRedshiftCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "redshift",
@@ -1528,6 +1730,111 @@ func newCredentialsCreateStarburstGalaxyCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsCreateTableauCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "tableau",
+		Short: "Create Tableau credentials",
+		Long:  "Store Tableau credentials.\n\nMonte Carlo keeps the password or the secret and returns everything else. Create the\ncredentials first, then create a connection that references them, on a Tableau BI\ncontainer. Nothing is checked against Tableau here.\n\nSend one way to sign in: `username` and `password`, `token_name` and `token_value` for a\npersonal access token, or `username` with the three `connected_app_*` fields for a\nconnected app. An account holds a limited number of credentials; past that the create is\nrefused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreateTableauCredentials(ctx)
+			serverName, err := flagString(cmd, "server-name")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewTableauCredentialsIn(serverName)
+			if changed(cmd, "connected-app-client-id") {
+				connectedAppClientId, err := flagString(cmd, "connected-app-client-id")
+				if err != nil {
+					return err
+				}
+				body.SetConnectedAppClientId(connectedAppClientId)
+			}
+			if changed(cmd, "connected-app-secret-id") {
+				connectedAppSecretId, err := flagString(cmd, "connected-app-secret-id")
+				if err != nil {
+					return err
+				}
+				body.SetConnectedAppSecretId(connectedAppSecretId)
+			}
+			if changed(cmd, "connected-app-secret-value", "connected-app-secret-value-prompt") {
+				connectedAppSecretValue, err := flagSecret(cmd, "connected-app-secret-value")
+				if err != nil {
+					return err
+				}
+				body.SetConnectedAppSecretValue(connectedAppSecretValue)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "site-name") {
+				siteName, err := flagString(cmd, "site-name")
+				if err != nil {
+					return err
+				}
+				body.SetSiteName(siteName)
+			}
+			if changed(cmd, "token-name") {
+				tokenName, err := flagString(cmd, "token-name")
+				if err != nil {
+					return err
+				}
+				body.SetTokenName(tokenName)
+			}
+			if changed(cmd, "token-value", "token-value-prompt") {
+				tokenValue, err := flagSecret(cmd, "token-value")
+				if err != nil {
+					return err
+				}
+				body.SetTokenValue(tokenValue)
+			}
+			if changed(cmd, "username") {
+				username, err := flagString(cmd, "username")
+				if err != nil {
+					return err
+				}
+				body.SetUsername(username)
+			}
+			if changed(cmd, "verify-ssl") {
+				verifySsl, err := flagBool(cmd, "verify-ssl")
+				if err != nil {
+					return err
+				}
+				body.SetVerifySsl(verifySsl)
+			}
+			req = req.TableauCredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "server_name", "site_name", "verify_ssl", "username", "token_name", "connected_app_client_id", "connected_app_secret_id")
+		},
+	}
+	cmd.Flags().String("server-name", "", "URL of the Tableau server, starting with https:// or http://.")
+	_ = cmd.MarkFlagRequired("server-name")
+	cmd.Flags().String("connected-app-client-id", "", "Client ID of a Tableau connected app. Send it with connected_app_secret_id, connected_app_secret_value and username.")
+	cmd.Flags().String("connected-app-secret-id", "", "ID of the connected app's secret. An identifier, not the secret itself.")
+	cmd.Flags().String("connected-app-secret-value", "", "Value of the connected app's secret in connected_app_secret_id. Stored by Monte Carlo and never returned. Visible in the process list; --connected-app-secret-value-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("connected-app-secret-value-prompt", false, "Read --connected-app-secret-value from a hidden prompt instead of the command line.")
+	cmd.Flags().String("password", "", "Password of username. Send this, a personal access token, or a connected app. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("site-name", "", "Tableau site to connect to. Leave it out for the default site.")
+	cmd.Flags().String("token-name", "", "Name of a personal access token. Send it with token_value.")
+	cmd.Flags().String("token-value", "", "Secret of the personal access token in token_name. Stored by Monte Carlo and never returned. Visible in the process list; --token-value-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("token-value-prompt", false, "Read --token-value from a hidden prompt instead of the command line.")
+	cmd.Flags().String("username", "", "Tableau user. Send it with password, or with a connected app. Not used with a personal access token.")
+	cmd.Flags().Bool("verify-ssl", false, "Whether to verify the server's TLS certificate. Verified when left out.")
+	return cmd
+}
+
 func newCredentialsCreateTeradataCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "teradata",
@@ -1662,15 +1969,19 @@ func newCredentialsDeleteCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsDeleteEnvVarCmd())
 	cmd.AddCommand(newCredentialsDeleteFileCmd())
 	cmd.AddCommand(newCredentialsDeleteGcpSecretManagerCmd())
+	cmd.AddCommand(newCredentialsDeleteLookerCmd())
+	cmd.AddCommand(newCredentialsDeleteLookerGitCloneCmd())
 	cmd.AddCommand(newCredentialsDeleteMariadbCmd())
 	cmd.AddCommand(newCredentialsDeleteMysqlCmd())
 	cmd.AddCommand(newCredentialsDeleteOracleCmd())
 	cmd.AddCommand(newCredentialsDeletePostgresCmd())
+	cmd.AddCommand(newCredentialsDeletePowerBiCmd())
 	cmd.AddCommand(newCredentialsDeleteRedshiftCmd())
 	cmd.AddCommand(newCredentialsDeleteSapHanaCmd())
 	cmd.AddCommand(newCredentialsDeleteSnowflakeCmd())
 	cmd.AddCommand(newCredentialsDeleteStarburstEnterpriseCmd())
 	cmd.AddCommand(newCredentialsDeleteStarburstGalaxyCmd())
+	cmd.AddCommand(newCredentialsDeleteTableauCmd())
 	cmd.AddCommand(newCredentialsDeleteTeradataCmd())
 	return cmd
 }
@@ -1963,6 +2274,54 @@ func newCredentialsDeleteGcpSecretManagerCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsDeleteLookerCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "looker <credentials_id>",
+		Short: "Delete Looker credentials",
+		Long:  "Delete Looker API credentials.\n\nRefused while a connection still uses them. Delete the connection first. Monte Carlo stops\nusing the stored client secret. Delete the API key in Looker if the secret itself must be\nretired.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete looker credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeleteLookerCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
+func newCredentialsDeleteLookerGitCloneCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "looker-git-clone <credentials_id>",
+		Short: "Delete LookML repository credentials",
+		Long:  "Delete LookML repository credentials.\n\nRefused while a connection still uses them. Delete the connection first. Monte Carlo stops\nusing the stored token or SSH key. Revoke it on the git server if it must be retired.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete looker-git-clone credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeleteLookerGitCloneCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
 func newCredentialsDeleteMariadbCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mariadb <credentials_id>",
@@ -2050,6 +2409,30 @@ func newCredentialsDeletePostgresCmd() *cobra.Command {
 				return err
 			}
 			req := api.CredentialsAPI.DeletePostgresCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
+func newCredentialsDeletePowerBiCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "power-bi <credentials_id>",
+		Short: "Delete Power BI credentials",
+		Long:  "Delete Power BI credentials.\n\nRefused while a connection still uses them. Delete the connection first. Monte Carlo stops\nusing the stored client secret or password. Rotate it in Microsoft Entra ID if it must be\nretired.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete power-bi credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeletePowerBiCredentials(ctx, args[0])
 			if resp, err := req.Execute(); err != nil {
 				return apiErr(resp, err)
 			}
@@ -2179,6 +2562,30 @@ func newCredentialsDeleteStarburstGalaxyCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsDeleteTableauCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "tableau <credentials_id>",
+		Short: "Delete Tableau credentials",
+		Long:  "Delete Tableau credentials.\n\nRefused while a connection still uses them. Delete the connection first. Monte Carlo stops\nusing the stored password or secret. Revoke it in Tableau if the secret itself must be\nretired.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete tableau credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeleteTableauCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
 func newCredentialsDeleteTeradataCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "teradata <credentials_id>",
@@ -2220,15 +2627,19 @@ func newCredentialsGetCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsGetEnvVarCmd())
 	cmd.AddCommand(newCredentialsGetFileCmd())
 	cmd.AddCommand(newCredentialsGetGcpSecretManagerCmd())
+	cmd.AddCommand(newCredentialsGetLookerCmd())
+	cmd.AddCommand(newCredentialsGetLookerGitCloneCmd())
 	cmd.AddCommand(newCredentialsGetMariadbCmd())
 	cmd.AddCommand(newCredentialsGetMysqlCmd())
 	cmd.AddCommand(newCredentialsGetOracleCmd())
 	cmd.AddCommand(newCredentialsGetPostgresCmd())
+	cmd.AddCommand(newCredentialsGetPowerBiCmd())
 	cmd.AddCommand(newCredentialsGetRedshiftCmd())
 	cmd.AddCommand(newCredentialsGetSapHanaCmd())
 	cmd.AddCommand(newCredentialsGetSnowflakeCmd())
 	cmd.AddCommand(newCredentialsGetStarburstEnterpriseCmd())
 	cmd.AddCommand(newCredentialsGetStarburstGalaxyCmd())
+	cmd.AddCommand(newCredentialsGetTableauCmd())
 	cmd.AddCommand(newCredentialsGetTeradataCmd())
 	return cmd
 }
@@ -2497,6 +2908,50 @@ func newCredentialsGetGcpSecretManagerCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsGetLookerCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "looker <credentials_id>",
+		Short: "Get Looker credentials",
+		Long:  "Get one set of Looker API credentials, without the client secret.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetLookerCredentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "base_url", "api_client_id", "verify_ssl")
+		},
+	}
+	return cmd
+}
+
+func newCredentialsGetLookerGitCloneCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "looker-git-clone <credentials_id>",
+		Short: "Get LookML repository credentials",
+		Long:  "Get one set of LookML repository credentials, without the token or the SSH key.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetLookerGitCloneCredentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "repo_url", "username", "ssl_ca_data", "ssl_skip_cert_verification")
+		},
+	}
+	return cmd
+}
+
 func newCredentialsGetMariadbCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mariadb <credentials_id>",
@@ -2580,6 +3035,28 @@ func newCredentialsGetPostgresCmd() *cobra.Command {
 				return apiErr(resp, err)
 			}
 			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user", "ssl_ca_data", "ssl_disabled", "ssl_verify_cert", "ssl_verify_identity", "ssl_skip_cert_verification", "rds_proxy")
+		},
+	}
+	return cmd
+}
+
+func newCredentialsGetPowerBiCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "power-bi <credentials_id>",
+		Short: "Get Power BI credentials",
+		Long:  "Get one set of Power BI credentials, without the client secret or the password.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetPowerBiCredentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "tenant_id", "app_client_id", "auth_mode", "username")
 		},
 	}
 	return cmd
@@ -2695,6 +3172,28 @@ func newCredentialsGetStarburstGalaxyCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsGetTableauCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "tableau <credentials_id>",
+		Short: "Get Tableau credentials",
+		Long:  "Get one set of Tableau credentials, without the password or the secrets.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetTableauCredentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "server_name", "site_name", "verify_ssl", "username", "token_name", "connected_app_client_id", "connected_app_secret_id")
+		},
+	}
+	return cmd
+}
+
 func newCredentialsGetTeradataCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "teradata <credentials_id>",
@@ -2789,15 +3288,19 @@ func newCredentialsUpdateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsUpdateEnvVarCmd())
 	cmd.AddCommand(newCredentialsUpdateFileCmd())
 	cmd.AddCommand(newCredentialsUpdateGcpSecretManagerCmd())
+	cmd.AddCommand(newCredentialsUpdateLookerCmd())
+	cmd.AddCommand(newCredentialsUpdateLookerGitCloneCmd())
 	cmd.AddCommand(newCredentialsUpdateMariadbCmd())
 	cmd.AddCommand(newCredentialsUpdateMysqlCmd())
 	cmd.AddCommand(newCredentialsUpdateOracleCmd())
 	cmd.AddCommand(newCredentialsUpdatePostgresCmd())
+	cmd.AddCommand(newCredentialsUpdatePowerBiCmd())
 	cmd.AddCommand(newCredentialsUpdateRedshiftCmd())
 	cmd.AddCommand(newCredentialsUpdateSapHanaCmd())
 	cmd.AddCommand(newCredentialsUpdateSnowflakeCmd())
 	cmd.AddCommand(newCredentialsUpdateStarburstEnterpriseCmd())
 	cmd.AddCommand(newCredentialsUpdateStarburstGalaxyCmd())
+	cmd.AddCommand(newCredentialsUpdateTableauCmd())
 	cmd.AddCommand(newCredentialsUpdateTeradataCmd())
 	return cmd
 }
@@ -3579,6 +4082,137 @@ func newCredentialsUpdateGcpSecretManagerCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsUpdateLookerCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "looker <credentials_id>",
+		Short: "Update Looker credentials",
+		Long:  "Change Looker API credentials in place.\n\nEvery connection using the credentials picks up the change. Send only the fields to\nchange. Sending an empty body returns the credentials as they are.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdateLookerCredentials(ctx, args[0])
+			body := sdk.NewLookerCredentialsPatch()
+			if changed(cmd, "api-client-id") {
+				apiClientId, err := flagString(cmd, "api-client-id")
+				if err != nil {
+					return err
+				}
+				body.SetApiClientId(apiClientId)
+			}
+			if changed(cmd, "api-client-secret", "api-client-secret-prompt") {
+				apiClientSecret, err := flagSecret(cmd, "api-client-secret")
+				if err != nil {
+					return err
+				}
+				body.SetApiClientSecret(apiClientSecret)
+			}
+			if changed(cmd, "base-url") {
+				baseUrl, err := flagString(cmd, "base-url")
+				if err != nil {
+					return err
+				}
+				body.SetBaseUrl(baseUrl)
+			}
+			if changed(cmd, "verify-ssl") {
+				verifySsl, err := flagBool(cmd, "verify-ssl")
+				if err != nil {
+					return err
+				}
+				body.SetVerifySsl(verifySsl)
+			}
+			req = req.LookerCredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "base_url", "api_client_id", "verify_ssl")
+		},
+	}
+	cmd.Flags().String("api-client-id", "", "Client ID of the Looker API key.")
+	cmd.Flags().String("api-client-secret", "", "Client secret of the Looker API key. Stored by Monte Carlo and never returned. Visible in the process list; --api-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("api-client-secret-prompt", false, "Read --api-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("base-url", "", "URL of the Looker API, such as https://acme.cloud.looker.com.")
+	cmd.Flags().Bool("verify-ssl", false, "Whether to verify Looker's TLS certificate. Verified when left out.")
+	return cmd
+}
+
+func newCredentialsUpdateLookerGitCloneCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "looker-git-clone <credentials_id>",
+		Short: "Update LookML repository credentials",
+		Long:  "Change LookML repository credentials in place.\n\nEvery connection using the credentials picks up the change. Send only the fields to\nchange. Sending `ssh_key` drops a stored username and token, and sending `username` or\n`token` drops a stored key. Sending an empty body returns the credentials as they are.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdateLookerGitCloneCredentials(ctx, args[0])
+			body := sdk.NewLookerGitCloneCredentialsPatch()
+			if changed(cmd, "repo-url") {
+				repoUrl, err := flagString(cmd, "repo-url")
+				if err != nil {
+					return err
+				}
+				body.SetRepoUrl(repoUrl)
+			}
+			if changed(cmd, "ssh-key", "ssh-key-prompt") {
+				sshKey, err := flagSecret(cmd, "ssh-key")
+				if err != nil {
+					return err
+				}
+				body.SetSshKey(sshKey)
+			}
+			if changed(cmd, "ssl-ca-data") {
+				sslCaData, err := flagString(cmd, "ssl-ca-data")
+				if err != nil {
+					return err
+				}
+				body.SetSslCaData(sslCaData)
+			}
+			if changed(cmd, "ssl-skip-cert-verification") {
+				sslSkipCertVerification, err := flagBool(cmd, "ssl-skip-cert-verification")
+				if err != nil {
+					return err
+				}
+				body.SetSslSkipCertVerification(sslSkipCertVerification)
+			}
+			if changed(cmd, "token", "token-prompt") {
+				token, err := flagSecret(cmd, "token")
+				if err != nil {
+					return err
+				}
+				body.SetToken(token)
+			}
+			if changed(cmd, "username") {
+				username, err := flagString(cmd, "username")
+				if err != nil {
+					return err
+				}
+				body.SetUsername(username)
+			}
+			req = req.LookerGitCloneCredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "repo_url", "username", "ssl_ca_data", "ssl_skip_cert_verification")
+		},
+	}
+	cmd.Flags().String("repo-url", "", "Clone URL of the LookML repository, over HTTPS or SSH.")
+	cmd.Flags().String("ssh-key", "", "Private key for an SSH clone, as PEM text including its BEGIN and END lines. Send this or username and token. Stored by Monte Carlo and never returned. Visible in the process list; --ssh-key-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("ssh-key-prompt", false, "Read --ssh-key from a hidden prompt instead of the command line.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM certificate of the CA that signed the git server's certificate.")
+	cmd.Flags().Bool("ssl-skip-cert-verification", false, "Skip verifying the git server's TLS certificate.")
+	cmd.Flags().String("token", "", "Access token of username, for an HTTPS clone. Send this or ssh_key. Stored by Monte Carlo and never returned. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
+	cmd.Flags().String("username", "", "Git user for an HTTPS clone. Send it with token.")
+	return cmd
+}
+
 func newCredentialsUpdateMariadbCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mariadb <credentials_id>",
@@ -3967,6 +4601,85 @@ func newCredentialsUpdatePostgresCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsUpdatePowerBiCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "power-bi <credentials_id>",
+		Short: "Update Power BI credentials",
+		Long:  "Change Power BI credentials in place.\n\nEvery connection using the credentials picks up the change. Send only the fields to\nchange. A new `auth_mode` drops the fields of the old one, so send the new mode's fields\nwith it. Sending an empty body returns the credentials as they are.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdatePowerBiCredentials(ctx, args[0])
+			body := sdk.NewPowerBiCredentialsPatch()
+			if changed(cmd, "app-client-id") {
+				appClientId, err := flagString(cmd, "app-client-id")
+				if err != nil {
+					return err
+				}
+				body.SetAppClientId(appClientId)
+			}
+			if changed(cmd, "app-client-secret", "app-client-secret-prompt") {
+				appClientSecret, err := flagSecret(cmd, "app-client-secret")
+				if err != nil {
+					return err
+				}
+				body.SetAppClientSecret(appClientSecret)
+			}
+			if changed(cmd, "auth-mode") {
+				authModeValue, err := flagString(cmd, "auth-mode")
+				if err != nil {
+					return err
+				}
+				authMode, err := sdk.NewPowerBiAuthModeFromValue(authModeValue)
+				if err != nil {
+					return err
+				}
+				body.SetAuthMode(*authMode)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "tenant-id") {
+				tenantId, err := flagString(cmd, "tenant-id")
+				if err != nil {
+					return err
+				}
+				body.SetTenantId(tenantId)
+			}
+			if changed(cmd, "username") {
+				username, err := flagString(cmd, "username")
+				if err != nil {
+					return err
+				}
+				body.SetUsername(username)
+			}
+			req = req.PowerBiCredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "tenant_id", "app_client_id", "auth_mode", "username")
+		},
+	}
+	cmd.Flags().String("app-client-id", "", "Client ID of the Entra ID app registration Monte Carlo signs in with.")
+	cmd.Flags().String("app-client-secret", "", "Secret of the app registration, for service_principal. Stored by Monte Carlo and never returned. Visible in the process list; --app-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("app-client-secret-prompt", false, "Read --app-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("auth-mode", "", "How Monte Carlo signs in. service_principal takes app_client_secret. primary_user takes username and password.")
+	_ = cmd.RegisterFlagCompletionFunc("auth-mode", enumCompletion(sdk.AllowedPowerBiAuthModeEnumValues))
+	cmd.Flags().String("password", "", "Password of username, for primary_user. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("tenant-id", "", "Microsoft Entra ID tenant the Power BI service belongs to.")
+	cmd.Flags().String("username", "", "User Monte Carlo signs in as, for primary_user.")
+	return cmd
+}
+
 func newCredentialsUpdateRedshiftCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "redshift <credentials_id>",
@@ -4349,6 +5062,113 @@ func newCredentialsUpdateStarburstGalaxyCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsUpdateTableauCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "tableau <credentials_id>",
+		Short: "Update Tableau credentials",
+		Long:  "Change Tableau credentials in place.\n\nEvery connection using the credentials picks up the change. Send only the fields to\nchange. Sending a field of another way to sign in drops the stored one. Moving to a\nconnected app is refused while a connection using the credentials runs on a deployment\ntoo old for connected apps. Sending an empty body returns the credentials as they are.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdateTableauCredentials(ctx, args[0])
+			body := sdk.NewTableauCredentialsPatch()
+			if changed(cmd, "connected-app-client-id") {
+				connectedAppClientId, err := flagString(cmd, "connected-app-client-id")
+				if err != nil {
+					return err
+				}
+				body.SetConnectedAppClientId(connectedAppClientId)
+			}
+			if changed(cmd, "connected-app-secret-id") {
+				connectedAppSecretId, err := flagString(cmd, "connected-app-secret-id")
+				if err != nil {
+					return err
+				}
+				body.SetConnectedAppSecretId(connectedAppSecretId)
+			}
+			if changed(cmd, "connected-app-secret-value", "connected-app-secret-value-prompt") {
+				connectedAppSecretValue, err := flagSecret(cmd, "connected-app-secret-value")
+				if err != nil {
+					return err
+				}
+				body.SetConnectedAppSecretValue(connectedAppSecretValue)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "server-name") {
+				serverName, err := flagString(cmd, "server-name")
+				if err != nil {
+					return err
+				}
+				body.SetServerName(serverName)
+			}
+			if changed(cmd, "site-name") {
+				siteName, err := flagString(cmd, "site-name")
+				if err != nil {
+					return err
+				}
+				body.SetSiteName(siteName)
+			}
+			if changed(cmd, "token-name") {
+				tokenName, err := flagString(cmd, "token-name")
+				if err != nil {
+					return err
+				}
+				body.SetTokenName(tokenName)
+			}
+			if changed(cmd, "token-value", "token-value-prompt") {
+				tokenValue, err := flagSecret(cmd, "token-value")
+				if err != nil {
+					return err
+				}
+				body.SetTokenValue(tokenValue)
+			}
+			if changed(cmd, "username") {
+				username, err := flagString(cmd, "username")
+				if err != nil {
+					return err
+				}
+				body.SetUsername(username)
+			}
+			if changed(cmd, "verify-ssl") {
+				verifySsl, err := flagBool(cmd, "verify-ssl")
+				if err != nil {
+					return err
+				}
+				body.SetVerifySsl(verifySsl)
+			}
+			req = req.TableauCredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "server_name", "site_name", "verify_ssl", "username", "token_name", "connected_app_client_id", "connected_app_secret_id")
+		},
+	}
+	cmd.Flags().String("connected-app-client-id", "", "Client ID of a Tableau connected app. Send it with connected_app_secret_id, connected_app_secret_value and username.")
+	cmd.Flags().String("connected-app-secret-id", "", "ID of the connected app's secret. An identifier, not the secret itself.")
+	cmd.Flags().String("connected-app-secret-value", "", "Value of the connected app's secret in connected_app_secret_id. Stored by Monte Carlo and never returned. Visible in the process list; --connected-app-secret-value-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("connected-app-secret-value-prompt", false, "Read --connected-app-secret-value from a hidden prompt instead of the command line.")
+	cmd.Flags().String("password", "", "Password of username. Send this, a personal access token, or a connected app. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("server-name", "", "URL of the Tableau server, starting with https:// or http://.")
+	cmd.Flags().String("site-name", "", "Tableau site to connect to. Leave it out for the default site.")
+	cmd.Flags().String("token-name", "", "Name of a personal access token. Send it with token_value.")
+	cmd.Flags().String("token-value", "", "Secret of the personal access token in token_name. Stored by Monte Carlo and never returned. Visible in the process list; --token-value-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("token-value-prompt", false, "Read --token-value from a hidden prompt instead of the command line.")
+	cmd.Flags().String("username", "", "Tableau user. Send it with password, or with a connected app. Not used with a personal access token.")
+	cmd.Flags().Bool("verify-ssl", false, "Whether to verify the server's TLS certificate. Verified when left out.")
+	return cmd
+}
+
 func newCredentialsUpdateTeradataCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "teradata <credentials_id>",
@@ -4473,15 +5293,19 @@ func newCredentialsValidateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsValidateEnvVarCmd())
 	cmd.AddCommand(newCredentialsValidateFileCmd())
 	cmd.AddCommand(newCredentialsValidateGcpSecretManagerCmd())
+	cmd.AddCommand(newCredentialsValidateLookerCmd())
+	cmd.AddCommand(newCredentialsValidateLookerGitCloneCmd())
 	cmd.AddCommand(newCredentialsValidateMariadbCmd())
 	cmd.AddCommand(newCredentialsValidateMysqlCmd())
 	cmd.AddCommand(newCredentialsValidateOracleCmd())
 	cmd.AddCommand(newCredentialsValidatePostgresCmd())
+	cmd.AddCommand(newCredentialsValidatePowerBiCmd())
 	cmd.AddCommand(newCredentialsValidateRedshiftCmd())
 	cmd.AddCommand(newCredentialsValidateSapHanaCmd())
 	cmd.AddCommand(newCredentialsValidateSnowflakeCmd())
 	cmd.AddCommand(newCredentialsValidateStarburstEnterpriseCmd())
 	cmd.AddCommand(newCredentialsValidateStarburstGalaxyCmd())
+	cmd.AddCommand(newCredentialsValidateTableauCmd())
 	cmd.AddCommand(newCredentialsValidateTeradataCmd())
 	return cmd
 }
@@ -5689,6 +6513,205 @@ func newCredentialsValidateGcpSecretManagerCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsValidateLookerCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "looker",
+		Short: "Validate Looker credentials",
+		Long:  "Check candidate Looker API credentials against Looker.\n\nNo credentials are created. Send the values you would create the credentials with, and a\ndeployment to run them from, and the checks run against your Looker instance.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "api-client-secret", "api-client-secret-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateLookerCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			baseUrl, err := flagString(cmd, "base-url")
+			if err != nil {
+				return err
+			}
+			apiClientId, err := flagString(cmd, "api-client-id")
+			if err != nil {
+				return err
+			}
+			apiClientSecret, err := flagSecret(cmd, "api-client-secret")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewLookerCredentialsValidateIn(deploymentId, baseUrl, apiClientId, apiClientSecret)
+			if changed(cmd, "verify-ssl") {
+				verifySsl, err := flagBool(cmd, "verify-ssl")
+				if err != nil {
+					return err
+				}
+				body.SetVerifySsl(verifySsl)
+			}
+			req = req.LookerCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return fmt.Errorf("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("base-url", "", "URL of the Looker API, such as https://acme.cloud.looker.com.")
+	_ = cmd.MarkFlagRequired("base-url")
+	cmd.Flags().String("api-client-id", "", "Client ID of the Looker API key.")
+	_ = cmd.MarkFlagRequired("api-client-id")
+	cmd.Flags().String("api-client-secret", "", "Client secret of the Looker API key. Used for this check and not kept. Visible in the process list; --api-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("api-client-secret-prompt", false, "Read --api-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().Bool("verify-ssl", false, "Whether to verify Looker's TLS certificate. Verified when left out.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateLookerGitCloneCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "looker-git-clone",
+		Short: "Validate LookML repository credentials",
+		Long:  "Check candidate LookML repository credentials against the repository.\n\nNo credentials are created. Send the values you would create the credentials with, and a\ndeployment to run them from, and the checks run against your git server.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateLookerGitCloneCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			repoUrl, err := flagString(cmd, "repo-url")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewLookerGitCloneCredentialsValidateIn(deploymentId, repoUrl)
+			if changed(cmd, "ssh-key", "ssh-key-prompt") {
+				sshKey, err := flagSecret(cmd, "ssh-key")
+				if err != nil {
+					return err
+				}
+				body.SetSshKey(sshKey)
+			}
+			if changed(cmd, "ssl-ca-data") {
+				sslCaData, err := flagString(cmd, "ssl-ca-data")
+				if err != nil {
+					return err
+				}
+				body.SetSslCaData(sslCaData)
+			}
+			if changed(cmd, "ssl-skip-cert-verification") {
+				sslSkipCertVerification, err := flagBool(cmd, "ssl-skip-cert-verification")
+				if err != nil {
+					return err
+				}
+				body.SetSslSkipCertVerification(sslSkipCertVerification)
+			}
+			if changed(cmd, "token", "token-prompt") {
+				token, err := flagSecret(cmd, "token")
+				if err != nil {
+					return err
+				}
+				body.SetToken(token)
+			}
+			if changed(cmd, "username") {
+				username, err := flagString(cmd, "username")
+				if err != nil {
+					return err
+				}
+				body.SetUsername(username)
+			}
+			req = req.LookerGitCloneCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return fmt.Errorf("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("repo-url", "", "Clone URL of the LookML repository, over HTTPS or SSH.")
+	_ = cmd.MarkFlagRequired("repo-url")
+	cmd.Flags().String("ssh-key", "", "Private key for an SSH clone, as PEM text including its BEGIN and END lines. Send this or username and token. Used for this check and not kept. Visible in the process list; --ssh-key-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("ssh-key-prompt", false, "Read --ssh-key from a hidden prompt instead of the command line.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM certificate of the CA that signed the git server's certificate.")
+	cmd.Flags().Bool("ssl-skip-cert-verification", false, "Skip verifying the git server's TLS certificate.")
+	cmd.Flags().String("token", "", "Access token of username, for an HTTPS clone. Send this or ssh_key. Used for this check and not kept. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
+	cmd.Flags().String("username", "", "Git user for an HTTPS clone. Send it with token.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
 func newCredentialsValidateMariadbCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mariadb",
@@ -6193,6 +7216,116 @@ func newCredentialsValidatePostgresCmd() *cobra.Command {
 	cmd.Flags().Bool("ssl-skip-cert-verification", false, "Encrypt the connection without checking the server's certificate.")
 	cmd.Flags().Bool("ssl-verify-cert", false, "Check the server's certificate against the CA.")
 	cmd.Flags().Bool("ssl-verify-identity", false, "Check the certificate and that it names the host.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidatePowerBiCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "power-bi",
+		Short: "Validate Power BI credentials",
+		Long:  "Check candidate Power BI credentials against Power BI.\n\nNo credentials are created. Send the values you would create the credentials with, and a\ndeployment to run them from, and the checks run against your Power BI tenant.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidatePowerBiCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			tenantId, err := flagString(cmd, "tenant-id")
+			if err != nil {
+				return err
+			}
+			appClientId, err := flagString(cmd, "app-client-id")
+			if err != nil {
+				return err
+			}
+			authModeValue, err := flagString(cmd, "auth-mode")
+			if err != nil {
+				return err
+			}
+			authMode, err := sdk.NewPowerBiAuthModeFromValue(authModeValue)
+			if err != nil {
+				return err
+			}
+			body := sdk.NewPowerBiCredentialsValidateIn(deploymentId, tenantId, appClientId, *authMode)
+			if changed(cmd, "app-client-secret", "app-client-secret-prompt") {
+				appClientSecret, err := flagSecret(cmd, "app-client-secret")
+				if err != nil {
+					return err
+				}
+				body.SetAppClientSecret(appClientSecret)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "username") {
+				username, err := flagString(cmd, "username")
+				if err != nil {
+					return err
+				}
+				body.SetUsername(username)
+			}
+			req = req.PowerBiCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return fmt.Errorf("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("tenant-id", "", "Microsoft Entra ID tenant the Power BI service belongs to.")
+	_ = cmd.MarkFlagRequired("tenant-id")
+	cmd.Flags().String("app-client-id", "", "Client ID of the Entra ID app registration Monte Carlo signs in with.")
+	_ = cmd.MarkFlagRequired("app-client-id")
+	cmd.Flags().String("auth-mode", "", "How Monte Carlo signs in. service_principal takes app_client_secret. primary_user takes username and password.")
+	_ = cmd.RegisterFlagCompletionFunc("auth-mode", enumCompletion(sdk.AllowedPowerBiAuthModeEnumValues))
+	_ = cmd.MarkFlagRequired("auth-mode")
+	cmd.Flags().String("app-client-secret", "", "Secret of the app registration, for service_principal. Used for this check and not kept. Visible in the process list; --app-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("app-client-secret-prompt", false, "Read --app-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("password", "", "Password of username, for primary_user. Used for this check and not kept. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("username", "", "User Monte Carlo signs in as, for primary_user.")
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }
@@ -6728,6 +7861,148 @@ func newCredentialsValidateStarburstGalaxyCmd() *cobra.Command {
 	cmd.Flags().String("password", "", "Password of the database user. Used for this check and not kept. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateTableauCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "tableau",
+		Short: "Validate Tableau credentials",
+		Long:  "Check candidate Tableau credentials against Tableau.\n\nNo credentials are created. Send the values you would create the credentials with, and a\ndeployment to run them from, and the checks run against your Tableau server.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateTableauCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			serverName, err := flagString(cmd, "server-name")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewTableauCredentialsValidateIn(deploymentId, serverName)
+			if changed(cmd, "connected-app-client-id") {
+				connectedAppClientId, err := flagString(cmd, "connected-app-client-id")
+				if err != nil {
+					return err
+				}
+				body.SetConnectedAppClientId(connectedAppClientId)
+			}
+			if changed(cmd, "connected-app-secret-id") {
+				connectedAppSecretId, err := flagString(cmd, "connected-app-secret-id")
+				if err != nil {
+					return err
+				}
+				body.SetConnectedAppSecretId(connectedAppSecretId)
+			}
+			if changed(cmd, "connected-app-secret-value", "connected-app-secret-value-prompt") {
+				connectedAppSecretValue, err := flagSecret(cmd, "connected-app-secret-value")
+				if err != nil {
+					return err
+				}
+				body.SetConnectedAppSecretValue(connectedAppSecretValue)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "site-name") {
+				siteName, err := flagString(cmd, "site-name")
+				if err != nil {
+					return err
+				}
+				body.SetSiteName(siteName)
+			}
+			if changed(cmd, "token-name") {
+				tokenName, err := flagString(cmd, "token-name")
+				if err != nil {
+					return err
+				}
+				body.SetTokenName(tokenName)
+			}
+			if changed(cmd, "token-value", "token-value-prompt") {
+				tokenValue, err := flagSecret(cmd, "token-value")
+				if err != nil {
+					return err
+				}
+				body.SetTokenValue(tokenValue)
+			}
+			if changed(cmd, "username") {
+				username, err := flagString(cmd, "username")
+				if err != nil {
+					return err
+				}
+				body.SetUsername(username)
+			}
+			if changed(cmd, "verify-ssl") {
+				verifySsl, err := flagBool(cmd, "verify-ssl")
+				if err != nil {
+					return err
+				}
+				body.SetVerifySsl(verifySsl)
+			}
+			req = req.TableauCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return fmt.Errorf("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("server-name", "", "URL of the Tableau server, starting with https:// or http://.")
+	_ = cmd.MarkFlagRequired("server-name")
+	cmd.Flags().String("connected-app-client-id", "", "Client ID of a Tableau connected app. Send it with connected_app_secret_id, connected_app_secret_value and username.")
+	cmd.Flags().String("connected-app-secret-id", "", "ID of the connected app's secret. An identifier, not the secret itself.")
+	cmd.Flags().String("connected-app-secret-value", "", "Value of the connected app's secret in connected_app_secret_id. Used for this check and not kept. Visible in the process list; --connected-app-secret-value-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("connected-app-secret-value-prompt", false, "Read --connected-app-secret-value from a hidden prompt instead of the command line.")
+	cmd.Flags().String("password", "", "Password of username. Send this, a personal access token, or a connected app. Used for this check and not kept. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("site-name", "", "Tableau site to connect to. Leave it out for the default site.")
+	cmd.Flags().String("token-name", "", "Name of a personal access token. Send it with token_value.")
+	cmd.Flags().String("token-value", "", "Secret of the personal access token in token_name. Used for this check and not kept. Visible in the process list; --token-value-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("token-value-prompt", false, "Read --token-value from a hidden prompt instead of the command line.")
+	cmd.Flags().String("username", "", "Tableau user. Send it with password, or with a connected app. Not used with a personal access token.")
+	cmd.Flags().Bool("verify-ssl", false, "Whether to verify the server's TLS certificate. Verified when left out.")
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }

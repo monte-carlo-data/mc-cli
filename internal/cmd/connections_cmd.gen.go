@@ -36,7 +36,7 @@ func newConnectionsCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create a connection",
-		Long:  "Add a connection to a warehouse.\n\nCreate the credentials first, through one of the credentials endpoints, then name them\nhere. The connection's type comes from them, and has to be a type the warehouse accepts\nand the warehouse's deployment supports. A type that depends on a metastore, such as\n`databricks-sql-warehouse`, goes on a data lake warehouse that already has a metastore\nconnection.\n\nOmit `job_types` to run what the type runs by default.\n\nAn unknown warehouse id or credentials id returns 404.",
+		Long:  "Add a connection to a warehouse or a BI container.\n\nCreate the credentials first, through one of the credentials endpoints, then name them\nhere. The connection's type comes from them, and has to be a type the parent accepts and\nits deployment supports. Send `warehouse_id` or `bi_container_id`, exactly one.\n\nA type that depends on a metastore, such as `databricks-sql-warehouse`, goes on a data\nlake warehouse that already has a metastore connection. Tableau, Looker and Power BI\ncredentials go on a BI container of the same tool; a `looker` container takes both the\n`looker` and the `looker-git-clone` connection.\n\nOmit `job_types` to run what the type runs by default.\n\nAn unknown warehouse, BI container or credentials id returns 404.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			api, ctx, err := apiClient(cmd)
@@ -48,15 +48,18 @@ func newConnectionsCreateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			warehouseId, err := flagString(cmd, "warehouse-id")
-			if err != nil {
-				return err
-			}
 			credentialsId, err := flagString(cmd, "credentials-id")
 			if err != nil {
 				return err
 			}
-			body := sdk.NewConnectionIn(name, warehouseId, credentialsId)
+			body := sdk.NewConnectionIn(name, credentialsId)
+			if changed(cmd, "bi-container-id") {
+				biContainerId, err := flagString(cmd, "bi-container-id")
+				if err != nil {
+					return err
+				}
+				body.SetBiContainerId(biContainerId)
+			}
 			if changed(cmd, "job-types") {
 				jobTypes, err := flagStringSlice(cmd, "job-types")
 				if err != nil {
@@ -64,21 +67,28 @@ func newConnectionsCreateCmd() *cobra.Command {
 				}
 				body.SetJobTypes(jobTypes)
 			}
+			if changed(cmd, "warehouse-id") {
+				warehouseId, err := flagString(cmd, "warehouse-id")
+				if err != nil {
+					return err
+				}
+				body.SetWarehouseId(warehouseId)
+			}
 			req = req.ConnectionIn(*body)
 			out, resp, err := retryOnTransient(cmd, req.Execute)
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "id", "connection_type", "name", "warehouse_id", "warehouse_name", "deployment_id", "deployment_name", "credentials_id", "credentials_storage_type", "job_types", "created_time")
+			return render(cmd, out, "id", "connection_type", "name", "warehouse_id", "warehouse_name", "bi_container_id", "bi_container_name", "deployment_id", "deployment_name", "credentials_id", "credentials_storage_type", "job_types", "created_time")
 		},
 	}
-	cmd.Flags().String("name", "", "Display name for the connection. Unique among the warehouse's connections.")
+	cmd.Flags().String("name", "", "Display name for the connection. Unique among the connections of its warehouse or BI container.")
 	_ = cmd.MarkFlagRequired("name")
-	cmd.Flags().String("warehouse-id", "", "The warehouse to add the connection to. Its type has to match what the credentials are for.")
-	_ = cmd.MarkFlagRequired("warehouse-id")
 	cmd.Flags().String("credentials-id", "", "The credentials the connection reads with. They also decide the connection's type. Create them first, through one of the credentials endpoints.")
 	_ = cmd.MarkFlagRequired("credentials-id")
+	cmd.Flags().String("bi-container-id", "", "The BI container to add the connection to, for Tableau, Looker or Power BI credentials. Its type has to match what the credentials are for: a looker container takes both looker and looker-git-clone credentials. Send this or warehouse_id, not both.")
 	cmd.Flags().StringSlice("job-types", nil, "The jobs to run on this connection. Omit it to run what the connection type runs by default, which is what the app does. Which values are accepted depends on the connection type. An empty list is not accepted; omit the field to take the defaults.")
+	cmd.Flags().String("warehouse-id", "", "The warehouse to add the connection to. Its type has to match what the credentials are for. Send this or bi_container_id, not both.")
 	return cmd
 }
 
@@ -98,7 +108,7 @@ func newConnectionsGetCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "id", "connection_type", "name", "warehouse_id", "warehouse_name", "deployment_id", "deployment_name", "credentials_id", "credentials_storage_type", "job_types", "created_time")
+			return render(cmd, out, "id", "connection_type", "name", "warehouse_id", "warehouse_name", "bi_container_id", "bi_container_name", "deployment_id", "deployment_name", "credentials_id", "credentials_storage_type", "job_types", "created_time")
 		},
 	}
 	return cmd
@@ -108,7 +118,7 @@ func newConnectionsListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List connections",
-		Long:  "List the connections in your account, a page at a time.\n\nConnections are returned oldest first. Pass `warehouse_id` to list one warehouse's\nconnections; an id you cannot see returns an empty page. A caller whose asset access is\nrestricted to certain domains sees only the connections of warehouses holding assets in\nthose domains.\n\nConnections that belong to a BI or ETL integration rather than to a warehouse are not\nlisted here.",
+		Long:  "List the connections in your account, a page at a time.\n\nConnections are returned oldest first. Pass `warehouse_id` or `bi_container_id` to list\none warehouse's or one BI container's connections; an id you cannot see returns an empty\npage. A caller whose asset access is restricted to certain domains sees only the\nconnections of warehouses holding assets in those domains, and every BI connection.\n\nConnections that belong to an ETL integration are not listed here.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			api, ctx, err := apiClient(cmd)
@@ -122,6 +132,13 @@ func newConnectionsListCmd() *cobra.Command {
 					return err
 				}
 				req = req.WarehouseId(warehouseId)
+			}
+			if changed(cmd, "bi-container-id") {
+				biContainerId, err := flagString(cmd, "bi-container-id")
+				if err != nil {
+					return err
+				}
+				req = req.BiContainerId(biContainerId)
 			}
 			if changed(cmd, "cursor") {
 				cursor, err := flagString(cmd, "cursor")
@@ -145,7 +162,7 @@ func newConnectionsListCmd() *cobra.Command {
 				req = req.WithCount(withCount)
 			}
 			if !changed(cmd, "cursor", "limit", "with-count") {
-				return renderPages(cmd, []string{"id", "name", "connection_type", "warehouse_name", "deployment_name"}, func(cursor string) (any, *http.Response, error) {
+				return renderPages(cmd, []string{"id", "name", "connection_type", "warehouse_name", "bi_container_name", "deployment_name"}, func(cursor string) (any, *http.Response, error) {
 					r := req
 					if cursor != "" {
 						r = r.Cursor(cursor)
@@ -157,10 +174,11 @@ func newConnectionsListCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return renderPage(cmd, out, []string{"id", "name", "connection_type", "warehouse_name", "deployment_name"})
+			return renderPage(cmd, out, []string{"id", "name", "connection_type", "warehouse_name", "bi_container_name", "deployment_name"})
 		},
 	}
 	cmd.Flags().String("warehouse-id", "", "Only list connections on this warehouse. Omit it to list every connection in your account.")
+	cmd.Flags().String("bi-container-id", "", "Only list connections on this BI container. Omit it to list every connection in your account.")
 	cmd.Flags().String("cursor", "", "Position to continue from, as returned in next_cursor by the previous page. Omit it to start from the first page. The value is opaque; do not build or modify one.")
 	cmd.Flags().Int32("limit", 0, "Maximum number of items to return, between 1 and 100.")
 	cmd.Flags().Bool("with-count", false, "Whether to also return the total number of items across every page, in count. Off by default: counting costs an extra query.")
@@ -240,8 +258,8 @@ type connectionsAddNative struct {
 func newConnectionsAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add <connection-type>",
-		Short: "Add a connection, creating its warehouse and credentials",
-		Long:  "Adds a connection in one step. It validates the credentials first and, once every validation passes, asks before creating a warehouse unless --warehouse-id names one, then the credentials, then the connection. --validate-only stops after validating; --skip-validations creates without validating or asking. If a step fails, or the command is interrupted, what it created is deleted again, and anything it could not delete is listed with the command that deletes it.\n\nThe argument is the connection type. This command takes self-hosted credentials, one set of --self-hosted-* flags; the subcommands take each connection type's own credentials.",
+		Short: "Add a connection, creating its warehouse or BI container and credentials",
+		Long:  "Adds a connection in one step. It validates the credentials first and, once every validation passes, asks before creating a warehouse unless --warehouse-id names one, or for a BI connection type a BI container unless --bi-container-id names one, then the credentials, then the connection. --validate-only stops after validating; --skip-validations creates without validating or asking. If a step fails, or the command is interrupted, what it created is deleted again, and anything it could not delete is listed with the command that deletes it.\n\nThe argument is the connection type. This command takes self-hosted credentials, one set of --self-hosted-* flags; the subcommands take each connection type's own credentials.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, args[0], nil)
@@ -265,6 +283,10 @@ func newConnectionsAddCmd() *cobra.Command {
 	cmd.AddCommand(newConnectionsAddStarburstEnterpriseCmd())
 	cmd.AddCommand(newConnectionsAddPostgresCmd())
 	cmd.AddCommand(newConnectionsAddTeradataCmd())
+	cmd.AddCommand(newConnectionsAddTableauCmd())
+	cmd.AddCommand(newConnectionsAddLookerCmd())
+	cmd.AddCommand(newConnectionsAddLookerGitCloneCmd())
+	cmd.AddCommand(newConnectionsAddPowerBiCmd())
 	return cmd
 }
 
@@ -710,6 +732,113 @@ func newConnectionsAddTeradataCmd() *cobra.Command {
 	return cmd
 }
 
+func newConnectionsAddTableauCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "tableau",
+		Short: "Add a tableau connection, creating its BI container and credentials",
+		Long:  "Adds a tableau connection in one step, as the add command does. Pass tableau credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsAdd(cmd, "tableau", &connectionsAddNative{
+				group:          flagGroup{"tableau", []string{"server-name", "connected-app-client-id", "connected-app-secret-id", "connected-app-secret-value", "connected-app-secret-value-prompt", "password", "password-prompt", "site-name", "token-name", "token-value", "token-value-prompt", "username", "verify-ssl"}},
+				selfHostedOnly: []string{"bq-project-id", "sql-warehouse-id"},
+				build:          buildConnectionsAddTableau,
+			})
+		},
+	}
+	cmd.Flags().String("server-name", "", "URL of the Tableau server, starting with https:// or http://.")
+	cmd.Flags().String("connected-app-client-id", "", "Client ID of a Tableau connected app. Send it with connected_app_secret_id, connected_app_secret_value and username.")
+	cmd.Flags().String("connected-app-secret-id", "", "ID of the connected app's secret. An identifier, not the secret itself.")
+	cmd.Flags().String("connected-app-secret-value", "", "Value of the connected app's secret in connected_app_secret_id. Stored by Monte Carlo and never returned. Visible in the process list; --connected-app-secret-value-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("connected-app-secret-value-prompt", false, "Read --connected-app-secret-value from a hidden prompt instead of the command line.")
+	cmd.Flags().String("password", "", "Password of username. Send this, a personal access token, or a connected app. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("site-name", "", "Tableau site to connect to. Leave it out for the default site.")
+	cmd.Flags().String("token-name", "", "Name of a personal access token. Send it with token_value.")
+	cmd.Flags().String("token-value", "", "Secret of the personal access token in token_name. Stored by Monte Carlo and never returned. Visible in the process list; --token-value-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("token-value-prompt", false, "Read --token-value from a hidden prompt instead of the command line.")
+	cmd.Flags().String("username", "", "Tableau user. Send it with password, or with a connected app. Not used with a personal access token.")
+	cmd.Flags().Bool("verify-ssl", false, "Whether to verify the server's TLS certificate. Verified when left out.")
+	registerConnectionsAddFlags(cmd)
+	return cmd
+}
+
+func newConnectionsAddLookerCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "looker",
+		Short: "Add a looker connection, creating its BI container and credentials",
+		Long:  "Adds a looker connection in one step, as the add command does. Pass looker credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsAdd(cmd, "looker", &connectionsAddNative{
+				group:          flagGroup{"looker", []string{"base-url", "api-client-id", "api-client-secret", "api-client-secret-prompt", "verify-ssl"}},
+				selfHostedOnly: []string{"bq-project-id", "sql-warehouse-id"},
+				build:          buildConnectionsAddLooker,
+			})
+		},
+	}
+	cmd.Flags().String("base-url", "", "URL of the Looker API, such as https://acme.cloud.looker.com.")
+	cmd.Flags().String("api-client-id", "", "Client ID of the Looker API key.")
+	cmd.Flags().String("api-client-secret", "", "Client secret of the Looker API key. Stored by Monte Carlo and never returned. Visible in the process list; --api-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("api-client-secret-prompt", false, "Read --api-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().Bool("verify-ssl", false, "Whether to verify Looker's TLS certificate. Verified when left out.")
+	registerConnectionsAddFlags(cmd)
+	return cmd
+}
+
+func newConnectionsAddLookerGitCloneCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "looker-git-clone",
+		Short: "Add a looker-git-clone connection, creating its BI container and credentials",
+		Long:  "Adds a looker-git-clone connection in one step, as the add command does. Pass looker-git-clone credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsAdd(cmd, "looker-git-clone", &connectionsAddNative{
+				group:          flagGroup{"looker-git-clone", []string{"repo-url", "ssh-key", "ssh-key-prompt", "ssl-ca-data", "ssl-skip-cert-verification", "token", "token-prompt", "username"}},
+				selfHostedOnly: []string{"bq-project-id", "sql-warehouse-id"},
+				build:          buildConnectionsAddLookerGitClone,
+			})
+		},
+	}
+	cmd.Flags().String("repo-url", "", "Clone URL of the LookML repository, over HTTPS or SSH.")
+	cmd.Flags().String("ssh-key", "", "Private key for an SSH clone, as PEM text including its BEGIN and END lines. Send this or username and token. Stored by Monte Carlo and never returned. Visible in the process list; --ssh-key-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("ssh-key-prompt", false, "Read --ssh-key from a hidden prompt instead of the command line.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM certificate of the CA that signed the git server's certificate.")
+	cmd.Flags().Bool("ssl-skip-cert-verification", false, "Skip verifying the git server's TLS certificate.")
+	cmd.Flags().String("token", "", "Access token of username, for an HTTPS clone. Send this or ssh_key. Stored by Monte Carlo and never returned. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
+	cmd.Flags().String("username", "", "Git user for an HTTPS clone. Send it with token.")
+	registerConnectionsAddFlags(cmd)
+	return cmd
+}
+
+func newConnectionsAddPowerBiCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "power-bi",
+		Short: "Add a power-bi connection, creating its BI container and credentials",
+		Long:  "Adds a power-bi connection in one step, as the add command does. Pass power-bi credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsAdd(cmd, "power-bi", &connectionsAddNative{
+				group:          flagGroup{"power-bi", []string{"tenant-id", "app-client-id", "auth-mode", "app-client-secret", "app-client-secret-prompt", "password", "password-prompt", "username"}},
+				selfHostedOnly: []string{"bq-project-id", "sql-warehouse-id"},
+				build:          buildConnectionsAddPowerBi,
+			})
+		},
+	}
+	cmd.Flags().String("tenant-id", "", "Microsoft Entra ID tenant the Power BI service belongs to.")
+	cmd.Flags().String("app-client-id", "", "Client ID of the Entra ID app registration Monte Carlo signs in with.")
+	cmd.Flags().String("auth-mode", "", "How Monte Carlo signs in. service_principal takes app_client_secret. primary_user takes username and password.")
+	_ = cmd.RegisterFlagCompletionFunc("auth-mode", enumCompletion(sdk.AllowedPowerBiAuthModeEnumValues))
+	cmd.Flags().String("app-client-secret", "", "Secret of the app registration, for service_principal. Stored by Monte Carlo and never returned. Visible in the process list; --app-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("app-client-secret-prompt", false, "Read --app-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("password", "", "Password of username, for primary_user. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("username", "", "User Monte Carlo signs in as, for primary_user.")
+	registerConnectionsAddFlags(cmd)
+	return cmd
+}
+
 // registerConnectionsAddFlags registers the flags every add command takes.
 func registerConnectionsAddFlags(cmd *cobra.Command) {
 	cmd.Flags().String("self-hosted-aws-secret", "", "Name or ARN of the AWS Secrets Manager secret holding the connection's credentials.")
@@ -725,9 +854,10 @@ func registerConnectionsAddFlags(cmd *cobra.Command) {
 	cmd.Flags().String("self-hosted-file-path", "", "Path of the file on the deployment that holds the connection's credentials.")
 	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
 	cmd.Flags().String("sql-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
-	cmd.Flags().String("name", "", "Name of the new connection, and of the warehouse when one is created. Required unless --validate-only.")
-	cmd.Flags().String("warehouse-id", "", "Existing warehouse to add the connection to. Without it, a warehouse is created for the connection first. Connection types that attach to a warehouse another connection provides need it: without it the connection is refused and the created warehouse removed.")
-	cmd.Flags().String("deployment-id", "", "The deployment the warehouse's connections will run through. Pick one from the deployments list. Only a deployment on Monte Carlo's current collection platform is accepted. Required when --warehouse-id is not given, refused with it.")
+	cmd.Flags().String("name", "", "Name of the new connection, and of the warehouse or BI container when one is created. Required unless --validate-only.")
+	cmd.Flags().String("warehouse-id", "", "Existing warehouse to add the connection to. Without it, a warehouse is created for the connection first. Connection types that attach to a warehouse another connection provides need it: without it the connection is refused and the created warehouse removed. A BI connection type takes --bi-container-id.")
+	cmd.Flags().String("bi-container-id", "", "Existing BI container to add a BI connection to. Without it, a BI container is created for the connection first.")
+	cmd.Flags().String("deployment-id", "", "The deployment the warehouse's connections will run through. Pick one from the deployments list. Only a deployment on Monte Carlo's current collection platform is accepted. A new BI container runs through it too. Required when neither --warehouse-id nor --bi-container-id is given, refused with either.")
 	cmd.Flags().StringSlice("job-types", nil, "The jobs to run on this connection. Omit it to run what the connection type runs by default, which is what the app does. Which values are accepted depends on the connection type. An empty list is not accepted; omit the field to take the defaults.")
 	cmd.Flags().Bool("validate-only", false, "Validate the credentials and create nothing.")
 	cmd.Flags().Bool("skip-validations", false, "Create the connection without validating the credentials first, and without asking.")
@@ -2238,6 +2368,392 @@ func buildConnectionsAddTeradata(cmd *cobra.Command, api *sdk.APIClient, connect
 	}, nil
 }
 
+func buildConnectionsAddTableau(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
+	var err error
+	if err := requireAny(cmd, "server-name"); err != nil {
+		return nil, err
+	}
+	serverName, err := flagString(cmd, "server-name")
+	if err != nil {
+		return nil, err
+	}
+	var connectedAppClientId string
+	if changed(cmd, "connected-app-client-id") {
+		connectedAppClientId, err = flagString(cmd, "connected-app-client-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var connectedAppSecretId string
+	if changed(cmd, "connected-app-secret-id") {
+		connectedAppSecretId, err = flagString(cmd, "connected-app-secret-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var connectedAppSecretValue string
+	if changed(cmd, "connected-app-secret-value", "connected-app-secret-value-prompt") {
+		connectedAppSecretValue, err = flagSecret(cmd, "connected-app-secret-value")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var password string
+	if changed(cmd, "password", "password-prompt") {
+		password, err = flagSecret(cmd, "password")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var siteName string
+	if changed(cmd, "site-name") {
+		siteName, err = flagString(cmd, "site-name")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var tokenName string
+	if changed(cmd, "token-name") {
+		tokenName, err = flagString(cmd, "token-name")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var tokenValue string
+	if changed(cmd, "token-value", "token-value-prompt") {
+		tokenValue, err = flagSecret(cmd, "token-value")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var username string
+	if changed(cmd, "username") {
+		username, err = flagString(cmd, "username")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var verifySsl bool
+	if changed(cmd, "verify-ssl") {
+		verifySsl, err = flagBool(cmd, "verify-ssl")
+		if err != nil {
+			return nil, err
+		}
+	}
+	body := sdk.NewTableauCredentialsIn(serverName)
+	if changed(cmd, "connected-app-client-id") {
+		body.SetConnectedAppClientId(connectedAppClientId)
+	}
+	if changed(cmd, "connected-app-secret-id") {
+		body.SetConnectedAppSecretId(connectedAppSecretId)
+	}
+	if changed(cmd, "connected-app-secret-value", "connected-app-secret-value-prompt") {
+		body.SetConnectedAppSecretValue(connectedAppSecretValue)
+	}
+	if changed(cmd, "password", "password-prompt") {
+		body.SetPassword(password)
+	}
+	if changed(cmd, "site-name") {
+		body.SetSiteName(siteName)
+	}
+	if changed(cmd, "token-name") {
+		body.SetTokenName(tokenName)
+	}
+	if changed(cmd, "token-value", "token-value-prompt") {
+		body.SetTokenValue(tokenValue)
+	}
+	if changed(cmd, "username") {
+		body.SetUsername(username)
+	}
+	if changed(cmd, "verify-ssl") {
+		body.SetVerifySsl(verifySsl)
+	}
+	return &connectionsAddCredentials{
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			candidate := sdk.NewTableauCredentialsValidateIn(deploymentId, serverName)
+			if changed(cmd, "connected-app-client-id") {
+				candidate.SetConnectedAppClientId(connectedAppClientId)
+			}
+			if changed(cmd, "connected-app-secret-id") {
+				candidate.SetConnectedAppSecretId(connectedAppSecretId)
+			}
+			if changed(cmd, "connected-app-secret-value", "connected-app-secret-value-prompt") {
+				candidate.SetConnectedAppSecretValue(connectedAppSecretValue)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				candidate.SetPassword(password)
+			}
+			if changed(cmd, "site-name") {
+				candidate.SetSiteName(siteName)
+			}
+			if changed(cmd, "token-name") {
+				candidate.SetTokenName(tokenName)
+			}
+			if changed(cmd, "token-value", "token-value-prompt") {
+				candidate.SetTokenValue(tokenValue)
+			}
+			if changed(cmd, "username") {
+				candidate.SetUsername(username)
+			}
+			if changed(cmd, "verify-ssl") {
+				candidate.SetVerifySsl(verifySsl)
+			}
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateTableauCredentials(ctx).TableauCredentialsValidateIn(*candidate).Execute)
+		},
+		create: func(ctx context.Context) (string, *http.Response, error) {
+			out, resp, err := retryOnTransient(cmd, api.CredentialsAPI.CreateTableauCredentials(ctx).TableauCredentialsIn(*body).Execute)
+			if err != nil {
+				return "", resp, err
+			}
+			return out.GetId(), resp, nil
+		},
+		del: func(ctx context.Context, id string) (*http.Response, error) {
+			return api.CredentialsAPI.DeleteTableauCredentials(ctx, id).Execute()
+		},
+		deleteCmd: "credentials delete tableau",
+		listCmd:   "credentials list",
+	}, nil
+}
+
+func buildConnectionsAddLooker(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
+	var err error
+	if err := requireAny(cmd, "base-url"); err != nil {
+		return nil, err
+	}
+	baseUrl, err := flagString(cmd, "base-url")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "api-client-id"); err != nil {
+		return nil, err
+	}
+	apiClientId, err := flagString(cmd, "api-client-id")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "api-client-secret", "api-client-secret-prompt"); err != nil {
+		return nil, err
+	}
+	apiClientSecret, err := flagSecret(cmd, "api-client-secret")
+	if err != nil {
+		return nil, err
+	}
+	var verifySsl bool
+	if changed(cmd, "verify-ssl") {
+		verifySsl, err = flagBool(cmd, "verify-ssl")
+		if err != nil {
+			return nil, err
+		}
+	}
+	body := sdk.NewLookerCredentialsIn(baseUrl, apiClientId, apiClientSecret)
+	if changed(cmd, "verify-ssl") {
+		body.SetVerifySsl(verifySsl)
+	}
+	return &connectionsAddCredentials{
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			candidate := sdk.NewLookerCredentialsValidateIn(deploymentId, baseUrl, apiClientId, apiClientSecret)
+			if changed(cmd, "verify-ssl") {
+				candidate.SetVerifySsl(verifySsl)
+			}
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateLookerCredentials(ctx).LookerCredentialsValidateIn(*candidate).Execute)
+		},
+		create: func(ctx context.Context) (string, *http.Response, error) {
+			out, resp, err := retryOnTransient(cmd, api.CredentialsAPI.CreateLookerCredentials(ctx).LookerCredentialsIn(*body).Execute)
+			if err != nil {
+				return "", resp, err
+			}
+			return out.GetId(), resp, nil
+		},
+		del: func(ctx context.Context, id string) (*http.Response, error) {
+			return api.CredentialsAPI.DeleteLookerCredentials(ctx, id).Execute()
+		},
+		deleteCmd: "credentials delete looker",
+		listCmd:   "credentials list",
+	}, nil
+}
+
+func buildConnectionsAddLookerGitClone(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
+	var err error
+	if err := requireAny(cmd, "repo-url"); err != nil {
+		return nil, err
+	}
+	repoUrl, err := flagString(cmd, "repo-url")
+	if err != nil {
+		return nil, err
+	}
+	var sshKey string
+	if changed(cmd, "ssh-key", "ssh-key-prompt") {
+		sshKey, err = flagSecret(cmd, "ssh-key")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var sslCaData string
+	if changed(cmd, "ssl-ca-data") {
+		sslCaData, err = flagString(cmd, "ssl-ca-data")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var sslSkipCertVerification bool
+	if changed(cmd, "ssl-skip-cert-verification") {
+		sslSkipCertVerification, err = flagBool(cmd, "ssl-skip-cert-verification")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var token string
+	if changed(cmd, "token", "token-prompt") {
+		token, err = flagSecret(cmd, "token")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var username string
+	if changed(cmd, "username") {
+		username, err = flagString(cmd, "username")
+		if err != nil {
+			return nil, err
+		}
+	}
+	body := sdk.NewLookerGitCloneCredentialsIn(repoUrl)
+	if changed(cmd, "ssh-key", "ssh-key-prompt") {
+		body.SetSshKey(sshKey)
+	}
+	if changed(cmd, "ssl-ca-data") {
+		body.SetSslCaData(sslCaData)
+	}
+	if changed(cmd, "ssl-skip-cert-verification") {
+		body.SetSslSkipCertVerification(sslSkipCertVerification)
+	}
+	if changed(cmd, "token", "token-prompt") {
+		body.SetToken(token)
+	}
+	if changed(cmd, "username") {
+		body.SetUsername(username)
+	}
+	return &connectionsAddCredentials{
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			candidate := sdk.NewLookerGitCloneCredentialsValidateIn(deploymentId, repoUrl)
+			if changed(cmd, "ssh-key", "ssh-key-prompt") {
+				candidate.SetSshKey(sshKey)
+			}
+			if changed(cmd, "ssl-ca-data") {
+				candidate.SetSslCaData(sslCaData)
+			}
+			if changed(cmd, "ssl-skip-cert-verification") {
+				candidate.SetSslSkipCertVerification(sslSkipCertVerification)
+			}
+			if changed(cmd, "token", "token-prompt") {
+				candidate.SetToken(token)
+			}
+			if changed(cmd, "username") {
+				candidate.SetUsername(username)
+			}
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateLookerGitCloneCredentials(ctx).LookerGitCloneCredentialsValidateIn(*candidate).Execute)
+		},
+		create: func(ctx context.Context) (string, *http.Response, error) {
+			out, resp, err := retryOnTransient(cmd, api.CredentialsAPI.CreateLookerGitCloneCredentials(ctx).LookerGitCloneCredentialsIn(*body).Execute)
+			if err != nil {
+				return "", resp, err
+			}
+			return out.GetId(), resp, nil
+		},
+		del: func(ctx context.Context, id string) (*http.Response, error) {
+			return api.CredentialsAPI.DeleteLookerGitCloneCredentials(ctx, id).Execute()
+		},
+		deleteCmd: "credentials delete looker-git-clone",
+		listCmd:   "credentials list",
+	}, nil
+}
+
+func buildConnectionsAddPowerBi(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
+	var err error
+	if err := requireAny(cmd, "tenant-id"); err != nil {
+		return nil, err
+	}
+	tenantId, err := flagString(cmd, "tenant-id")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "app-client-id"); err != nil {
+		return nil, err
+	}
+	appClientId, err := flagString(cmd, "app-client-id")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "auth-mode"); err != nil {
+		return nil, err
+	}
+	authModeValue, err := flagString(cmd, "auth-mode")
+	if err != nil {
+		return nil, err
+	}
+	authMode, err := sdk.NewPowerBiAuthModeFromValue(authModeValue)
+	if err != nil {
+		return nil, err
+	}
+	var appClientSecret string
+	if changed(cmd, "app-client-secret", "app-client-secret-prompt") {
+		appClientSecret, err = flagSecret(cmd, "app-client-secret")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var password string
+	if changed(cmd, "password", "password-prompt") {
+		password, err = flagSecret(cmd, "password")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var username string
+	if changed(cmd, "username") {
+		username, err = flagString(cmd, "username")
+		if err != nil {
+			return nil, err
+		}
+	}
+	body := sdk.NewPowerBiCredentialsIn(tenantId, appClientId, *authMode)
+	if changed(cmd, "app-client-secret", "app-client-secret-prompt") {
+		body.SetAppClientSecret(appClientSecret)
+	}
+	if changed(cmd, "password", "password-prompt") {
+		body.SetPassword(password)
+	}
+	if changed(cmd, "username") {
+		body.SetUsername(username)
+	}
+	return &connectionsAddCredentials{
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			candidate := sdk.NewPowerBiCredentialsValidateIn(deploymentId, tenantId, appClientId, *authMode)
+			if changed(cmd, "app-client-secret", "app-client-secret-prompt") {
+				candidate.SetAppClientSecret(appClientSecret)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				candidate.SetPassword(password)
+			}
+			if changed(cmd, "username") {
+				candidate.SetUsername(username)
+			}
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidatePowerBiCredentials(ctx).PowerBiCredentialsValidateIn(*candidate).Execute)
+		},
+		create: func(ctx context.Context) (string, *http.Response, error) {
+			out, resp, err := retryOnTransient(cmd, api.CredentialsAPI.CreatePowerBiCredentials(ctx).PowerBiCredentialsIn(*body).Execute)
+			if err != nil {
+				return "", resp, err
+			}
+			return out.GetId(), resp, nil
+		},
+		del: func(ctx context.Context, id string) (*http.Response, error) {
+			return api.CredentialsAPI.DeletePowerBiCredentials(ctx, id).Execute()
+		},
+		deleteCmd: "credentials delete power-bi",
+		listCmd:   "credentials list",
+	}, nil
+}
+
 func buildConnectionsAddSelfHostedAws(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
 	var err error
 	if err := requireAny(cmd, "self-hosted-aws-secret"); err != nil {
@@ -2630,8 +3146,34 @@ func runConnectionsAdd(cmd *cobra.Command, connectionType string, native *connec
 			return err
 		}
 	}
-	if changed(cmd, "warehouse-id") == changed(cmd, "deployment-id") {
-		return fmt.Errorf("pass --deployment-id to create a warehouse for the connection, or --warehouse-id to add it to an existing one")
+	// The BI container type each connection type goes on; any other type goes on a warehouse.
+	biContainerTypes := map[string]string{
+		"looker":           "looker",
+		"looker-git-clone": "looker",
+		"power-bi":         "power-bi",
+		"tableau":          "tableau",
+	}
+	containerType, onBi := biContainerTypes[connectionType]
+	var biContainerType sdk.NewBiContainerType
+	if onBi {
+		if changed(cmd, "warehouse-id") {
+			return fmt.Errorf("a %s connection goes on a BI container, so it takes no --warehouse-id", connectionType)
+		}
+		if changed(cmd, "bi-container-id") == changed(cmd, "deployment-id") {
+			return fmt.Errorf("pass --deployment-id to create a BI container for the connection, or --bi-container-id to add it to an existing one")
+		}
+		value, err := sdk.NewNewBiContainerTypeFromValue(containerType)
+		if err != nil {
+			return err
+		}
+		biContainerType = *value
+	} else {
+		if changed(cmd, "bi-container-id") {
+			return fmt.Errorf("a %s connection goes on a warehouse, so it takes no --bi-container-id", connectionType)
+		}
+		if changed(cmd, "warehouse-id") == changed(cmd, "deployment-id") {
+			return fmt.Errorf("pass --deployment-id to create a warehouse for the connection, or --warehouse-id to add it to an existing one")
+		}
 	}
 	api, ctx, err := apiClient(cmd)
 	if err != nil {
@@ -2670,10 +3212,15 @@ func runConnectionsAdd(cmd *cobra.Command, connectionType string, native *connec
 	if err != nil {
 		return err
 	}
+	biContainerId, err := flagString(cmd, "bi-container-id")
+	if err != nil {
+		return err
+	}
 	var credentialsId string
 	warehouse := sdk.NewWarehouseIn(name, deploymentId)
 	warehouse.SetConnectionType(connectionType)
-	connection := sdk.NewConnectionIn(name, warehouseId, credentialsId)
+	biContainer := sdk.NewBiContainerIn(biContainerType, name, deploymentId)
+	connection := sdk.NewConnectionIn(name, credentialsId)
 	if changed(cmd, "job-types") {
 		jobTypes, err := flagStringSlice(cmd, "job-types")
 		if err != nil {
@@ -2683,7 +3230,16 @@ func runConnectionsAdd(cmd *cobra.Command, connectionType string, native *connec
 	}
 	if !skipValidations {
 		deployment := deploymentId
-		if changed(cmd, "warehouse-id") {
+		if changed(cmd, "bi-container-id") {
+			existing, resp, err := api.BiContainersAPI.GetBiContainer(ctx, biContainerId).Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			deployment = existing.GetDeploymentId()
+			if deployment == "" {
+				return fmt.Errorf("BI container %s has no deployment for its connections to run through", biContainerId)
+			}
+		} else if changed(cmd, "warehouse-id") {
 			existing, resp, err := api.WarehousesAPI.GetWarehouse(ctx, warehouseId).Execute()
 			if err != nil {
 				return apiErr(resp, err)
@@ -2721,7 +3277,21 @@ func runConnectionsAdd(cmd *cobra.Command, connectionType string, native *connec
 	}
 
 	run := newUnwind(cmd)
-	if !changed(cmd, "warehouse-id") {
+	if onBi {
+		if !changed(cmd, "bi-container-id") {
+			created, resp, err := retryOnTransient(cmd, api.BiContainersAPI.CreateBiContainer(ctx).BiContainerIn(*biContainer).Execute)
+			if err != nil {
+				if resp != nil && resp.StatusCode == http.StatusConflict {
+					return fmt.Errorf("%w\nIf an earlier run created it, find its id with `%s %s` and pass it as --%s.", apiErr(resp, err), binaryName, "bi-containers list", "bi-container-id")
+				}
+				return run.fail(resp, err, "The BI container may have been created; check "+binaryName+" bi-containers list.")
+			}
+			biContainerId = created.GetId()
+			run.record("BI container", biContainerId, "bi-containers delete "+biContainerId, func(ctx context.Context) (*http.Response, error) {
+				return api.BiContainersAPI.DeleteBiContainer(ctx, biContainerId).Execute()
+			})
+		}
+	} else if !changed(cmd, "warehouse-id") {
 		created, resp, err := retryOnTransient(cmd, api.WarehousesAPI.CreateWarehouse(ctx).WarehouseIn(*warehouse).Execute)
 		if err != nil {
 			if resp != nil && resp.StatusCode == http.StatusConflict {
@@ -2742,13 +3312,17 @@ func runConnectionsAdd(cmd *cobra.Command, connectionType string, native *connec
 		return credentials.del(ctx, credentialsId)
 	})
 	connection.SetName(name)
-	connection.SetWarehouseId(warehouseId)
 	connection.SetCredentialsId(credentialsId)
+	if onBi {
+		connection.SetBiContainerId(biContainerId)
+	} else {
+		connection.SetWarehouseId(warehouseId)
+	}
 	out, resp, err := retryOnTransient(cmd, api.ConnectionsAPI.CreateConnection(ctx).ConnectionIn(*connection).Execute)
 	if err != nil {
 		return run.fail(resp, err, "The connection may have been created; check "+binaryName+" connections list.")
 	}
-	return render(cmd, out, "id", "connection_type", "name", "warehouse_id", "warehouse_name", "deployment_id", "deployment_name", "credentials_id", "credentials_storage_type", "job_types", "created_time")
+	return render(cmd, out, "id", "connection_type", "name", "warehouse_id", "warehouse_name", "bi_container_id", "bi_container_name", "deployment_id", "deployment_name", "credentials_id", "credentials_storage_type", "job_types", "created_time")
 }
 
 // connectionsUpdateCredentials validates a change to a connection's credentials, and makes it.
@@ -2805,6 +3379,10 @@ func newConnectionsUpdateCmd() *cobra.Command {
 	cmd.AddCommand(newConnectionsUpdateStarburstEnterpriseCmd())
 	cmd.AddCommand(newConnectionsUpdatePostgresCmd())
 	cmd.AddCommand(newConnectionsUpdateTeradataCmd())
+	cmd.AddCommand(newConnectionsUpdateTableauCmd())
+	cmd.AddCommand(newConnectionsUpdateLookerCmd())
+	cmd.AddCommand(newConnectionsUpdateLookerGitCloneCmd())
+	cmd.AddCommand(newConnectionsUpdatePowerBiCmd())
 	return cmd
 }
 
@@ -3248,6 +3826,113 @@ func newConnectionsUpdateTeradataCmd() *cobra.Command {
 	cmd.Flags().String("td-sslmode", "", "How the connection to Teradata uses TLS.")
 	_ = cmd.RegisterFlagCompletionFunc("td-sslmode", enumCompletion(sdk.AllowedTeradataSslModeEnumValues))
 	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	registerConnectionsUpdateFlags(cmd)
+	return cmd
+}
+
+func newConnectionsUpdateTableauCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "tableau <connection_id>",
+		Short: "Update a tableau connection, and change its credentials",
+		Long:  "Updates a tableau connection, as the update command does, changing its tableau credentials with the flags below.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
+				group:   flagGroup{"tableau", []string{"connected-app-client-id", "connected-app-secret-id", "connected-app-secret-value", "connected-app-secret-value-prompt", "password", "password-prompt", "server-name", "site-name", "token-name", "token-value", "token-value-prompt", "username", "verify-ssl"}},
+				storage: "mc_managed",
+				build:   buildConnectionsUpdateTableau,
+			})
+		},
+	}
+	cmd.Flags().String("connected-app-client-id", "", "Client ID of a Tableau connected app. Send it with connected_app_secret_id, connected_app_secret_value and username.")
+	cmd.Flags().String("connected-app-secret-id", "", "ID of the connected app's secret. An identifier, not the secret itself.")
+	cmd.Flags().String("connected-app-secret-value", "", "Value of the connected app's secret in connected_app_secret_id. Stored by Monte Carlo and never returned. Visible in the process list; --connected-app-secret-value-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("connected-app-secret-value-prompt", false, "Read --connected-app-secret-value from a hidden prompt instead of the command line.")
+	cmd.Flags().String("password", "", "Password of username. Send this, a personal access token, or a connected app. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("server-name", "", "URL of the Tableau server, starting with https:// or http://.")
+	cmd.Flags().String("site-name", "", "Tableau site to connect to. Leave it out for the default site.")
+	cmd.Flags().String("token-name", "", "Name of a personal access token. Send it with token_value.")
+	cmd.Flags().String("token-value", "", "Secret of the personal access token in token_name. Stored by Monte Carlo and never returned. Visible in the process list; --token-value-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("token-value-prompt", false, "Read --token-value from a hidden prompt instead of the command line.")
+	cmd.Flags().String("username", "", "Tableau user. Send it with password, or with a connected app. Not used with a personal access token.")
+	cmd.Flags().Bool("verify-ssl", false, "Whether to verify the server's TLS certificate. Verified when left out.")
+	registerConnectionsUpdateFlags(cmd)
+	return cmd
+}
+
+func newConnectionsUpdateLookerCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "looker <connection_id>",
+		Short: "Update a looker connection, and change its credentials",
+		Long:  "Updates a looker connection, as the update command does, changing its looker credentials with the flags below.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
+				group:   flagGroup{"looker", []string{"api-client-id", "api-client-secret", "api-client-secret-prompt", "base-url", "verify-ssl"}},
+				storage: "mc_managed",
+				build:   buildConnectionsUpdateLooker,
+			})
+		},
+	}
+	cmd.Flags().String("api-client-id", "", "Client ID of the Looker API key.")
+	cmd.Flags().String("api-client-secret", "", "Client secret of the Looker API key. Stored by Monte Carlo and never returned. Visible in the process list; --api-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("api-client-secret-prompt", false, "Read --api-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("base-url", "", "URL of the Looker API, such as https://acme.cloud.looker.com.")
+	cmd.Flags().Bool("verify-ssl", false, "Whether to verify Looker's TLS certificate. Verified when left out.")
+	registerConnectionsUpdateFlags(cmd)
+	return cmd
+}
+
+func newConnectionsUpdateLookerGitCloneCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "looker-git-clone <connection_id>",
+		Short: "Update a looker-git-clone connection, and change its credentials",
+		Long:  "Updates a looker-git-clone connection, as the update command does, changing its looker-git-clone credentials with the flags below.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
+				group:   flagGroup{"looker-git-clone", []string{"repo-url", "ssh-key", "ssh-key-prompt", "ssl-ca-data", "ssl-skip-cert-verification", "token", "token-prompt", "username"}},
+				storage: "mc_managed",
+				build:   buildConnectionsUpdateLookerGitClone,
+			})
+		},
+	}
+	cmd.Flags().String("repo-url", "", "Clone URL of the LookML repository, over HTTPS or SSH.")
+	cmd.Flags().String("ssh-key", "", "Private key for an SSH clone, as PEM text including its BEGIN and END lines. Send this or username and token. Stored by Monte Carlo and never returned. Visible in the process list; --ssh-key-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("ssh-key-prompt", false, "Read --ssh-key from a hidden prompt instead of the command line.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM certificate of the CA that signed the git server's certificate.")
+	cmd.Flags().Bool("ssl-skip-cert-verification", false, "Skip verifying the git server's TLS certificate.")
+	cmd.Flags().String("token", "", "Access token of username, for an HTTPS clone. Send this or ssh_key. Stored by Monte Carlo and never returned. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
+	cmd.Flags().String("username", "", "Git user for an HTTPS clone. Send it with token.")
+	registerConnectionsUpdateFlags(cmd)
+	return cmd
+}
+
+func newConnectionsUpdatePowerBiCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "power-bi <connection_id>",
+		Short: "Update a power-bi connection, and change its credentials",
+		Long:  "Updates a power-bi connection, as the update command does, changing its power-bi credentials with the flags below.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
+				group:   flagGroup{"power-bi", []string{"app-client-id", "app-client-secret", "app-client-secret-prompt", "auth-mode", "password", "password-prompt", "tenant-id", "username"}},
+				storage: "mc_managed",
+				build:   buildConnectionsUpdatePowerBi,
+			})
+		},
+	}
+	cmd.Flags().String("app-client-id", "", "Client ID of the Entra ID app registration Monte Carlo signs in with.")
+	cmd.Flags().String("app-client-secret", "", "Secret of the app registration, for service_principal. Stored by Monte Carlo and never returned. Visible in the process list; --app-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("app-client-secret-prompt", false, "Read --app-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("auth-mode", "", "How Monte Carlo signs in. service_principal takes app_client_secret. primary_user takes username and password.")
+	_ = cmd.RegisterFlagCompletionFunc("auth-mode", enumCompletion(sdk.AllowedPowerBiAuthModeEnumValues))
+	cmd.Flags().String("password", "", "Password of username, for primary_user. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("tenant-id", "", "Microsoft Entra ID tenant the Power BI service belongs to.")
+	cmd.Flags().String("username", "", "User Monte Carlo signs in as, for primary_user.")
 	registerConnectionsUpdateFlags(cmd)
 	return cmd
 }
@@ -5888,6 +6573,614 @@ func buildConnectionsUpdateTeradata(cmd *cobra.Command, api *sdk.APIClient, cred
 	}, nil
 }
 
+func buildConnectionsUpdateTableau(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+	var err error
+	var connectedAppClientId string
+	if changed(cmd, "connected-app-client-id") {
+		connectedAppClientId, err = flagString(cmd, "connected-app-client-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var connectedAppSecretId string
+	if changed(cmd, "connected-app-secret-id") {
+		connectedAppSecretId, err = flagString(cmd, "connected-app-secret-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var connectedAppSecretValue string
+	if changed(cmd, "connected-app-secret-value", "connected-app-secret-value-prompt") {
+		connectedAppSecretValue, err = flagSecret(cmd, "connected-app-secret-value")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var password string
+	if changed(cmd, "password", "password-prompt") {
+		password, err = flagSecret(cmd, "password")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var serverName string
+	if changed(cmd, "server-name") {
+		serverName, err = flagString(cmd, "server-name")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var siteName string
+	if changed(cmd, "site-name") {
+		siteName, err = flagString(cmd, "site-name")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var tokenName string
+	if changed(cmd, "token-name") {
+		tokenName, err = flagString(cmd, "token-name")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var tokenValue string
+	if changed(cmd, "token-value", "token-value-prompt") {
+		tokenValue, err = flagSecret(cmd, "token-value")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var username string
+	if changed(cmd, "username") {
+		username, err = flagString(cmd, "username")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var verifySsl bool
+	if changed(cmd, "verify-ssl") {
+		verifySsl, err = flagBool(cmd, "verify-ssl")
+		if err != nil {
+			return nil, err
+		}
+	}
+	patch := sdk.NewTableauCredentialsPatchWithDefaults()
+	if changed(cmd, "connected-app-client-id") {
+		if connectedAppClientId == "" {
+			patch.SetConnectedAppClientIdNil()
+		} else {
+			patch.SetConnectedAppClientId(connectedAppClientId)
+		}
+	}
+	if changed(cmd, "connected-app-secret-id") {
+		if connectedAppSecretId == "" {
+			patch.SetConnectedAppSecretIdNil()
+		} else {
+			patch.SetConnectedAppSecretId(connectedAppSecretId)
+		}
+	}
+	if changed(cmd, "connected-app-secret-value", "connected-app-secret-value-prompt") {
+		if connectedAppSecretValue == "" {
+			patch.SetConnectedAppSecretValueNil()
+		} else {
+			patch.SetConnectedAppSecretValue(connectedAppSecretValue)
+		}
+	}
+	if changed(cmd, "password", "password-prompt") {
+		if password == "" {
+			patch.SetPasswordNil()
+		} else {
+			patch.SetPassword(password)
+		}
+	}
+	if changed(cmd, "server-name") {
+		if serverName == "" {
+			patch.SetServerNameNil()
+		} else {
+			patch.SetServerName(serverName)
+		}
+	}
+	if changed(cmd, "site-name") {
+		if siteName == "" {
+			patch.SetSiteNameNil()
+		} else {
+			patch.SetSiteName(siteName)
+		}
+	}
+	if changed(cmd, "token-name") {
+		if tokenName == "" {
+			patch.SetTokenNameNil()
+		} else {
+			patch.SetTokenName(tokenName)
+		}
+	}
+	if changed(cmd, "token-value", "token-value-prompt") {
+		if tokenValue == "" {
+			patch.SetTokenValueNil()
+		} else {
+			patch.SetTokenValue(tokenValue)
+		}
+	}
+	if changed(cmd, "username") {
+		if username == "" {
+			patch.SetUsernameNil()
+		} else {
+			patch.SetUsername(username)
+		}
+	}
+	if changed(cmd, "verify-ssl") {
+		patch.SetVerifySsl(verifySsl)
+	}
+	return &connectionsUpdateCredentials{
+		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
+			stored, resp, err := api.CredentialsAPI.GetTableauCredentials(ctx, credentialsId).Execute()
+			if err != nil {
+				return nil, resp, err
+			}
+			candidate := sdk.NewTableauCredentialsValidateInWithDefaults()
+			var missing []string
+			candidate.SetDeploymentId(deploymentId)
+			if changed(cmd, "server-name") {
+				if serverName != "" {
+					candidate.SetServerName(serverName)
+				}
+			} else if v, ok := stored.GetServerNameOk(); ok && v != nil {
+				candidate.SetServerName(*v)
+			}
+			if changed(cmd, "connected-app-client-id") {
+				if connectedAppClientId != "" {
+					candidate.SetConnectedAppClientId(connectedAppClientId)
+				}
+			} else if v, ok := stored.GetConnectedAppClientIdOk(); ok && v != nil {
+				candidate.SetConnectedAppClientId(*v)
+			}
+			if changed(cmd, "connected-app-secret-id") {
+				if connectedAppSecretId != "" {
+					candidate.SetConnectedAppSecretId(connectedAppSecretId)
+				}
+			} else if v, ok := stored.GetConnectedAppSecretIdOk(); ok && v != nil {
+				candidate.SetConnectedAppSecretId(*v)
+			}
+			if changed(cmd, "connected-app-secret-value", "connected-app-secret-value-prompt") {
+				if connectedAppSecretValue != "" {
+					candidate.SetConnectedAppSecretValue(connectedAppSecretValue)
+				}
+			}
+			if changed(cmd, "password", "password-prompt") {
+				if password != "" {
+					candidate.SetPassword(password)
+				}
+			}
+			if changed(cmd, "site-name") {
+				if siteName != "" {
+					candidate.SetSiteName(siteName)
+				}
+			} else if v, ok := stored.GetSiteNameOk(); ok && v != nil {
+				candidate.SetSiteName(*v)
+			}
+			if changed(cmd, "token-name") {
+				if tokenName != "" {
+					candidate.SetTokenName(tokenName)
+				}
+			} else if v, ok := stored.GetTokenNameOk(); ok && v != nil {
+				candidate.SetTokenName(*v)
+			}
+			if changed(cmd, "token-value", "token-value-prompt") {
+				if tokenValue != "" {
+					candidate.SetTokenValue(tokenValue)
+				}
+			}
+			if changed(cmd, "username") {
+				if username != "" {
+					candidate.SetUsername(username)
+				}
+			} else if v, ok := stored.GetUsernameOk(); ok && v != nil {
+				candidate.SetUsername(*v)
+			}
+			if changed(cmd, "verify-ssl") {
+				candidate.SetVerifySsl(verifySsl)
+			} else if v, ok := stored.GetVerifySslOk(); ok && v != nil {
+				candidate.SetVerifySsl(*v)
+			}
+			if len(missing) > 0 {
+				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+			}
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateTableauCredentials(ctx).TableauCredentialsValidateIn(*candidate).Execute)
+		},
+		patch: func(ctx context.Context) (*http.Response, error) {
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateTableauCredentials(ctx, credentialsId).TableauCredentialsPatch(*patch).Execute)
+			return resp, err
+		},
+	}, nil
+}
+
+func buildConnectionsUpdateLooker(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+	var err error
+	var apiClientId string
+	if changed(cmd, "api-client-id") {
+		apiClientId, err = flagString(cmd, "api-client-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var apiClientSecret string
+	if changed(cmd, "api-client-secret", "api-client-secret-prompt") {
+		apiClientSecret, err = flagSecret(cmd, "api-client-secret")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var baseUrl string
+	if changed(cmd, "base-url") {
+		baseUrl, err = flagString(cmd, "base-url")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var verifySsl bool
+	if changed(cmd, "verify-ssl") {
+		verifySsl, err = flagBool(cmd, "verify-ssl")
+		if err != nil {
+			return nil, err
+		}
+	}
+	patch := sdk.NewLookerCredentialsPatchWithDefaults()
+	if changed(cmd, "api-client-id") {
+		if apiClientId == "" {
+			patch.SetApiClientIdNil()
+		} else {
+			patch.SetApiClientId(apiClientId)
+		}
+	}
+	if changed(cmd, "api-client-secret", "api-client-secret-prompt") {
+		if apiClientSecret == "" {
+			patch.SetApiClientSecretNil()
+		} else {
+			patch.SetApiClientSecret(apiClientSecret)
+		}
+	}
+	if changed(cmd, "base-url") {
+		if baseUrl == "" {
+			patch.SetBaseUrlNil()
+		} else {
+			patch.SetBaseUrl(baseUrl)
+		}
+	}
+	if changed(cmd, "verify-ssl") {
+		patch.SetVerifySsl(verifySsl)
+	}
+	return &connectionsUpdateCredentials{
+		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
+			stored, resp, err := api.CredentialsAPI.GetLookerCredentials(ctx, credentialsId).Execute()
+			if err != nil {
+				return nil, resp, err
+			}
+			candidate := sdk.NewLookerCredentialsValidateInWithDefaults()
+			var missing []string
+			candidate.SetDeploymentId(deploymentId)
+			if changed(cmd, "base-url") {
+				if baseUrl != "" {
+					candidate.SetBaseUrl(baseUrl)
+				}
+			} else if v, ok := stored.GetBaseUrlOk(); ok && v != nil {
+				candidate.SetBaseUrl(*v)
+			}
+			if changed(cmd, "api-client-id") {
+				if apiClientId != "" {
+					candidate.SetApiClientId(apiClientId)
+				}
+			} else if v, ok := stored.GetApiClientIdOk(); ok && v != nil {
+				candidate.SetApiClientId(*v)
+			}
+			if changed(cmd, "api-client-secret", "api-client-secret-prompt") {
+				if apiClientSecret != "" {
+					candidate.SetApiClientSecret(apiClientSecret)
+				}
+			} else {
+				missing = append(missing, "--api-client-secret")
+			}
+			if changed(cmd, "verify-ssl") {
+				candidate.SetVerifySsl(verifySsl)
+			} else if v, ok := stored.GetVerifySslOk(); ok && v != nil {
+				candidate.SetVerifySsl(*v)
+			}
+			if len(missing) > 0 {
+				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+			}
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateLookerCredentials(ctx).LookerCredentialsValidateIn(*candidate).Execute)
+		},
+		patch: func(ctx context.Context) (*http.Response, error) {
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateLookerCredentials(ctx, credentialsId).LookerCredentialsPatch(*patch).Execute)
+			return resp, err
+		},
+	}, nil
+}
+
+func buildConnectionsUpdateLookerGitClone(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+	var err error
+	var repoUrl string
+	if changed(cmd, "repo-url") {
+		repoUrl, err = flagString(cmd, "repo-url")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var sshKey string
+	if changed(cmd, "ssh-key", "ssh-key-prompt") {
+		sshKey, err = flagSecret(cmd, "ssh-key")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var sslCaData string
+	if changed(cmd, "ssl-ca-data") {
+		sslCaData, err = flagString(cmd, "ssl-ca-data")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var sslSkipCertVerification bool
+	if changed(cmd, "ssl-skip-cert-verification") {
+		sslSkipCertVerification, err = flagBool(cmd, "ssl-skip-cert-verification")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var token string
+	if changed(cmd, "token", "token-prompt") {
+		token, err = flagSecret(cmd, "token")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var username string
+	if changed(cmd, "username") {
+		username, err = flagString(cmd, "username")
+		if err != nil {
+			return nil, err
+		}
+	}
+	patch := sdk.NewLookerGitCloneCredentialsPatchWithDefaults()
+	if changed(cmd, "repo-url") {
+		if repoUrl == "" {
+			patch.SetRepoUrlNil()
+		} else {
+			patch.SetRepoUrl(repoUrl)
+		}
+	}
+	if changed(cmd, "ssh-key", "ssh-key-prompt") {
+		if sshKey == "" {
+			patch.SetSshKeyNil()
+		} else {
+			patch.SetSshKey(sshKey)
+		}
+	}
+	if changed(cmd, "ssl-ca-data") {
+		if sslCaData == "" {
+			patch.SetSslCaDataNil()
+		} else {
+			patch.SetSslCaData(sslCaData)
+		}
+	}
+	if changed(cmd, "ssl-skip-cert-verification") {
+		patch.SetSslSkipCertVerification(sslSkipCertVerification)
+	}
+	if changed(cmd, "token", "token-prompt") {
+		if token == "" {
+			patch.SetTokenNil()
+		} else {
+			patch.SetToken(token)
+		}
+	}
+	if changed(cmd, "username") {
+		if username == "" {
+			patch.SetUsernameNil()
+		} else {
+			patch.SetUsername(username)
+		}
+	}
+	return &connectionsUpdateCredentials{
+		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
+			stored, resp, err := api.CredentialsAPI.GetLookerGitCloneCredentials(ctx, credentialsId).Execute()
+			if err != nil {
+				return nil, resp, err
+			}
+			candidate := sdk.NewLookerGitCloneCredentialsValidateInWithDefaults()
+			var missing []string
+			candidate.SetDeploymentId(deploymentId)
+			if changed(cmd, "repo-url") {
+				if repoUrl != "" {
+					candidate.SetRepoUrl(repoUrl)
+				}
+			} else if v, ok := stored.GetRepoUrlOk(); ok && v != nil {
+				candidate.SetRepoUrl(*v)
+			}
+			if changed(cmd, "ssh-key", "ssh-key-prompt") {
+				if sshKey != "" {
+					candidate.SetSshKey(sshKey)
+				}
+			}
+			if changed(cmd, "ssl-ca-data") {
+				if sslCaData != "" {
+					candidate.SetSslCaData(sslCaData)
+				}
+			} else if v, ok := stored.GetSslCaDataOk(); ok && v != nil {
+				candidate.SetSslCaData(*v)
+			}
+			if changed(cmd, "ssl-skip-cert-verification") {
+				candidate.SetSslSkipCertVerification(sslSkipCertVerification)
+			} else if v, ok := stored.GetSslSkipCertVerificationOk(); ok && v != nil {
+				candidate.SetSslSkipCertVerification(*v)
+			}
+			if changed(cmd, "token", "token-prompt") {
+				if token != "" {
+					candidate.SetToken(token)
+				}
+			}
+			if changed(cmd, "username") {
+				if username != "" {
+					candidate.SetUsername(username)
+				}
+			} else if v, ok := stored.GetUsernameOk(); ok && v != nil {
+				candidate.SetUsername(*v)
+			}
+			if len(missing) > 0 {
+				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+			}
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateLookerGitCloneCredentials(ctx).LookerGitCloneCredentialsValidateIn(*candidate).Execute)
+		},
+		patch: func(ctx context.Context) (*http.Response, error) {
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateLookerGitCloneCredentials(ctx, credentialsId).LookerGitCloneCredentialsPatch(*patch).Execute)
+			return resp, err
+		},
+	}, nil
+}
+
+func buildConnectionsUpdatePowerBi(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+	var err error
+	var appClientId string
+	if changed(cmd, "app-client-id") {
+		appClientId, err = flagString(cmd, "app-client-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var appClientSecret string
+	if changed(cmd, "app-client-secret", "app-client-secret-prompt") {
+		appClientSecret, err = flagSecret(cmd, "app-client-secret")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var authMode *sdk.PowerBiAuthMode
+	if changed(cmd, "auth-mode") {
+		authModeValue, err := flagString(cmd, "auth-mode")
+		if err != nil {
+			return nil, err
+		}
+		authMode, err = sdk.NewPowerBiAuthModeFromValue(authModeValue)
+		if err != nil {
+			return nil, err
+		}
+	}
+	var password string
+	if changed(cmd, "password", "password-prompt") {
+		password, err = flagSecret(cmd, "password")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var tenantId string
+	if changed(cmd, "tenant-id") {
+		tenantId, err = flagString(cmd, "tenant-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var username string
+	if changed(cmd, "username") {
+		username, err = flagString(cmd, "username")
+		if err != nil {
+			return nil, err
+		}
+	}
+	patch := sdk.NewPowerBiCredentialsPatchWithDefaults()
+	if changed(cmd, "app-client-id") {
+		if appClientId == "" {
+			patch.SetAppClientIdNil()
+		} else {
+			patch.SetAppClientId(appClientId)
+		}
+	}
+	if changed(cmd, "app-client-secret", "app-client-secret-prompt") {
+		if appClientSecret == "" {
+			patch.SetAppClientSecretNil()
+		} else {
+			patch.SetAppClientSecret(appClientSecret)
+		}
+	}
+	if changed(cmd, "auth-mode") {
+		patch.SetAuthMode(*authMode)
+	}
+	if changed(cmd, "password", "password-prompt") {
+		if password == "" {
+			patch.SetPasswordNil()
+		} else {
+			patch.SetPassword(password)
+		}
+	}
+	if changed(cmd, "tenant-id") {
+		if tenantId == "" {
+			patch.SetTenantIdNil()
+		} else {
+			patch.SetTenantId(tenantId)
+		}
+	}
+	if changed(cmd, "username") {
+		if username == "" {
+			patch.SetUsernameNil()
+		} else {
+			patch.SetUsername(username)
+		}
+	}
+	return &connectionsUpdateCredentials{
+		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
+			stored, resp, err := api.CredentialsAPI.GetPowerBiCredentials(ctx, credentialsId).Execute()
+			if err != nil {
+				return nil, resp, err
+			}
+			candidate := sdk.NewPowerBiCredentialsValidateInWithDefaults()
+			var missing []string
+			candidate.SetDeploymentId(deploymentId)
+			if changed(cmd, "tenant-id") {
+				if tenantId != "" {
+					candidate.SetTenantId(tenantId)
+				}
+			} else if v, ok := stored.GetTenantIdOk(); ok && v != nil {
+				candidate.SetTenantId(*v)
+			}
+			if changed(cmd, "app-client-id") {
+				if appClientId != "" {
+					candidate.SetAppClientId(appClientId)
+				}
+			} else if v, ok := stored.GetAppClientIdOk(); ok && v != nil {
+				candidate.SetAppClientId(*v)
+			}
+			if changed(cmd, "auth-mode") {
+				candidate.SetAuthMode(*authMode)
+			} else if v, ok := stored.GetAuthModeOk(); ok && v != nil {
+				candidate.SetAuthMode(*v)
+			}
+			if changed(cmd, "app-client-secret", "app-client-secret-prompt") {
+				if appClientSecret != "" {
+					candidate.SetAppClientSecret(appClientSecret)
+				}
+			}
+			if changed(cmd, "password", "password-prompt") {
+				if password != "" {
+					candidate.SetPassword(password)
+				}
+			}
+			if changed(cmd, "username") {
+				if username != "" {
+					candidate.SetUsername(username)
+				}
+			} else if v, ok := stored.GetUsernameOk(); ok && v != nil {
+				candidate.SetUsername(*v)
+			}
+			if len(missing) > 0 {
+				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+			}
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidatePowerBiCredentials(ctx).PowerBiCredentialsValidateIn(*candidate).Execute)
+		},
+		patch: func(ctx context.Context) (*http.Response, error) {
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdatePowerBiCredentials(ctx, credentialsId).PowerBiCredentialsPatch(*patch).Execute)
+			return resp, err
+		},
+	}, nil
+}
+
 func buildConnectionsUpdateSelfHostedAws(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var selfHostedAwsAssumableRole string
@@ -6617,14 +7910,14 @@ func runConnectionsUpdate(cmd *cobra.Command, connectionId string, native *conne
 		}
 		connection = out
 	}
-	return render(cmd, connection, "id", "connection_type", "name", "warehouse_id", "warehouse_name", "deployment_id", "deployment_name", "credentials_id", "credentials_storage_type", "job_types", "created_time")
+	return render(cmd, connection, "id", "connection_type", "name", "warehouse_id", "warehouse_name", "bi_container_id", "bi_container_name", "deployment_id", "deployment_name", "credentials_id", "credentials_storage_type", "job_types", "created_time")
 }
 
 func newConnectionsDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <connection_id>",
 		Short: "Delete a connection, and its credentials",
-		Long:  "Deletes a connection, then the credentials it used, unless --keep-credentials. Credentials another connection still uses are kept. The warehouse is kept unless --with-warehouse, and when it has no connection left, the command says so. With --with-warehouse, nothing is deleted while the warehouse has another connection. Deleting the connection also deletes its own schedules, monitors and rules.",
+		Long:  "Deletes a connection, then the credentials it used, unless --keep-credentials. Credentials another connection still uses are kept. The warehouse is kept unless --with-warehouse, and when it has no connection left, the command says so. With --with-warehouse, nothing is deleted while the warehouse has another connection. A connection on a BI container keeps the container, and the command says so when it has no connection left. Deleting the connection also deletes its own schedules, monitors and rules.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsDelete(cmd, args[0])
@@ -6666,6 +7959,10 @@ func runConnectionsDelete(cmd *cobra.Command, connectionId string) error {
 		return apiErr(resp, err)
 	}
 	warehouseId := connection.GetWarehouseId()
+	biContainerId := connection.GetBiContainerId()
+	if withWarehouse && warehouseId == "" {
+		return fmt.Errorf("connection %s is on BI container %s, not on a warehouse, so nothing was deleted; run it again without --with-warehouse", connectionId, biContainerId)
+	}
 	if withWarehouse {
 		others, resp, err := api.ConnectionsAPI.ListConnections(ctx).WarehouseId(warehouseId).Limit(2).Execute()
 		if err != nil {
@@ -6697,7 +7994,13 @@ func runConnectionsDelete(cmd *cobra.Command, connectionId string) error {
 		if err != nil && (resp == nil || resp.StatusCode != http.StatusNotFound) {
 			left = append(left, fmt.Sprintf("could not delete the warehouse %s: %s\n    delete it with: %s %s %s", warehouseId, firstLine(apiErr(resp, err)), binaryName, "warehouses delete", warehouseId))
 		}
-	} else {
+	} else if biContainerId != "" {
+		// Only the stderr note depends on this read, so its error does not fail the command.
+		remaining, _, err := api.ConnectionsAPI.ListConnections(ctx).BiContainerId(biContainerId).Limit(1).Execute()
+		if err == nil && len(remaining.GetItems()) == 0 {
+			fmt.Fprintf(stderr, "The BI container %s has no connection left. Delete it with: %s %s %s\n", biContainerId, binaryName, "bi-containers delete", biContainerId)
+		}
+	} else if warehouseId != "" {
 		// Only the stderr note depends on this read, so its error does not fail the command.
 		remaining, _, err := api.ConnectionsAPI.ListConnections(ctx).WarehouseId(warehouseId).Limit(1).Execute()
 		if err == nil && len(remaining.GetItems()) == 0 {
