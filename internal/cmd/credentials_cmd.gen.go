@@ -1311,7 +1311,7 @@ func newCredentialsCreatePowerBiCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "power-bi",
 		Short: "Create Power BI credentials",
-		Long:  "Store Power BI credentials.\n\nMonte Carlo keeps the client secret or the password and returns everything else. Create\nthe credentials first, then create a connection that references them, on a Power BI BI\ncontainer. Nothing is checked against Power BI here.\n\n`auth_mode` decides what else to send: `app_client_secret` for `service_principal`, or\n`username` and `password` for `primary_user`. An account holds a limited number of\ncredentials; past that the create is refused.",
+		Long:  "Store Power BI credentials.\n\nMonte Carlo keeps the client secret or the password and returns everything else. Create\nthe credentials first, then create a connection that references them, on a Power BI\ncontainer. Nothing is checked against Power BI here.\n\n`auth_mode` decides what else to send: `app_client_secret` for `service_principal`, or\n`username` and `password` for `primary_user`. An account holds a limited number of\ncredentials; past that the create is refused.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			api, ctx, err := apiClient(cmd)
