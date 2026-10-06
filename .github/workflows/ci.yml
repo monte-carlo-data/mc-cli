@@ -63,6 +63,16 @@ jobs:
       - name: Test
         run: go test -race ./...
 
+      - name: Check the third-party notices are current
+        run: |
+          go generate ./...
+          stale="$(git status --porcelain -- THIRD_PARTY_NOTICES)"
+          if [ -n "$stale" ]; then
+            echo "THIRD_PARTY_NOTICES is out of date. Run go generate ./... and commit the result:"
+            echo "$stale"
+            exit 1
+          fi
+
       - name: Generated files carry the header and nothing else does
         run: |
           for f in internal/cmd/*_cmd.gen.go; do

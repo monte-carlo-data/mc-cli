@@ -29,6 +29,7 @@ go build ./...                  # compile check only, produces no binary
 go test -race ./...
 go vet ./...
 gofmt -l .                      # must be empty
+go generate ./...               # rewrites THIRD_PARTY_NOTICES
 
 go build -o . ./cmd/montecarlo  # writes ./montecarlo
 ./montecarlo --help
@@ -40,12 +41,17 @@ go build -o . ./cmd/montecarlo  # writes ./montecarlo
 |------|---------|
 | `cmd/montecarlo/` | The main package. |
 | `internal/cmd/` | The command tree: hand-written base files and the generated `*_cmd.gen.go`. |
+| `tools/notices/` | Writes `THIRD_PARTY_NOTICES`; `go generate ./...` runs it. |
 
 ## What is generated
 
 Every `internal/cmd/*_cmd.gen.go`: one file per API tag, holding that tag's group command, its verb containers and one cobra command per exposed operation. A fix to one of those files does not survive regeneration; it belongs in the API or in the generator that reads its spec.
 
 Regeneration replaces files **by name**: exactly `internal/cmd/*_cmd.gen.go` are deleted and rewritten, and every other file in the package is left alone. A hand-written file whose name ends in `_cmd.gen.go` is therefore lost on the next run. CI checks that every file with the suffix carries the generated header and no file without it does.
+
+## Third-party notices
+
+The release binaries compile in third-party modules, and their licenses require passing on their license and notice files. `THIRD_PARTY_NOTICES` holds them, and every release archive has to carry it next to `LICENSE` and `README.md`. `go generate ./...` rebuilds it with `tools/notices`, from the modules `go list -deps` reports for `cmd/montecarlo` on every release platform. Never edit it by hand. CI fails when it differs from what `go generate` produces, so a dependency change has to commit it too.
 
 ## Regeneration is automatic
 
