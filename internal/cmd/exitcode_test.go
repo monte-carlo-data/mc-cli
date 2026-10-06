@@ -107,6 +107,9 @@ func TestApiFailuresExitWithTheirStatusCode(t *testing.T) {
 		// users/me is a read, which is not retried: a 503 still means "try again later".
 		{http.StatusServiceUnavailable, "application/problem+json", transientProblem, exitTransient},
 		{http.StatusTooManyRequests, "text/plain", "slow down", exitTransient},
+		// Only 503 and 429 are transient; other 5xx statuses are plain failures.
+		{http.StatusBadGateway, "text/plain", "bad gateway", exitFailure},
+		{http.StatusGatewayTimeout, "text/plain", "timeout", exitFailure},
 		{http.StatusInternalServerError, "text/plain", "oops", exitFailure},
 		{http.StatusConflict, "text/plain", "conflict", exitFailure},
 		// A success status whose body the SDK cannot decode.
@@ -195,10 +198,36 @@ func TestCommandLineMistakesExitWith2(t *testing.T) {
 	}
 }
 
+// The command takes an argument and has required flags, and fails with an uncoded
+// network error, so this reaches the re-check in commandLineErr.
 func TestAFailureInsideAValidCommandLineIsNotAUsageError(t *testing.T) {
-	srv := problemServer(t, http.StatusInternalServerError, "text/plain", "oops")
-	if code, stderr := whoamiAgainst(t, srv); code != exitFailure {
+	code, _, stderr := runExit(t, context.Background(), "deployments", "reprovision", "d1",
+		"--type", "COLLECTION_AGENT", "--runtime-platform", "AWS", "--yes",
+		"--endpoint", "http://127.0.0.1:1", "--api-id", "i", "--api-token", "s")
+	if code != exitFailure {
 		t.Fatalf("exit %d; stderr %q", code, stderr)
+	}
+}
+
+func TestABadOutputIsRejectedUnderACommandWithItsOwnHook(t *testing.T) {
+	ran := false
+	cmd := &cobra.Command{
+		Use:               "fixture-hooked",
+		PersistentPreRunE: func(*cobra.Command, []string) error { return nil },
+		RunE:              func(*cobra.Command, []string) error { ran = true; return nil },
+	}
+	rootCmd.AddCommand(cmd)
+	t.Cleanup(func() { rootCmd.RemoveCommand(cmd) })
+	code, _, stderr := runExit(t, context.Background(), "fixture-hooked", "--output", "xml")
+	if code != exitUsage || ran {
+		t.Fatalf("exit %d, ran %v; stderr %q", code, ran, stderr)
+	}
+}
+
+func TestHelpAsASubcommandOfAGroupShowsItsHelp(t *testing.T) {
+	code, stdout, stderr := runExit(t, context.Background(), "connections", "help")
+	if code != exitOK || !strings.Contains(stdout, "Available Commands:") {
+		t.Fatalf("exit %d\nstdout %q\nstderr %q", code, stdout, stderr)
 	}
 }
 

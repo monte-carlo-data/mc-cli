@@ -78,7 +78,8 @@ func flagSecret(cmd *cobra.Command, name string) (string, error) {
 }
 
 // readSecret prompts on the terminal with echo off. Without a terminal there is nothing to
-// prompt on, and the caller is told to use @<path> instead.
+// prompt on, and the caller is told to use @<path> instead. Ctrl-C does not end the read:
+// abandoning it would leave the terminal's echo off.
 func readSecret(cmd *cobra.Command, name string) (string, error) {
 	if !stdinIsTerminal(cmd) {
 		return "", usageError("--%s-prompt needs a terminal; pass --%s @<path> instead", name, name)

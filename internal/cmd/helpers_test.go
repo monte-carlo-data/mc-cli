@@ -70,8 +70,6 @@ func runExit(t *testing.T, ctx context.Context, args ...string) (code int, stdou
 	isolateEnv(t)
 	resetFlags(rootCmd)
 	var outBuf, errBuf bytes.Buffer
-	rootCmd.SetOut(&outBuf)
-	rootCmd.SetErr(&errBuf)
 	t.Cleanup(func() {
 		rootCmd.SetOut(nil)
 		rootCmd.SetErr(nil)

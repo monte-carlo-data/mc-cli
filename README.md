@@ -53,7 +53,7 @@ Scripts can tell failures apart by the exit code:
 |------|---------|
 | 0 | Success. |
 | 1 | The command failed for a reason not listed below: an API error such as a 500 or a 409, a network failure, or a local error. |
-| 2 | The command line is wrong: an unknown command or flag, a flag value of the wrong type or outside its allowed values, a missing argument or required flag, flags that do not go together, or a confirmation without `--yes` when there is no terminal. |
+| 2 | The command line is wrong: an unknown command or flag, a flag value of the wrong type or outside its allowed values, a missing argument or required flag, a `@<path>` that cannot be read, flags that do not go together, or a confirmation without `--yes` when there is no terminal. |
 | 3 | Not found: the API answered 404. |
 | 4 | The API refused the request: it answered 401 (credentials rejected) or 403 (not permitted). |
 | 5 | The API answered 503 or 429, unavailable or limiting requests, and was still answering it when the command ended, after any retries. |

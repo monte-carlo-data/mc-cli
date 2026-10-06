@@ -26,6 +26,8 @@ const defaultEndpoint = "https://api.getmontecarlo.com"
 // persistent flags exist before registerRootCompletions, in this package's own init, looks for
 // them.
 func newRootCmd() *cobra.Command {
+	// Run the root's persistent hook before any command's own, instead of replacing it.
+	cobra.EnableTraverseRunHooks = true
 	cmd := &cobra.Command{
 		Use:   binaryName,
 		Short: "Monte Carlo from the command line",
@@ -42,7 +44,7 @@ A secret flag accepts @<path> to read its value from a file, and has a --<name>-
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		// A bad --output is caught before the command runs, not when its result is printed,
-		// after a write has already happened. A command with its own hook would skip this one.
+		// after a write has already happened.
 		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
 			_, err := outputFormat(cmd)
 			return err
@@ -84,16 +86,17 @@ A secret flag accepts @<path> to read its value from a file, and has a --<name>-
 var rootCmd = newRootCmd()
 
 // Execute runs the command and returns the process exit code. Ctrl-C or SIGTERM cancels the
-// command's context, which ends a retry wait or a prompt, and the exit code is then 130.
+// command's context, which ends a retry wait or a confirmation, and the exit code is then 130.
 func Execute() int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	return executeArgs(ctx, os.Args[1:], os.Stdout, os.Stderr)
 }
 
-// executeArgs is Execute with its inputs passed in, so a test can check the exit code. stdout is
-// where completion answers go; commands write to the root's own output.
+// executeArgs is Execute with its inputs passed in, so a test can check the exit code.
 func executeArgs(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	rootCmd.SetOut(stdout)
+	rootCmd.SetErr(stderr)
 	rootCmd.SetArgs(args)
 	if completionRequest(args) {
 		return executeCompletion(ctx, stdout)
@@ -107,8 +110,9 @@ func executeArgs(ctx context.Context, args []string, stdout, stderr io.Writer) i
 }
 
 // commandLineErr marks err as a usage error when cobra rejected the command line before running
-// cmd: an unknown command, the wrong arguments, or a required flag missing. It repeats cobra's
-// checks to find out: they return plain errors, and give the same answer each time.
+// cmd: an unknown command, the wrong arguments, a missing required flag, or a broken flag group.
+// It repeats cobra's checks to find out: they return plain errors, and give the same answer each
+// time.
 func commandLineErr(cmd *cobra.Command, err error) error {
 	if err == nil {
 		return unknownSubcommand(cmd)
@@ -125,11 +129,11 @@ func commandLineErr(cmd *cobra.Command, err error) error {
 	return err
 }
 
-// unknownSubcommand is the usage error for a group command given an argument, which can only be
-// a subcommand it does not have.
+// unknownSubcommand is the usage error for a group command given an argument other than help,
+// which can only be a subcommand it does not have. Cobra registers help only at the root.
 func unknownSubcommand(cmd *cobra.Command) error {
 	args := cmd.Flags().Args()
-	if cmd.Runnable() || !cmd.HasSubCommands() || len(args) == 0 {
+	if cmd.Runnable() || !cmd.HasSubCommands() || len(args) == 0 || args[0] == "help" {
 		return nil
 	}
 	msg := fmt.Sprintf("unknown command %q for %q", args[0], cmd.CommandPath())

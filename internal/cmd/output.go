@@ -263,7 +263,7 @@ func statusExitCode(resp *http.Response, apiError *sdk.GenericOpenAPIError) int 
 		return exitNotFound
 	case status == http.StatusUnauthorized || status == http.StatusForbidden:
 		return exitAuth
-	case retryableStatus(status):
+	case status == http.StatusServiceUnavailable || status == http.StatusTooManyRequests:
 		return exitTransient
 	}
 	return exitFailure

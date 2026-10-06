@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"os"
 	"strings"
@@ -95,10 +96,6 @@ func TestGeneratedDeleteRefusesWithoutYesOffATerminal(t *testing.T) {
 }
 
 func TestConfirmEndsWhenTheCommandIsInterrupted(t *testing.T) {
-	original := isTerminal
-	isTerminal = func(*os.File) bool { return true }
-	t.Cleanup(func() { isTerminal = original })
-
 	cmd := newTestCommand(t)
 	answer, _ := io.Pipe() // nobody answers
 	cmd.SetIn(answer)
@@ -111,8 +108,11 @@ func TestConfirmEndsWhenTheCommandIsInterrupted(t *testing.T) {
 	cancel()
 	select {
 	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("err = %v, want context.Canceled", err)
+		}
 		if exitCode(ctx, err) != exitInterrupted {
-			t.Fatalf("err = %v", err)
+			t.Fatalf("exit code = %d", exitCode(ctx, err))
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("the prompt kept waiting after the command was interrupted")
