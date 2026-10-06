@@ -83,8 +83,8 @@ A secret flag accepts @<path> to read its value from a file, and has a --<name>-
 
 var rootCmd = newRootCmd()
 
-// Execute runs the command and returns the process exit code. Ctrl-C cancels the command's
-// context, which ends a retry wait.
+// Execute runs the command and returns the process exit code. Ctrl-C or SIGTERM cancels the
+// command's context, which ends a retry wait or a prompt, and the exit code is then 130.
 func Execute() int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

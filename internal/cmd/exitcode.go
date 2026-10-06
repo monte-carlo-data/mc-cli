@@ -13,7 +13,7 @@ const (
 	exitFailure     = 1   // an API or runtime failure, and anything not classified below
 	exitUsage       = 2   // the command line is wrong: an unknown command or flag, a bad value
 	exitNotFound    = 3   // the API answered 404
-	exitAuth        = 4   // the credentials were rejected: 401 or 403
+	exitAuth        = 4   // the API refused the request: 401 or 403
 	exitTransient   = 5   // the API was still answering 503 or 429 when the command ended
 	exitValidation  = 6   // the command ran, but the validations it ran did not pass
 	exitInterrupted = 130 // declined at a confirmation, or interrupted
