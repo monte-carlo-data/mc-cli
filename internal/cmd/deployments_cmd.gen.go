@@ -44,7 +44,7 @@ func newDeploymentsCreateCmd() *cobra.Command {
 			}
 			type_, err := sdk.NewDeploymentTypeFromValue(typeValue)
 			if err != nil {
-				return err
+				return usageError("%w", err)
 			}
 			runtimePlatformValue, err := flagString(cmd, "runtime-platform")
 			if err != nil {
@@ -52,7 +52,7 @@ func newDeploymentsCreateCmd() *cobra.Command {
 			}
 			runtimePlatform, err := sdk.NewRuntimePlatformFromValue(runtimePlatformValue)
 			if err != nil {
-				return err
+				return usageError("%w", err)
 			}
 			body := sdk.NewDeploymentIn(*type_, *runtimePlatform)
 			if changed(cmd, "name") {
@@ -169,7 +169,7 @@ func newDeploymentsReprovisionCmd() *cobra.Command {
 			}
 			type_, err := sdk.NewDeploymentTypeFromValue(typeValue)
 			if err != nil {
-				return err
+				return usageError("%w", err)
 			}
 			runtimePlatformValue, err := flagString(cmd, "runtime-platform")
 			if err != nil {
@@ -177,7 +177,7 @@ func newDeploymentsReprovisionCmd() *cobra.Command {
 			}
 			runtimePlatform, err := sdk.NewRuntimePlatformFromValue(runtimePlatformValue)
 			if err != nil {
-				return err
+				return usageError("%w", err)
 			}
 			body := sdk.NewDeploymentIn(*type_, *runtimePlatform)
 			if changed(cmd, "name") {

@@ -286,7 +286,7 @@ func newCollectionDataStoresRegisterAzureCmd() *cobra.Command {
 			}
 			authenticationType, err := sdk.NewAzureDataStoreAuthenticationTypeFromValue(authenticationTypeValue)
 			if err != nil {
-				return err
+				return usageError("%w", err)
 			}
 			deploymentId, err := flagString(cmd, "deployment-id")
 			if err != nil {
@@ -513,7 +513,7 @@ func newCollectionDataStoresUpdateAzureCmd() *cobra.Command {
 				}
 				authenticationType, err := sdk.NewAzureDataStoreAuthenticationTypeFromValue(authenticationTypeValue)
 				if err != nil {
-					return err
+					return usageError("%w", err)
 				}
 				body.SetAuthenticationType(*authenticationType)
 			}

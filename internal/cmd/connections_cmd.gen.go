@@ -227,7 +227,7 @@ func newConnectionsValidateCmd() *cobra.Command {
 					return err
 				}
 				if !passed {
-					return fmt.Errorf("not every validation passed")
+					return validationsFailed("not every validation passed")
 				}
 				return nil
 			}
@@ -2303,7 +2303,7 @@ func buildConnectionsAddTeradata(cmd *cobra.Command, api *sdk.APIClient, connect
 		}
 		tdLogmech, err = sdk.NewTeradataLogonMechanismFromValue(tdLogmechValue)
 		if err != nil {
-			return nil, err
+			return nil, usageError("%w", err)
 		}
 	}
 	var tdSslmode *sdk.TeradataSslMode
@@ -2314,7 +2314,7 @@ func buildConnectionsAddTeradata(cmd *cobra.Command, api *sdk.APIClient, connect
 		}
 		tdSslmode, err = sdk.NewTeradataSslModeFromValue(tdSslmodeValue)
 		if err != nil {
-			return nil, err
+			return nil, usageError("%w", err)
 		}
 	}
 	body := sdk.NewTeradataCredentialsIn(host, port, user, password)
@@ -2692,7 +2692,7 @@ func buildConnectionsAddPowerBi(cmd *cobra.Command, api *sdk.APIClient, connecti
 	}
 	authMode, err := sdk.NewPowerBiAuthModeFromValue(authModeValue)
 	if err != nil {
-		return nil, err
+		return nil, usageError("%w", err)
 	}
 	var appClientSecret string
 	if changed(cmd, "app-client-secret", "app-client-secret-prompt") {
@@ -3139,7 +3139,7 @@ func runConnectionsAdd(cmd *cobra.Command, connectionType string, native *connec
 		return err
 	}
 	if validateOnly && skipValidations {
-		return fmt.Errorf("pass --validate-only or --skip-validations, not both")
+		return usageError("pass --validate-only or --skip-validations, not both")
 	}
 	if !validateOnly {
 		if err := requireAny(cmd, "name"); err != nil {
@@ -3157,10 +3157,10 @@ func runConnectionsAdd(cmd *cobra.Command, connectionType string, native *connec
 	var biContainerType sdk.NewBiContainerType
 	if onBi {
 		if changed(cmd, "warehouse-id") {
-			return fmt.Errorf("a %s connection goes on a BI container, so it takes no --warehouse-id", connectionType)
+			return usageError("a %s connection goes on a BI container, so it takes no --warehouse-id", connectionType)
 		}
 		if changed(cmd, "bi-container-id") == changed(cmd, "deployment-id") {
-			return fmt.Errorf("pass --deployment-id to create a BI container for the connection, or --bi-container-id to add it to an existing one")
+			return usageError("pass --deployment-id to create a BI container for the connection, or --bi-container-id to add it to an existing one")
 		}
 		value, err := sdk.NewNewBiContainerTypeFromValue(containerType)
 		if err != nil {
@@ -3169,10 +3169,10 @@ func runConnectionsAdd(cmd *cobra.Command, connectionType string, native *connec
 		biContainerType = *value
 	} else {
 		if changed(cmd, "bi-container-id") {
-			return fmt.Errorf("a %s connection goes on a warehouse, so it takes no --bi-container-id", connectionType)
+			return usageError("a %s connection goes on a warehouse, so it takes no --bi-container-id", connectionType)
 		}
 		if changed(cmd, "warehouse-id") == changed(cmd, "deployment-id") {
-			return fmt.Errorf("pass --deployment-id to create a warehouse for the connection, or --warehouse-id to add it to an existing one")
+			return usageError("pass --deployment-id to create a warehouse for the connection, or --warehouse-id to add it to an existing one")
 		}
 	}
 	api, ctx, err := apiClient(cmd)
@@ -3183,7 +3183,7 @@ func runConnectionsAdd(cmd *cobra.Command, connectionType string, native *connec
 	switch {
 	case native != nil && selected == native.group.name:
 		if changed(cmd, native.selfHostedOnly...) {
-			return fmt.Errorf("%s credentials take no --%s", connectionType, strings.Join(native.selfHostedOnly, " or --"))
+			return usageError("%s credentials take no --%s", connectionType, strings.Join(native.selfHostedOnly, " or --"))
 		}
 		credentials, err = native.build(cmd, api, connectionType)
 	case selected == "self-hosted-aws":
@@ -3265,7 +3265,7 @@ func runConnectionsAdd(cmd *cobra.Command, connectionType string, native *connec
 			return err
 		}
 		if !passed {
-			return fmt.Errorf("the validations did not pass, so nothing was created. Fix the problems above, or pass --skip-validations to create the connection without validating")
+			return validationsFailed("the validations did not pass, so nothing was created. Fix the problems above, or pass --skip-validations to create the connection without validating")
 		}
 		if validateOnly {
 			fmt.Fprintln(cmd.ErrOrStderr(), "Nothing was created: --validate-only.")
@@ -4061,7 +4061,7 @@ func buildConnectionsUpdateSnowflake(cmd *cobra.Command, api *sdk.APIClient, cre
 				candidate.SetWarehouse(*v)
 			}
 			if len(missing) > 0 {
-				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
 			}
 			return retryOnTransient(cmd, api.CredentialsAPI.ValidateSnowflakeCredentials(ctx).SnowflakeCredentialsValidateIn(*candidate).Execute)
 		},
@@ -4102,7 +4102,7 @@ func buildConnectionsUpdateBigquery(cmd *cobra.Command, api *sdk.APIClient, cred
 				missing = append(missing, "--service-account-key")
 			}
 			if len(missing) > 0 {
-				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
 			}
 			return retryOnTransient(cmd, api.CredentialsAPI.ValidateBigqueryCredentials(ctx).BigQueryCredentialsValidateIn(*candidate).Execute)
 		},
@@ -4306,7 +4306,7 @@ func buildConnectionsUpdateRedshift(cmd *cobra.Command, api *sdk.APIClient, cred
 				candidate.SetSslVerifyIdentity(*v)
 			}
 			if len(missing) > 0 {
-				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
 			}
 			return retryOnTransient(cmd, api.CredentialsAPI.ValidateRedshiftCredentials(ctx).RedshiftCredentialsValidateIn(*candidate).Execute)
 		},
@@ -4494,7 +4494,7 @@ func buildConnectionsUpdateDatabricksMetastoreSqlWarehouse(cmd *cobra.Command, a
 				}
 			}
 			if len(missing) > 0 {
-				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
 			}
 			return retryOnTransient(cmd, api.CredentialsAPI.ValidateDatabricksMetastoreSqlWarehouseCredentials(ctx).DatabricksMetastoreSqlWarehouseCredentialsValidateIn(*candidate).Execute)
 		},
@@ -4682,7 +4682,7 @@ func buildConnectionsUpdateDatabricksSqlWarehouse(cmd *cobra.Command, api *sdk.A
 				candidate.SetWorkspaceId(*v)
 			}
 			if len(missing) > 0 {
-				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
 			}
 			return retryOnTransient(cmd, api.CredentialsAPI.ValidateDatabricksSqlWarehouseCredentials(ctx).DatabricksSqlWarehouseCredentialsValidateIn(*candidate).Execute)
 		},
@@ -4805,7 +4805,7 @@ func buildConnectionsUpdateMariadb(cmd *cobra.Command, api *sdk.APIClient, crede
 				candidate.SetDbName(*v)
 			}
 			if len(missing) > 0 {
-				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
 			}
 			return retryOnTransient(cmd, api.CredentialsAPI.ValidateMariadbCredentials(ctx).MariaDbCredentialsValidateIn(*candidate).Execute)
 		},
@@ -4928,7 +4928,7 @@ func buildConnectionsUpdateClickhouse(cmd *cobra.Command, api *sdk.APIClient, cr
 				candidate.SetDbName(*v)
 			}
 			if len(missing) > 0 {
-				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
 			}
 			return retryOnTransient(cmd, api.CredentialsAPI.ValidateClickhouseCredentials(ctx).ClickHouseCredentialsValidateIn(*candidate).Execute)
 		},
@@ -5051,7 +5051,7 @@ func buildConnectionsUpdateStarburstGalaxy(cmd *cobra.Command, api *sdk.APIClien
 				candidate.SetDbName(*v)
 			}
 			if len(missing) > 0 {
-				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
 			}
 			return retryOnTransient(cmd, api.CredentialsAPI.ValidateStarburstGalaxyCredentials(ctx).StarburstGalaxyCredentialsValidateIn(*candidate).Execute)
 		},
@@ -5174,7 +5174,7 @@ func buildConnectionsUpdateAzureSqlDatabase(cmd *cobra.Command, api *sdk.APIClie
 				candidate.SetDbName(*v)
 			}
 			if len(missing) > 0 {
-				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
 			}
 			return retryOnTransient(cmd, api.CredentialsAPI.ValidateAzureSqlDatabaseCredentials(ctx).AzureSqlDatabaseCredentialsValidateIn(*candidate).Execute)
 		},
@@ -5297,7 +5297,7 @@ func buildConnectionsUpdateAzureDedicatedSqlPool(cmd *cobra.Command, api *sdk.AP
 				candidate.SetDbName(*v)
 			}
 			if len(missing) > 0 {
-				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
 			}
 			return retryOnTransient(cmd, api.CredentialsAPI.ValidateAzureDedicatedSqlPoolCredentials(ctx).AzureDedicatedSqlPoolCredentialsValidateIn(*candidate).Execute)
 		},
@@ -5420,7 +5420,7 @@ func buildConnectionsUpdateSapHana(cmd *cobra.Command, api *sdk.APIClient, crede
 				candidate.SetDbName(*v)
 			}
 			if len(missing) > 0 {
-				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
 			}
 			return retryOnTransient(cmd, api.CredentialsAPI.ValidateSapHanaCredentials(ctx).SapHanaCredentialsValidateIn(*candidate).Execute)
 		},
@@ -5624,7 +5624,7 @@ func buildConnectionsUpdateMysql(cmd *cobra.Command, api *sdk.APIClient, credent
 				candidate.SetSslVerifyIdentity(*v)
 			}
 			if len(missing) > 0 {
-				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
 			}
 			return retryOnTransient(cmd, api.CredentialsAPI.ValidateMysqlCredentials(ctx).MySqlCredentialsValidateIn(*candidate).Execute)
 		},
@@ -5828,7 +5828,7 @@ func buildConnectionsUpdateOracle(cmd *cobra.Command, api *sdk.APIClient, creden
 				candidate.SetSslVerifyIdentity(*v)
 			}
 			if len(missing) > 0 {
-				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
 			}
 			return retryOnTransient(cmd, api.CredentialsAPI.ValidateOracleCredentials(ctx).OracleCredentialsValidateIn(*candidate).Execute)
 		},
@@ -5987,7 +5987,7 @@ func buildConnectionsUpdateDb2(cmd *cobra.Command, api *sdk.APIClient, credentia
 				candidate.SetSslDisabled(*v)
 			}
 			if len(missing) > 0 {
-				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
 			}
 			return retryOnTransient(cmd, api.CredentialsAPI.ValidateDb2Credentials(ctx).Db2CredentialsValidateIn(*candidate).Execute)
 		},
@@ -6146,7 +6146,7 @@ func buildConnectionsUpdateStarburstEnterprise(cmd *cobra.Command, api *sdk.APIC
 				candidate.SetSslDisabled(*v)
 			}
 			if len(missing) > 0 {
-				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
 			}
 			return retryOnTransient(cmd, api.CredentialsAPI.ValidateStarburstEnterpriseCredentials(ctx).StarburstEnterpriseCredentialsValidateIn(*candidate).Execute)
 		},
@@ -6365,7 +6365,7 @@ func buildConnectionsUpdatePostgres(cmd *cobra.Command, api *sdk.APIClient, cred
 				candidate.SetSslVerifyIdentity(*v)
 			}
 			if len(missing) > 0 {
-				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
 			}
 			return retryOnTransient(cmd, api.CredentialsAPI.ValidatePostgresCredentials(ctx).PostgresCredentialsValidateIn(*candidate).Execute)
 		},
@@ -6428,7 +6428,7 @@ func buildConnectionsUpdateTeradata(cmd *cobra.Command, api *sdk.APIClient, cred
 		}
 		tdLogmech, err = sdk.NewTeradataLogonMechanismFromValue(tdLogmechValue)
 		if err != nil {
-			return nil, err
+			return nil, usageError("%w", err)
 		}
 	}
 	var tdSslmode *sdk.TeradataSslMode
@@ -6439,7 +6439,7 @@ func buildConnectionsUpdateTeradata(cmd *cobra.Command, api *sdk.APIClient, cred
 		}
 		tdSslmode, err = sdk.NewTeradataSslModeFromValue(tdSslmodeValue)
 		if err != nil {
-			return nil, err
+			return nil, usageError("%w", err)
 		}
 	}
 	var user string
@@ -6562,7 +6562,7 @@ func buildConnectionsUpdateTeradata(cmd *cobra.Command, api *sdk.APIClient, cred
 				candidate.SetTdSslmode(*v)
 			}
 			if len(missing) > 0 {
-				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
 			}
 			return retryOnTransient(cmd, api.CredentialsAPI.ValidateTeradataCredentials(ctx).TeradataCredentialsValidateIn(*candidate).Execute)
 		},
@@ -6784,7 +6784,7 @@ func buildConnectionsUpdateTableau(cmd *cobra.Command, api *sdk.APIClient, crede
 				candidate.SetVerifySsl(*v)
 			}
 			if len(missing) > 0 {
-				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
 			}
 			return retryOnTransient(cmd, api.CredentialsAPI.ValidateTableauCredentials(ctx).TableauCredentialsValidateIn(*candidate).Execute)
 		},
@@ -6886,7 +6886,7 @@ func buildConnectionsUpdateLooker(cmd *cobra.Command, api *sdk.APIClient, creden
 				candidate.SetVerifySsl(*v)
 			}
 			if len(missing) > 0 {
-				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
 			}
 			return retryOnTransient(cmd, api.CredentialsAPI.ValidateLookerCredentials(ctx).LookerCredentialsValidateIn(*candidate).Execute)
 		},
@@ -7026,7 +7026,7 @@ func buildConnectionsUpdateLookerGitClone(cmd *cobra.Command, api *sdk.APIClient
 				candidate.SetUsername(*v)
 			}
 			if len(missing) > 0 {
-				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
 			}
 			return retryOnTransient(cmd, api.CredentialsAPI.ValidateLookerGitCloneCredentials(ctx).LookerGitCloneCredentialsValidateIn(*candidate).Execute)
 		},
@@ -7061,7 +7061,7 @@ func buildConnectionsUpdatePowerBi(cmd *cobra.Command, api *sdk.APIClient, crede
 		}
 		authMode, err = sdk.NewPowerBiAuthModeFromValue(authModeValue)
 		if err != nil {
-			return nil, err
+			return nil, usageError("%w", err)
 		}
 	}
 	var password string
@@ -7170,7 +7170,7 @@ func buildConnectionsUpdatePowerBi(cmd *cobra.Command, api *sdk.APIClient, crede
 				candidate.SetUsername(*v)
 			}
 			if len(missing) > 0 {
-				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
 			}
 			return retryOnTransient(cmd, api.CredentialsAPI.ValidatePowerBiCredentials(ctx).PowerBiCredentialsValidateIn(*candidate).Execute)
 		},
@@ -7321,7 +7321,7 @@ func buildConnectionsUpdateSelfHostedAws(cmd *cobra.Command, api *sdk.APIClient,
 				candidate.SetSqlWarehouseId(*v)
 			}
 			if len(missing) > 0 {
-				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
 			}
 			return retryOnTransient(cmd, api.CredentialsAPI.ValidateAwsSecretsManagerCredentials(ctx).AwsSecretsManagerCredentialsValidateIn(*candidate).Execute)
 		},
@@ -7409,7 +7409,7 @@ func buildConnectionsUpdateSelfHostedGcp(cmd *cobra.Command, api *sdk.APIClient,
 				candidate.SetSqlWarehouseId(*v)
 			}
 			if len(missing) > 0 {
-				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
 			}
 			return retryOnTransient(cmd, api.CredentialsAPI.ValidateGcpSecretManagerCredentials(ctx).GcpSecretManagerCredentialsValidateIn(*candidate).Execute)
 		},
@@ -7539,7 +7539,7 @@ func buildConnectionsUpdateSelfHostedAzure(cmd *cobra.Command, api *sdk.APIClien
 				candidate.SetSqlWarehouseId(*v)
 			}
 			if len(missing) > 0 {
-				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
 			}
 			return retryOnTransient(cmd, api.CredentialsAPI.ValidateAzureKeyVaultCredentials(ctx).AzureKeyVaultCredentialsValidateIn(*candidate).Execute)
 		},
@@ -7648,7 +7648,7 @@ func buildConnectionsUpdateSelfHostedEnvVar(cmd *cobra.Command, api *sdk.APIClie
 				candidate.SetSqlWarehouseId(*v)
 			}
 			if len(missing) > 0 {
-				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
 			}
 			return retryOnTransient(cmd, api.CredentialsAPI.ValidateEnvVarCredentials(ctx).EnvVarCredentialsValidateIn(*candidate).Execute)
 		},
@@ -7736,7 +7736,7 @@ func buildConnectionsUpdateSelfHostedFile(cmd *cobra.Command, api *sdk.APIClient
 				candidate.SetSqlWarehouseId(*v)
 			}
 			if len(missing) > 0 {
-				return nil, nil, fmt.Errorf("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
 			}
 			return retryOnTransient(cmd, api.CredentialsAPI.ValidateFileCredentials(ctx).FileCredentialsValidateIn(*candidate).Execute)
 		},
@@ -7774,7 +7774,7 @@ func runConnectionsUpdate(cmd *cobra.Command, connectionId string, native *conne
 	changing := changed(cmd, credentialsFlags...)
 	renaming := changed(cmd, "name")
 	if !changing && !renaming {
-		return fmt.Errorf("nothing to update: pass the flags of what changes")
+		return usageError("nothing to update: pass the flags of what changes")
 	}
 	validateOnly, err := flagBool(cmd, "validate-only")
 	if err != nil {
@@ -7785,10 +7785,10 @@ func runConnectionsUpdate(cmd *cobra.Command, connectionId string, native *conne
 		return err
 	}
 	if validateOnly && skipValidations {
-		return fmt.Errorf("pass --validate-only or --skip-validations, not both")
+		return usageError("pass --validate-only or --skip-validations, not both")
 	}
 	if validateOnly && !changing {
-		return fmt.Errorf("--validate-only validates a credentials change; pass the flags of one")
+		return usageError("--validate-only validates a credentials change; pass the flags of one")
 	}
 	api, ctx, err := apiClient(cmd)
 	if err != nil {
@@ -7880,7 +7880,7 @@ func runConnectionsUpdate(cmd *cobra.Command, connectionId string, native *conne
 			return err
 		}
 		if !passed {
-			return fmt.Errorf("the validations did not pass, so nothing was changed. Fix the problems above, or pass --skip-validations to change the credentials without validating")
+			return validationsFailed("the validations did not pass, so nothing was changed. Fix the problems above, or pass --skip-validations to change the credentials without validating")
 		}
 		if validateOnly {
 			fmt.Fprintln(cmd.ErrOrStderr(), "Nothing was changed: --validate-only.")

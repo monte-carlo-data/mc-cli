@@ -62,7 +62,7 @@ func newWarehousesCreateCmd() *cobra.Command {
 				}
 				type_, err := sdk.NewWarehouseTypeFromValue(typeValue)
 				if err != nil {
-					return err
+					return usageError("%w", err)
 				}
 				body.SetType(*type_)
 			}

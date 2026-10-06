@@ -3,7 +3,6 @@
 package cmd
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/spf13/cobra"
@@ -1034,7 +1033,7 @@ func newCredentialsCreateInformaticaV2Cmd() *cobra.Command {
 			}
 			authMode, err := sdk.NewInformaticaV2AuthModeFromValue(authModeValue)
 			if err != nil {
-				return err
+				return usageError("%w", err)
 			}
 			body := sdk.NewInformaticaV2CredentialsIn(*authMode)
 			if changed(cmd, "base-url") {
@@ -1072,7 +1071,7 @@ func newCredentialsCreateInformaticaV2Cmd() *cobra.Command {
 				}
 				oauthGrantType, err := sdk.NewOAuthGrantTypeFromValue(oauthGrantTypeValue)
 				if err != nil {
-					return err
+					return usageError("%w", err)
 				}
 				body.SetOauthGrantType(*oauthGrantType)
 			}
@@ -1369,7 +1368,7 @@ func newCredentialsCreateMulesoftCmd() *cobra.Command {
 				}
 				region, err := sdk.NewMulesoftRegionFromValue(regionValue)
 				if err != nil {
-					return err
+					return usageError("%w", err)
 				}
 				body.SetRegion(*region)
 			}
@@ -1718,7 +1717,7 @@ func newCredentialsCreatePowerBiCmd() *cobra.Command {
 			}
 			authMode, err := sdk.NewPowerBiAuthModeFromValue(authModeValue)
 			if err != nil {
-				return err
+				return usageError("%w", err)
 			}
 			body := sdk.NewPowerBiCredentialsIn(tenantId, appClientId, *authMode)
 			if changed(cmd, "app-client-secret", "app-client-secret-prompt") {
@@ -2280,7 +2279,7 @@ func newCredentialsCreateTeradataCmd() *cobra.Command {
 				}
 				tdLogmech, err := sdk.NewTeradataLogonMechanismFromValue(tdLogmechValue)
 				if err != nil {
-					return err
+					return usageError("%w", err)
 				}
 				body.SetTdLogmech(*tdLogmech)
 			}
@@ -2291,7 +2290,7 @@ func newCredentialsCreateTeradataCmd() *cobra.Command {
 				}
 				tdSslmode, err := sdk.NewTeradataSslModeFromValue(tdSslmodeValue)
 				if err != nil {
-					return err
+					return usageError("%w", err)
 				}
 				body.SetTdSslmode(*tdSslmode)
 			}
@@ -4985,7 +4984,7 @@ func newCredentialsUpdateInformaticaV2Cmd() *cobra.Command {
 				}
 				authMode, err := sdk.NewInformaticaV2AuthModeFromValue(authModeValue)
 				if err != nil {
-					return err
+					return usageError("%w", err)
 				}
 				body.SetAuthMode(*authMode)
 			}
@@ -5024,7 +5023,7 @@ func newCredentialsUpdateInformaticaV2Cmd() *cobra.Command {
 				}
 				oauthGrantType, err := sdk.NewOAuthGrantTypeFromValue(oauthGrantTypeValue)
 				if err != nil {
-					return err
+					return usageError("%w", err)
 				}
 				body.SetOauthGrantType(*oauthGrantType)
 			}
@@ -5335,7 +5334,7 @@ func newCredentialsUpdateMulesoftCmd() *cobra.Command {
 				}
 				region, err := sdk.NewMulesoftRegionFromValue(regionValue)
 				if err != nil {
-					return err
+					return usageError("%w", err)
 				}
 				body.SetRegion(*region)
 			}
@@ -5713,7 +5712,7 @@ func newCredentialsUpdatePowerBiCmd() *cobra.Command {
 				}
 				authMode, err := sdk.NewPowerBiAuthModeFromValue(authModeValue)
 				if err != nil {
-					return err
+					return usageError("%w", err)
 				}
 				body.SetAuthMode(*authMode)
 			}
@@ -6309,7 +6308,7 @@ func newCredentialsUpdateTeradataCmd() *cobra.Command {
 				}
 				tdLogmech, err := sdk.NewTeradataLogonMechanismFromValue(tdLogmechValue)
 				if err != nil {
-					return err
+					return usageError("%w", err)
 				}
 				body.SetTdLogmech(*tdLogmech)
 			}
@@ -6320,7 +6319,7 @@ func newCredentialsUpdateTeradataCmd() *cobra.Command {
 				}
 				tdSslmode, err := sdk.NewTeradataSslModeFromValue(tdSslmodeValue)
 				if err != nil {
-					return err
+					return usageError("%w", err)
 				}
 				body.SetTdSslmode(*tdSslmode)
 			}
@@ -6484,7 +6483,7 @@ func newCredentialsValidateAwsSecretsManagerCmd() *cobra.Command {
 					return err
 				}
 				if !passed {
-					return fmt.Errorf("not every validation passed")
+					return validationsFailed("not every validation passed")
 				}
 				return nil
 			}
@@ -6581,7 +6580,7 @@ func newCredentialsValidateAzureDataFactoryCmd() *cobra.Command {
 					return err
 				}
 				if !passed {
-					return fmt.Errorf("not every validation passed")
+					return validationsFailed("not every validation passed")
 				}
 				return nil
 			}
@@ -6677,7 +6676,7 @@ func newCredentialsValidateAzureDedicatedSqlPoolCmd() *cobra.Command {
 					return err
 				}
 				if !passed {
-					return fmt.Errorf("not every validation passed")
+					return validationsFailed("not every validation passed")
 				}
 				return nil
 			}
@@ -6784,7 +6783,7 @@ func newCredentialsValidateAzureKeyVaultCmd() *cobra.Command {
 					return err
 				}
 				if !passed {
-					return fmt.Errorf("not every validation passed")
+					return validationsFailed("not every validation passed")
 				}
 				return nil
 			}
@@ -6876,7 +6875,7 @@ func newCredentialsValidateAzureSqlDatabaseCmd() *cobra.Command {
 					return err
 				}
 				if !passed {
-					return fmt.Errorf("not every validation passed")
+					return validationsFailed("not every validation passed")
 				}
 				return nil
 			}
@@ -6954,7 +6953,7 @@ func newCredentialsValidateBigqueryCmd() *cobra.Command {
 					return err
 				}
 				if !passed {
-					return fmt.Errorf("not every validation passed")
+					return validationsFailed("not every validation passed")
 				}
 				return nil
 			}
@@ -7043,7 +7042,7 @@ func newCredentialsValidateClickhouseCmd() *cobra.Command {
 					return err
 				}
 				if !passed {
-					return fmt.Errorf("not every validation passed")
+					return validationsFailed("not every validation passed")
 				}
 				return nil
 			}
@@ -7160,7 +7159,7 @@ func newCredentialsValidateDatabricksMetastoreSqlWarehouseCmd() *cobra.Command {
 					return err
 				}
 				if !passed {
-					return fmt.Errorf("not every validation passed")
+					return validationsFailed("not every validation passed")
 				}
 				return nil
 			}
@@ -7284,7 +7283,7 @@ func newCredentialsValidateDatabricksSqlWarehouseCmd() *cobra.Command {
 					return err
 				}
 				if !passed {
-					return fmt.Errorf("not every validation passed")
+					return validationsFailed("not every validation passed")
 				}
 				return nil
 			}
@@ -7397,7 +7396,7 @@ func newCredentialsValidateDb2Cmd() *cobra.Command {
 					return err
 				}
 				if !passed {
-					return fmt.Errorf("not every validation passed")
+					return validationsFailed("not every validation passed")
 				}
 				return nil
 			}
@@ -7498,7 +7497,7 @@ func newCredentialsValidateEnvVarCmd() *cobra.Command {
 					return err
 				}
 				if !passed {
-					return fmt.Errorf("not every validation passed")
+					return validationsFailed("not every validation passed")
 				}
 				return nil
 			}
@@ -7588,7 +7587,7 @@ func newCredentialsValidateFileCmd() *cobra.Command {
 					return err
 				}
 				if !passed {
-					return fmt.Errorf("not every validation passed")
+					return validationsFailed("not every validation passed")
 				}
 				return nil
 			}
@@ -7676,7 +7675,7 @@ func newCredentialsValidateFivetranCmd() *cobra.Command {
 					return err
 				}
 				if !passed {
-					return fmt.Errorf("not every validation passed")
+					return validationsFailed("not every validation passed")
 				}
 				return nil
 			}
@@ -7757,7 +7756,7 @@ func newCredentialsValidateGcpDataformCmd() *cobra.Command {
 					return err
 				}
 				if !passed {
-					return fmt.Errorf("not every validation passed")
+					return validationsFailed("not every validation passed")
 				}
 				return nil
 			}
@@ -7846,7 +7845,7 @@ func newCredentialsValidateGcpSecretManagerCmd() *cobra.Command {
 					return err
 				}
 				if !passed {
-					return fmt.Errorf("not every validation passed")
+					return validationsFailed("not every validation passed")
 				}
 				return nil
 			}
@@ -7887,7 +7886,7 @@ func newCredentialsValidateInformaticaV2Cmd() *cobra.Command {
 			}
 			authMode, err := sdk.NewInformaticaV2AuthModeFromValue(authModeValue)
 			if err != nil {
-				return err
+				return usageError("%w", err)
 			}
 			body := sdk.NewInformaticaV2CredentialsValidateIn(deploymentId, *authMode)
 			if changed(cmd, "base-url") {
@@ -7925,7 +7924,7 @@ func newCredentialsValidateInformaticaV2Cmd() *cobra.Command {
 				}
 				oauthGrantType, err := sdk.NewOAuthGrantTypeFromValue(oauthGrantTypeValue)
 				if err != nil {
-					return err
+					return usageError("%w", err)
 				}
 				body.SetOauthGrantType(*oauthGrantType)
 			}
@@ -8002,7 +8001,7 @@ func newCredentialsValidateInformaticaV2Cmd() *cobra.Command {
 					return err
 				}
 				if !passed {
-					return fmt.Errorf("not every validation passed")
+					return validationsFailed("not every validation passed")
 				}
 				return nil
 			}
@@ -8103,7 +8102,7 @@ func newCredentialsValidateLookerCmd() *cobra.Command {
 					return err
 				}
 				if !passed {
-					return fmt.Errorf("not every validation passed")
+					return validationsFailed("not every validation passed")
 				}
 				return nil
 			}
@@ -8210,7 +8209,7 @@ func newCredentialsValidateLookerGitCloneCmd() *cobra.Command {
 					return err
 				}
 				if !passed {
-					return fmt.Errorf("not every validation passed")
+					return validationsFailed("not every validation passed")
 				}
 				return nil
 			}
@@ -8306,7 +8305,7 @@ func newCredentialsValidateMariadbCmd() *cobra.Command {
 					return err
 				}
 				if !passed {
-					return fmt.Errorf("not every validation passed")
+					return validationsFailed("not every validation passed")
 				}
 				return nil
 			}
@@ -8370,7 +8369,7 @@ func newCredentialsValidateMulesoftCmd() *cobra.Command {
 				}
 				region, err := sdk.NewMulesoftRegionFromValue(regionValue)
 				if err != nil {
-					return err
+					return usageError("%w", err)
 				}
 				body.SetRegion(*region)
 			}
@@ -8405,7 +8404,7 @@ func newCredentialsValidateMulesoftCmd() *cobra.Command {
 					return err
 				}
 				if !passed {
-					return fmt.Errorf("not every validation passed")
+					return validationsFailed("not every validation passed")
 				}
 				return nil
 			}
@@ -8534,7 +8533,7 @@ func newCredentialsValidateMysqlCmd() *cobra.Command {
 					return err
 				}
 				if !passed {
-					return fmt.Errorf("not every validation passed")
+					return validationsFailed("not every validation passed")
 				}
 				return nil
 			}
@@ -8667,7 +8666,7 @@ func newCredentialsValidateOracleCmd() *cobra.Command {
 					return err
 				}
 				if !passed {
-					return fmt.Errorf("not every validation passed")
+					return validationsFailed("not every validation passed")
 				}
 				return nil
 			}
@@ -8808,7 +8807,7 @@ func newCredentialsValidatePostgresCmd() *cobra.Command {
 					return err
 				}
 				if !passed {
-					return fmt.Errorf("not every validation passed")
+					return validationsFailed("not every validation passed")
 				}
 				return nil
 			}
@@ -8867,7 +8866,7 @@ func newCredentialsValidatePowerBiCmd() *cobra.Command {
 			}
 			authMode, err := sdk.NewPowerBiAuthModeFromValue(authModeValue)
 			if err != nil {
-				return err
+				return usageError("%w", err)
 			}
 			body := sdk.NewPowerBiCredentialsValidateIn(deploymentId, tenantId, appClientId, *authMode)
 			if changed(cmd, "app-client-secret", "app-client-secret-prompt") {
@@ -8922,7 +8921,7 @@ func newCredentialsValidatePowerBiCmd() *cobra.Command {
 					return err
 				}
 				if !passed {
-					return fmt.Errorf("not every validation passed")
+					return validationsFailed("not every validation passed")
 				}
 				return nil
 			}
@@ -9053,7 +9052,7 @@ func newCredentialsValidateRedshiftCmd() *cobra.Command {
 					return err
 				}
 				if !passed {
-					return fmt.Errorf("not every validation passed")
+					return validationsFailed("not every validation passed")
 				}
 				return nil
 			}
@@ -9152,7 +9151,7 @@ func newCredentialsValidateSapHanaCmd() *cobra.Command {
 					return err
 				}
 				if !passed {
-					return fmt.Errorf("not every validation passed")
+					return validationsFailed("not every validation passed")
 				}
 				return nil
 			}
@@ -9252,7 +9251,7 @@ func newCredentialsValidateSnowflakeCmd() *cobra.Command {
 					return err
 				}
 				if !passed {
-					return fmt.Errorf("not every validation passed")
+					return validationsFailed("not every validation passed")
 				}
 				return nil
 			}
@@ -9362,7 +9361,7 @@ func newCredentialsValidateStarburstEnterpriseCmd() *cobra.Command {
 					return err
 				}
 				if !passed {
-					return fmt.Errorf("not every validation passed")
+					return validationsFailed("not every validation passed")
 				}
 				return nil
 			}
@@ -9460,7 +9459,7 @@ func newCredentialsValidateStarburstGalaxyCmd() *cobra.Command {
 					return err
 				}
 				if !passed {
-					return fmt.Errorf("not every validation passed")
+					return validationsFailed("not every validation passed")
 				}
 				return nil
 			}
@@ -9597,7 +9596,7 @@ func newCredentialsValidateTableauCmd() *cobra.Command {
 					return err
 				}
 				if !passed {
-					return fmt.Errorf("not every validation passed")
+					return validationsFailed("not every validation passed")
 				}
 				return nil
 			}
@@ -9688,7 +9687,7 @@ func newCredentialsValidateTeradataCmd() *cobra.Command {
 				}
 				tdLogmech, err := sdk.NewTeradataLogonMechanismFromValue(tdLogmechValue)
 				if err != nil {
-					return err
+					return usageError("%w", err)
 				}
 				body.SetTdLogmech(*tdLogmech)
 			}
@@ -9699,7 +9698,7 @@ func newCredentialsValidateTeradataCmd() *cobra.Command {
 				}
 				tdSslmode, err := sdk.NewTeradataSslModeFromValue(tdSslmodeValue)
 				if err != nil {
-					return err
+					return usageError("%w", err)
 				}
 				body.SetTdSslmode(*tdSslmode)
 			}
@@ -9734,7 +9733,7 @@ func newCredentialsValidateTeradataCmd() *cobra.Command {
 					return err
 				}
 				if !passed {
-					return fmt.Errorf("not every validation passed")
+					return validationsFailed("not every validation passed")
 				}
 				return nil
 			}

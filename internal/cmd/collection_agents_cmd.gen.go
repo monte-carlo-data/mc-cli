@@ -557,7 +557,7 @@ func newCollectionAgentsRegisterAzureCmd() *cobra.Command {
 			}
 			authenticationType, err := sdk.NewAzureAgentAuthenticationTypeFromValue(authenticationTypeValue)
 			if err != nil {
-				return err
+				return usageError("%w", err)
 			}
 			deploymentId, err := flagString(cmd, "deployment-id")
 			if err != nil {
@@ -662,7 +662,7 @@ func newCollectionAgentsRegisterGcpCmd() *cobra.Command {
 			}
 			authenticationType, err := sdk.NewGcpAgentAuthenticationTypeFromValue(authenticationTypeValue)
 			if err != nil {
-				return err
+				return usageError("%w", err)
 			}
 			deploymentId, err := flagString(cmd, "deployment-id")
 			if err != nil {
@@ -838,7 +838,7 @@ func newCollectionAgentsUpdateAzureCmd() *cobra.Command {
 				}
 				authenticationType, err := sdk.NewAzureAgentAuthenticationTypeFromValue(authenticationTypeValue)
 				if err != nil {
-					return err
+					return usageError("%w", err)
 				}
 				body.SetAuthenticationType(*authenticationType)
 			}
@@ -941,7 +941,7 @@ func newCollectionAgentsUpdateGcpCmd() *cobra.Command {
 				}
 				authenticationType, err := sdk.NewGcpAgentAuthenticationTypeFromValue(authenticationTypeValue)
 				if err != nil {
-					return err
+					return usageError("%w", err)
 				}
 				body.SetAuthenticationType(*authenticationType)
 			}
