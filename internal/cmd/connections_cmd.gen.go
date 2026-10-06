@@ -3153,7 +3153,7 @@ func runConnectionsAdd(cmd *cobra.Command, connectionType string, native *connec
 		"power-bi":         "power-bi",
 		"tableau":          "tableau",
 	}
-	containerType, onBi := biContainerTypes[connectionType]
+	biType, onBi := biContainerTypes[connectionType]
 	var biContainerType sdk.NewBiContainerType
 	if onBi {
 		if changed(cmd, "warehouse-id") {
@@ -3162,7 +3162,7 @@ func runConnectionsAdd(cmd *cobra.Command, connectionType string, native *connec
 		if changed(cmd, "bi-container-id") == changed(cmd, "deployment-id") {
 			return usageError("pass --deployment-id to create a BI container for the connection, or --bi-container-id to add it to an existing one")
 		}
-		value, err := sdk.NewNewBiContainerTypeFromValue(containerType)
+		value, err := sdk.NewNewBiContainerTypeFromValue(biType)
 		if err != nil {
 			return err
 		}
@@ -7960,7 +7960,7 @@ func runConnectionsDelete(cmd *cobra.Command, connectionId string) error {
 	}
 	warehouseId := connection.GetWarehouseId()
 	biContainerId := connection.GetBiContainerId()
-	if withWarehouse && warehouseId == "" {
+	if withWarehouse && biContainerId != "" {
 		return fmt.Errorf("connection %s is on BI container %s, not on a warehouse, so nothing was deleted; run it again without --with-warehouse", connectionId, biContainerId)
 	}
 	if withWarehouse {

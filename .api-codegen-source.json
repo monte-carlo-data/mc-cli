@@ -1,7 +1,7 @@
 {
-  "api_codegen_commit": "3ddd19180d041aeab5411d4416ef5a4cc4a60f0a",
-  "api_codegen_run_id": 37519194864,
-  "generated_at": "2026-10-06T19:30:28Z",
+  "api_codegen_commit": "5bf1b3b4c482f02e9a7e85602b73d7b456313089",
+  "api_codegen_run_id": 37544188137,
+  "generated_at": "2026-10-06T23:03:54Z",
   "mc_sdk_go_commit": "023337bde456cb9a80a43eabd4583402bf0bd22c",
   "monolith_commit": "da87a19c88de6d273f65003f6b14dba352932b31",
   "monolith_run_id": 37360882612,
