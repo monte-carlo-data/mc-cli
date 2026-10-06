@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -560,6 +561,9 @@ func TestConnectionsValidateFailsWhenAValidationDidNotPass(t *testing.T) {
 	stdout, _, err := executeStreams(t, append([]string{"connections", "validate", "cn-1"}, validateArgs(srv, t)...)...)
 	if err == nil || err.Error() != "not every validation passed" {
 		t.Fatalf("err = %v", err)
+	}
+	if code := exitCode(context.Background(), err); code != exitValidation {
+		t.Errorf("exit %d", code)
 	}
 	if !strings.Contains(stdout, `"passed": false`) {
 		t.Errorf("stdout = %s", stdout)

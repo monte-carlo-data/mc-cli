@@ -80,7 +80,7 @@ Renaming or removing one is a change to the generator's template as well, landed
 
 The codes are constants in `internal/cmd/exitcode.go`, listed for users in the README, and a change to one is a breaking change. An error carries its code as an `exitError`, which leaves the message alone; `exitCode` maps a command's error to the code, and an interrupted context is 130 whatever the error. The root's flag error function marks flag errors as usage errors. Cobra's other rejections (unknown command, wrong arguments, missing required flag, flag groups) are plain errors. When a command fails, `executeArgs` runs cobra's checks on it again to tell those apart from a failure inside the command. Cobra answers a group given an unknown subcommand with its help and no error; `executeArgs` reports that as a usage error, and the root's help function prints nothing for it (`<group> help` still shows help). The root's `PersistentPreRunE` checks `--output` before any command runs. The root turns on cobra's `EnableTraverseRunHooks`, so a command's own persistent hook runs after this one instead of replacing it.
 
-A plain `fmt.Errorf` exits 1. Generated usage errors and validation failures that are still plain errors exit 1 until the generator emits `usageError` and `validationsFailed` for them.
+A plain `fmt.Errorf` exits 1. The generated commands return `usageError` for a mistake the command line alone shows, an enum value the SDK refuses included, and `validationsFailed` when validations did not all pass.
 
 ## Configuration
 

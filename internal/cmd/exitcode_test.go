@@ -190,6 +190,7 @@ func TestCommandLineMistakesExitWith2(t *testing.T) {
 		{"profile", "set", "--config-dir", dir},
 		{"profile", "set", "p", "--config-dir", dir},
 		{"profile", "set", "p", "--config-dir", dir, "--api-id", "i"},
+		append([]string{"deployments", "reprovision", "d1", "--type", "NOPE", "--runtime-platform", "AWS", "--yes"}, creds...),
 	}
 	for _, args := range cases {
 		if code, _, stderr := runExit(t, context.Background(), args...); code != exitUsage {
