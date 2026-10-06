@@ -2,7 +2,12 @@
 
 Monte Carlo values independent security research and believes responsible vulnerability disclosure ensures user security and privacy.
 
-Please do **NOT** raise a GitHub Issue to report a security vulnerability. If you believe you have found a security vulnerability, please submit a report to security@montecarlodata.com. Proof of concepts are appreciated. We provide additional information on [how to report security vulnerabilities to Monte Carlo](https://trust.montecarlodata.com/resources/ZTMzNjM0YmMtZDQ3Yi00NWJmLTk0NmQtNWEwNzJkMWJmMDZj).
+Please do **NOT** raise a GitHub Issue to report a security vulnerability. If you believe you have found a security vulnerability, report it privately in either of these ways:
+
+- Email security@montecarlodata.com.
+- Use GitHub's private vulnerability reporting: on this repository's **Security** tab, choose [**Report a vulnerability**](https://github.com/monte-carlo-data/mc-cli/security/advisories/new).
+
+Both reach the same team. Proof of concepts are appreciated. We provide additional information on [how to report security vulnerabilities to Monte Carlo](https://trust.montecarlodata.com/resources/ZTMzNjM0YmMtZDQ3Yi00NWJmLTk0NmQtNWEwNzJkMWJmMDZj).
 
 We ask that you do not use other channels or contact project contributors directly.
 
