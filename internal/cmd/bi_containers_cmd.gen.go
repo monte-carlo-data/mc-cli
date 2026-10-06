@@ -43,7 +43,7 @@ func newBiContainersCreateCmd() *cobra.Command {
 			}
 			type_, err := sdk.NewNewBiContainerTypeFromValue(typeValue)
 			if err != nil {
-				return err
+				return usageError("%w", err)
 			}
 			name, err := flagString(cmd, "name")
 			if err != nil {
