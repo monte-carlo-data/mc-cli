@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/spf13/cobra"
 )
 
 func TestExitCodeMapsErrors(t *testing.T) {
@@ -151,5 +153,60 @@ func TestAGroupAloneStillShowsItsHelp(t *testing.T) {
 	code, stdout, _ := runExit(t, context.Background(), "connections")
 	if code != exitOK || !strings.Contains(stdout, "Available Commands:") {
 		t.Fatalf("exit %d\nstdout %q", code, stdout)
+	}
+}
+
+func TestCommandLineMistakesExitWith2(t *testing.T) {
+	srv, _ := flakyServer(t, 0, http.StatusOK, "")
+	creds := []string{"--endpoint", srv.URL, "--api-id", "i", "--api-token", "s"}
+	dir := t.TempDir()
+	cases := [][]string{
+		{"bogus"},
+		{"whoami", "--nope"},
+		{"whoami", "extra"},
+		{"connections", "list", "--limit", "many"},
+		{"bi-containers", "create", "--name", "n"},
+		append([]string{"whoami", "--output", "xml"}, creds...),
+		{"whoami", "--endpoint", srv.URL, "--api-id", "i", "--api-token", "@" + dir + "/missing"},
+		{"whoami", "--api-token", "s", "--api-token-prompt"},
+		{"profile", "set", "--config-dir", dir},
+		{"profile", "set", "p", "--config-dir", dir},
+		{"profile", "set", "p", "--config-dir", dir, "--api-id", "i"},
+	}
+	for _, args := range cases {
+		if code, _, stderr := runExit(t, context.Background(), args...); code != exitUsage {
+			t.Errorf("%v: exit %d; stderr %q", args, code, stderr)
+		}
+	}
+}
+
+func TestAFailureInsideAValidCommandLineIsNotAUsageError(t *testing.T) {
+	srv := problemServer(t, http.StatusInternalServerError, "text/plain", "oops")
+	if code, stderr := whoamiAgainst(t, srv); code != exitFailure {
+		t.Fatalf("exit %d; stderr %q", code, stderr)
+	}
+}
+
+func TestFlagHelpersReturnUsageErrors(t *testing.T) {
+	cmd := &cobra.Command{Use: "t"}
+	cmd.Flags().String("a", "", "")
+	cmd.Flags().String("b", "", "")
+	cmd.Flags().StringArray("m", nil, "")
+	if err := cmd.ParseFlags([]string{"--a", "x", "--b", "y", "--m", "novalue"}); err != nil {
+		t.Fatal(err)
+	}
+	_, mapErr := flagStringMap(cmd, "m")
+	_, groupErr := requireOneGroup(cmd, flagGroup{"first", []string{"a"}}, flagGroup{"second", []string{"b"}})
+	_, noGroupErr := requireOneGroup(cmd, flagGroup{"other", []string{"c"}})
+	for name, err := range map[string]error{
+		"requireAny":            requireAny(cmd, "c"),
+		"requireAny of several": requireAny(cmd, "c", "d"),
+		"two groups":            groupErr,
+		"no group":              noGroupErr,
+		"map entry":             mapErr,
+	} {
+		if got := exitCode(context.Background(), err); got != exitUsage {
+			t.Errorf("%s: exit %d (%v)", name, got, err)
+		}
 	}
 }

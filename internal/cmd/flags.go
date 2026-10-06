@@ -38,11 +38,11 @@ func flagStringMap(cmd *cobra.Command, name string) (map[string]string, error) {
 	if len(entries) == 1 && strings.HasPrefix(entries[0], "@") {
 		raw, err := readValueFile(entries[0][1:])
 		if err != nil {
-			return nil, fmt.Errorf("--%s: %w", name, err)
+			return nil, usageError("--%s: %w", name, err)
 		}
 		out := map[string]string{}
 		if err := json.Unmarshal([]byte(raw), &out); err != nil {
-			return nil, fmt.Errorf("--%s: %s does not hold a JSON object of strings: %w", name, entries[0][1:], err)
+			return nil, usageError("--%s: %s does not hold a JSON object of strings: %w", name, entries[0][1:], err)
 		}
 		return out, nil
 	}
@@ -50,7 +50,7 @@ func flagStringMap(cmd *cobra.Command, name string) (map[string]string, error) {
 	for _, entry := range entries {
 		key, value, ok := strings.Cut(entry, "=")
 		if !ok || key == "" {
-			return nil, fmt.Errorf("--%s: %q is not key=value", name, entry)
+			return nil, usageError("--%s: %q is not key=value", name, entry)
 		}
 		out[key] = value
 	}
@@ -64,7 +64,7 @@ func flagSecret(cmd *cobra.Command, name string) (string, error) {
 	if cmd.Flags().Lookup(prompt) != nil {
 		if wants, _ := cmd.Flags().GetBool(prompt); wants {
 			if changed(cmd, name) {
-				return "", fmt.Errorf("pass --%s or --%s, not both", name, prompt)
+				return "", usageError("pass --%s or --%s, not both", name, prompt)
 			}
 			return readSecret(cmd, name)
 		}
@@ -73,14 +73,15 @@ func flagSecret(cmd *cobra.Command, name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return expandValue(v)
+	secret, err := expandValue(v)
+	return secret, withExitCode(exitUsage, err)
 }
 
 // readSecret prompts on the terminal with echo off. Without a terminal there is nothing to
 // prompt on, and the caller is told to use @<path> instead.
 func readSecret(cmd *cobra.Command, name string) (string, error) {
 	if !stdinIsTerminal(cmd) {
-		return "", fmt.Errorf("--%s-prompt needs a terminal; pass --%s @<path> instead", name, name)
+		return "", usageError("--%s-prompt needs a terminal; pass --%s @<path> instead", name, name)
 	}
 	fmt.Fprintf(cmd.ErrOrStderr(), "%s: ", name)
 	f := cmd.InOrStdin().(*os.File)
@@ -108,13 +109,13 @@ func requireAny(cmd *cobra.Command, names ...string) error {
 		return nil
 	}
 	if len(names) == 1 {
-		return fmt.Errorf("--%s is required", names[0])
+		return usageError("--%s is required", names[0])
 	}
 	quoted := make([]string, len(names))
 	for i, name := range names {
 		quoted[i] = "--" + name
 	}
-	return fmt.Errorf("one of %s or %s is required", strings.Join(quoted[:len(quoted)-1], ", "), quoted[len(quoted)-1])
+	return usageError("one of %s or %s is required", strings.Join(quoted[:len(quoted)-1], ", "), quoted[len(quoted)-1])
 }
 
 // flagGroup names a set of flags that are passed together, as one of several alternatives.
@@ -145,9 +146,9 @@ func requireOneGroup(cmd *cobra.Command, groups ...flagGroup) (string, error) {
 		for i, g := range groups {
 			names[i] = g.name
 		}
-		return "", fmt.Errorf("pass the flags of one of: %s", strings.Join(names, ", "))
+		return "", usageError("pass the flags of one of: %s", strings.Join(names, ", "))
 	}
-	return "", fmt.Errorf("%s belong to different alternatives; pass the flags of one", strings.Join(given, ", "))
+	return "", usageError("%s belong to different alternatives; pass the flags of one", strings.Join(given, ", "))
 }
 
 // expandValue reads the file a @<path> value names; any other value passes through.

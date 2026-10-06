@@ -26,7 +26,7 @@ func outputFormat(cmd *cobra.Command) (string, error) {
 	case "table", "wide", "json":
 		return format, nil
 	}
-	return "", fmt.Errorf("--output must be table, wide or json, not %q", format)
+	return "", usageError("--output must be table, wide or json, not %q", format)
 }
 
 // render prints one object: as JSON, or as a two-column table of its fields. The table shows

@@ -59,6 +59,11 @@ A secret flag accepts @<path> to read its value from a file, and has a --<name>-
 	f.Bool("api-token-prompt", false, "Read --api-token from a hidden prompt instead of the command line.")
 	f.BoolP("yes", "y", false, "Answer yes to every confirmation. Required without a terminal for any command that confirms.")
 
+	// Marks an unknown flag, or a value its type rejects, as a usage error. Every command inherits it.
+	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
+		return withExitCode(exitUsage, err)
+	})
+
 	// Cobra answers a group given an unknown subcommand with the group's help. Print nothing
 	// instead: executeArgs reports the unknown command.
 	help := cmd.HelpFunc()
@@ -88,13 +93,30 @@ func executeArgs(ctx context.Context, args []string, stdout, stderr io.Writer) i
 		return executeCompletion(ctx, stdout)
 	}
 	executed, err := rootCmd.ExecuteContextC(ctx)
-	if err == nil {
-		err = unknownSubcommand(executed)
-	}
+	err = commandLineErr(executed, err)
 	if err != nil {
 		fmt.Fprintf(stderr, "%s: %v\n", binaryName, err)
 	}
 	return exitCode(ctx, err)
+}
+
+// commandLineErr marks err as a usage error when cobra rejected the command line before running
+// cmd: an unknown command, the wrong arguments, or a required flag missing. It repeats cobra's
+// checks to find out: they return plain errors, and give the same answer each time.
+func commandLineErr(cmd *cobra.Command, err error) error {
+	if err == nil {
+		return unknownSubcommand(cmd)
+	}
+	var coded *exitError
+	if errors.As(err, &coded) {
+		return err
+	}
+	unknownAtRoot := !cmd.HasParent() && !cmd.Runnable()
+	if unknownAtRoot || cmd.ValidateArgs(cmd.Flags().Args()) != nil ||
+		cmd.ValidateRequiredFlags() != nil || cmd.ValidateFlagGroups() != nil {
+		return withExitCode(exitUsage, err)
+	}
+	return err
 }
 
 // unknownSubcommand is the usage error for a group command given an argument, which can only be

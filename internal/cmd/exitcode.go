@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"errors"
+	"fmt"
 )
 
 // The process exit codes. Scripts depend on them, so a change here is a breaking change; the
@@ -34,6 +35,12 @@ func withExitCode(code int, err error) error {
 		return nil
 	}
 	return &exitError{code: code, err: err}
+}
+
+// usageError is fmt.Errorf for a mistake on the command line: running it again unchanged fails
+// the same way.
+func usageError(format string, args ...any) error {
+	return withExitCode(exitUsage, fmt.Errorf(format, args...))
 }
 
 // exitCode is the exit code for the error a command returned under ctx. An interrupt wins over
