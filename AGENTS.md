@@ -10,7 +10,11 @@ Treat everything here as customer-facing, including things that are easy to forg
 - **Help text**, which is what every flag and command description becomes.
 - **Generated code**, which ships as-is.
 
-So, **in the contents of any file committed here**: no internal repository names, no internal file paths, no ticket identifiers, and no design rationale that only makes sense from the inside. That reasoning belongs in the ticket or in the internal repository that owns generation. Branch names and pull request metadata are the exception: `<person>/<ticket-id>-<slug>` is the convention, and a merged pull request displays its head branch permanently.
+So, **in the contents of any file committed here**: no internal file paths, no ticket identifiers, and no design rationale that only makes sense from the inside. That reasoning belongs in the ticket or in the internal repository that owns generation.
+
+Two internal names are the exception: api-codegen, the generator, and monolith, the service the API spec is exported from. Generated files and `.api-codegen-source.json` already name them. Name no other internal repository.
+
+Branch names and pull request metadata may carry ticket identifiers: `<person>/<ticket-id>-<slug>` is the convention, and a merged pull request displays its head branch permanently.
 
 The generated-file header naming the generator is deliberate and stays.
 
@@ -27,6 +31,7 @@ go build ./...                  # compile check only, produces no binary
 go test -race ./...
 go vet ./...
 gofmt -l .                      # must be empty
+go generate ./...               # rewrites THIRD_PARTY_NOTICES
 
 go build -o . ./cmd/montecarlo  # writes ./montecarlo
 ./montecarlo --help
@@ -38,6 +43,7 @@ go build -o . ./cmd/montecarlo  # writes ./montecarlo
 |------|---------|
 | `cmd/montecarlo/` | The main package. |
 | `internal/cmd/` | The command tree: hand-written base files and the generated `*_cmd.gen.go`. |
+| `tools/notices/` | Writes `THIRD_PARTY_NOTICES`; `go generate ./...` runs it. |
 
 ## What is generated
 
@@ -45,11 +51,17 @@ Every `internal/cmd/*_cmd.gen.go`: one file per API tag, holding that tag's grou
 
 Regeneration replaces files **by name**: exactly `internal/cmd/*_cmd.gen.go` are deleted and rewritten, and every other file in the package is left alone. A hand-written file whose name ends in `_cmd.gen.go` is therefore lost on the next run. CI checks that every file with the suffix carries the generated header and no file without it does.
 
+Every hand-written Go file starts with `// Copyright Monte Carlo AI, Inc.` and `// SPDX-License-Identifier: Apache-2.0`, followed by a blank line. Generated `*_cmd.gen.go` files carry no such header, since regeneration would drop it.
+
+## Third-party notices
+
+The release binaries compile in third-party modules, and their licenses require passing on their license and notice files. `THIRD_PARTY_NOTICES` holds them, and every release archive has to carry it next to `LICENSE` and `README.md`. `go generate ./...` rebuilds it with `tools/notices`, from the modules `go list -deps` reports for `cmd/montecarlo` on every release platform. Never edit it by hand. CI fails when it differs from what `go generate` produces, so a dependency change has to commit it too.
+
 ## Regeneration is automatic
 
 api-codegen regenerates this repository and opens a pull request whenever it is behind the API spec or behind `mc-sdk-go`. Nobody runs the generator from outside any more.
 
-That pull request moves the SDK pin in the same commit as the generated commands that need it — they call SDK symbols that do not exist at the older pin — and it has already been built and vetted against that pin before being pushed. The generated files carry no code owner, so it asks nobody for review: a person still approves and merges it, and `go.mod` and `go.sum` are checked to make sure the bot changed nothing there but the SDK's own lines.
+That pull request moves the SDK pin in the same commit as the generated commands that need it — they call SDK symbols that do not exist at the older pin — and it has already been built and vetted against that pin before being pushed. It also runs `go generate ./...`, so `THIRD_PARTY_NOTICES` moves with the pin. The generated files and the notices carry no code owner, so it asks nobody for review: a person still approves and merges it, and `go.mod` and `go.sum` are checked to make sure the bot changed nothing there but the SDK's own lines.
 
 `.api-codegen-source.json` at the root records what produced the tree: the api-codegen commit and run, the `mc-sdk-go` commit pinned, and the monolith export the spec came from. It names no generator version, because the commands come from api-codegen's own templates rather than an external tool, and `api_codegen_commit` already says which.
 
@@ -96,4 +108,4 @@ Branch from `main` as `<person>/<ticket-id>-<slug>`. Never commit directly to `m
 
 ## Releasing
 
-Not yet. Before the first release: the Go SDK this CLI depends on must be public and tagged, so `go.mod` can pin a tag instead of a pseudo-version; a tag-triggered release pipeline must build the per-platform archives and their checksums; and the binary name must be final, since the name reaches every install path. On a pull request from a fork, CI's SDK token step fails until mc-sdk-go is public; that is accepted.
+Not yet. Before the first release, a release pipeline must build the per-platform archives, each carrying `LICENSE`, `README.md` and `THIRD_PARTY_NOTICES`, and their checksums, and the binary name must be final, since the name reaches every install path. The release targets and the `goos` list in `tools/notices` stay in step, so the notices cover every platform shipped. The Go SDK is public, and `go.mod` pins one of its release tags.

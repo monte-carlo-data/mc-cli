@@ -19,33 +19,12 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
-
-      # The SDK module lives in a private repository, so the runner needs a short-lived token
-      # scoped to it. Both steps go away when the SDK is public.
-      - uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
-        id: sdk-token
-        with:
-          app-id: ${{ secrets.MC_GITHUB_APP_ID }}
-          private-key: ${{ secrets.MC_GITHUB_APP_PRIVATE_KEY }}
-          owner: monte-carlo-data
-          repositories: mc-sdk-go
-          permission-contents: read
-
-      # GOPRIVATE keeps the module off the public proxy and checksum database. The credential
-      # goes in an Authorization header rather than a rewritten remote URL, so it lands in the
-      # runner's global git config instead of a repository's.
-      - name: Let the build resolve the private SDK module
-        shell: bash
-        env:
-          TOKEN: ${{ steps.sdk-token.outputs.token }}
-        run: |
-          go env -w GOPRIVATE='github.com/monte-carlo-data/*'
-          header="$(printf 'x-access-token:%s' "$TOKEN" | base64 | tr -d '\n')"
-          git config --global http.https://github.com/.extraheader "Authorization: Basic $header"
 
       - name: Build
         run: go build ./...
@@ -61,27 +40,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
-
-      - uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
-        id: sdk-token
-        with:
-          app-id: ${{ secrets.MC_GITHUB_APP_ID }}
-          private-key: ${{ secrets.MC_GITHUB_APP_PRIVATE_KEY }}
-          owner: monte-carlo-data
-          repositories: mc-sdk-go
-          permission-contents: read
-
-      - name: Let the build resolve the private SDK module
-        env:
-          TOKEN: ${{ steps.sdk-token.outputs.token }}
-        run: |
-          go env -w GOPRIVATE='github.com/monte-carlo-data/*'
-          header="$(printf 'x-access-token:%s' "$TOKEN" | base64 | tr -d '\n')"
-          git config --global http.https://github.com/.extraheader "Authorization: Basic $header"
 
       - name: Vet
         run: go vet ./...
@@ -98,6 +62,16 @@ jobs:
 
       - name: Test
         run: go test -race ./...
+
+      - name: Check the third-party notices are current
+        run: |
+          go generate ./...
+          stale="$(git status --porcelain -- THIRD_PARTY_NOTICES)"
+          if [ -n "$stale" ]; then
+            echo "THIRD_PARTY_NOTICES is out of date. Run go generate ./... and commit the result:"
+            echo "$stale"
+            exit 1
+          fi
 
       - name: Generated files carry the header and nothing else does
         run: |
@@ -116,19 +90,22 @@ jobs:
     name: The bot's dependency change stays narrow
     # go.mod and go.sum carry no code owner, so that a generated pull request requests no review.
     # That is only safe while the bot's dependency change is the SDK pin and nothing else, which
-    # is what this asserts. Only the generated branch is unowned, so only it is checked.
-    if: github.head_ref == 'api-codegen/spec-update'
+    # is what this asserts. The bot is identified by author and by a branch in this repository,
+    # not by branch name, which a fork can choose.
+    if: >-
+      github.event.pull_request.user.login == 'mc-ci-cd-app[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Only the mc-sdk-go lines may change
         env:
           BASE_REF: ${{ github.base_ref }}
         run: |
-          git fetch -q --no-tags origin "$BASE_REF"
           changed=$(git diff "origin/$BASE_REF...HEAD" -- go.mod go.sum | grep -E '^[+-][^+-]' || true)
           stray=$(printf '%s\n' "$changed" | grep -v 'monte-carlo-data/mc-sdk-go' | grep -v '^$' || true)
           if [ -n "$stray" ]; then

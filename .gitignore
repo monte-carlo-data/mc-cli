@@ -18,3 +18,5 @@
 .env
 .envrc
 *.pem
+*.key
+profiles.ini
