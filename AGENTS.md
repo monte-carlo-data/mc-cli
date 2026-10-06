@@ -10,7 +10,9 @@ Treat everything here as customer-facing, including things that are easy to forg
 - **Help text**, which is what every flag and command description becomes.
 - **Generated code**, which ships as-is.
 
-So, **in the contents of any file committed here**: no internal repository names, no internal file paths, no ticket identifiers, and no design rationale that only makes sense from the inside. That reasoning belongs in the ticket or in the internal repository that owns generation. Branch names and pull request metadata are the exception: `<person>/<ticket-id>-<slug>` is the convention, and a merged pull request displays its head branch permanently.
+So, **in the contents of any file committed here**: no internal file paths, no ticket identifiers, and no design rationale that only makes sense from the inside. That reasoning belongs in the ticket or in the internal repository that owns generation.
+
+Two internal names are the exception: api-codegen, the generator, and monolith, the service the API spec is exported from. Generated files and `.api-codegen-source.json` already name them. Name no other internal repository. Branch names and pull request metadata are the exception: `<person>/<ticket-id>-<slug>` is the convention, and a merged pull request displays its head branch permanently.
 
 The generated-file header naming the generator is deliberate and stays.
 
