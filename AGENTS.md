@@ -72,7 +72,7 @@ The generated files call these by bare name, all defined in the hand-written fil
 | `enumCompletion(values)` | Shell completion for an enum flag, from the values the SDK exports. |
 | `retryOnTransient(cmd, call)` | Repeats a call while the API answers 503 or 429, every 15s, or as `Retry-After` asks, for up to 5 minutes; a longer Retry-After ends the retries; also stops at the deadline of the context it runs under. The generator wraps writes in it; a generated read calls the API once, except the polls inside `followValidationRun`. |
 | `confirm(cmd, question)` | Asks `question? [y/N]` on the terminal; `--yes` skips it and is required without a terminal. Every delete and every write the spec marks destructive use it (`deployments reprovision` today). A decline exits 130, a missing `--yes` 2, and Ctrl-C ends the prompt. |
-| `usageError(format, args...)`, `validationsFailed(format, args...)` | Like `fmt.Errorf`, with exit code 2 for a mistake on the command line the command finds itself, or 6 for validations that ran and did not all pass. |
+| `usageError(format, args...)`, `validationsFailed(format, args...)` | Like `fmt.Errorf`, with exit code 2 for a mistake the command line alone shows, or 6 for validations that ran and did not all pass. |
 
 Renaming or removing one is a change to the generator's template as well, landed as a pair. The root command's persistent flag names are part of the same contract: the generator refuses a body or query flag that collides with one.
 

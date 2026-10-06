@@ -37,8 +37,7 @@ func withExitCode(code int, err error) error {
 	return &exitError{code: code, err: err}
 }
 
-// usageError is fmt.Errorf for a mistake on the command line: running it again unchanged fails
-// the same way.
+// usageError is fmt.Errorf for a mistake the command line alone shows, without asking the API.
 func usageError(format string, args ...any) error {
 	return withExitCode(exitUsage, fmt.Errorf(format, args...))
 }
