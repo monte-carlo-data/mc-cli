@@ -21,7 +21,7 @@ func TestNoticeFilesPicksLicenseAndNoticeFilesOnly(t *testing.T) {
 		}
 	}
 	// A directory named like a license file is not one.
-	if err := os.Mkdir(filepath.Join(dir, "LICENSES"), 0o755); err != nil {
+	if err := os.Mkdir(filepath.Join(dir, "LICENSE.d"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 

@@ -51,6 +51,8 @@ Every `internal/cmd/*_cmd.gen.go`: one file per API tag, holding that tag's grou
 
 Regeneration replaces files **by name**: exactly `internal/cmd/*_cmd.gen.go` are deleted and rewritten, and every other file in the package is left alone. A hand-written file whose name ends in `_cmd.gen.go` is therefore lost on the next run. CI checks that every file with the suffix carries the generated header and no file without it does.
 
+Every hand-written Go file starts with `// Copyright Monte Carlo AI, Inc.` and `// SPDX-License-Identifier: Apache-2.0`, followed by a blank line. Generated `*_cmd.gen.go` files carry no such header, since regeneration would drop it.
+
 ## Third-party notices
 
 The release binaries compile in third-party modules, and their licenses require passing on their license and notice files. `THIRD_PARTY_NOTICES` holds them, and every release archive has to carry it next to `LICENSE` and `README.md`. `go generate ./...` rebuilds it with `tools/notices`, from the modules `go list -deps` reports for `cmd/montecarlo` on every release platform. Never edit it by hand. CI fails when it differs from what `go generate` produces, so a dependency change has to commit it too.
@@ -106,4 +108,4 @@ Branch from `main` as `<person>/<ticket-id>-<slug>`. Never commit directly to `m
 
 ## Releasing
 
-Not yet. Before the first release, a release pipeline must build the per-platform archives, each carrying `LICENSE`, `README.md` and `THIRD_PARTY_NOTICES`, and their checksums, and the binary name must be final, since the name reaches every install path. The Go SDK is public, and `go.mod` pins one of its release tags.
+Not yet. Before the first release, a release pipeline must build the per-platform archives, each carrying `LICENSE`, `README.md` and `THIRD_PARTY_NOTICES`, and their checksums, and the binary name must be final, since the name reaches every install path. The release targets and the `goos` list in `tools/notices` stay in step, so the notices cover every platform shipped. The Go SDK is public, and `go.mod` pins one of its release tags.

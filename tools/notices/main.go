@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Command notices writes THIRD_PARTY_NOTICES: the license and notice files of every module
-// compiled into the montecarlo binary, which the release archives carry alongside its own
-// LICENSE. cmd/montecarlo runs it from go generate, so it lists that package's dependencies
+// compiled into the montecarlo binary, which every release archive has to carry alongside its
+// own LICENSE. cmd/montecarlo runs it from go generate, so it lists that package's dependencies
 // from the module cache of the current go.mod.
 package main
 
@@ -20,8 +20,9 @@ import (
 	"strings"
 )
 
-// The operating systems the binary is released for. A dependency imported under a build
-// constraint is compiled in on some of them only, so the list is the union across all three.
+// The operating systems the binary is built for, kept in step with the release targets. A
+// dependency imported under a build constraint is compiled in on some of them only, so the
+// list is the union across them.
 var goos = []string{"darwin", "linux", "windows"}
 
 var noticeFile = regexp.MustCompile(`(?i)^(licen[cs]e|copying|notice|patents)([.-].*)?$`)
