@@ -2,9 +2,13 @@ package cmd
 
 import (
 	"bytes"
+	"context"
+	"errors"
+	"io"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -88,5 +92,44 @@ func TestGeneratedDeleteRefusesWithoutYesOffATerminal(t *testing.T) {
 	_, _, err := executeStreams(t, "deployments", "delete", "some-id", "--config-dir", t.TempDir())
 	if err == nil || !strings.Contains(err.Error(), "Delete deployment some-id: pass --yes") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestConfirmEndsWhenTheCommandIsInterrupted(t *testing.T) {
+	cmd := newTestCommand(t)
+	answer, _ := io.Pipe() // nobody answers
+	cmd.SetIn(answer)
+	cmd.SetErr(io.Discard)
+	ctx, cancel := context.WithCancel(context.Background())
+	cmd.SetContext(ctx)
+
+	done := make(chan error, 1)
+	go func() { done <- confirm(cmd, "Delete deployment x") }()
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("err = %v, want context.Canceled", err)
+		}
+		if exitCode(ctx, err) != exitInterrupted {
+			t.Fatalf("exit code = %d", exitCode(ctx, err))
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the prompt kept waiting after the command was interrupted")
+	}
+}
+
+func TestConfirmExitCodes(t *testing.T) {
+	cmd := newTestCommand(t)
+	if got := exitCode(context.Background(), confirm(cmd, "Delete deployment x")); got != exitUsage {
+		t.Fatalf("without a terminal or --yes: exit %d", got)
+	}
+	original := isTerminal
+	isTerminal = func(*os.File) bool { return true }
+	t.Cleanup(func() { isTerminal = original })
+	cmd.SetIn(strings.NewReader("n\n"))
+	cmd.SetErr(io.Discard)
+	if got := exitCode(context.Background(), confirm(cmd, "Delete deployment x")); got != exitInterrupted {
+		t.Fatalf("declined: exit %d", got)
 	}
 }

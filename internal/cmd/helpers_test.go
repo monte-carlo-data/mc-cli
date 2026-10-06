@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -60,6 +61,21 @@ func executeStreams(t *testing.T, args ...string) (stdout, stderr string, err er
 	rootCmd.SetArgs(args)
 	err = rootCmd.Execute()
 	return outBuf.String(), errBuf.String(), err
+}
+
+// runExit runs args the way the binary does, under ctx, and returns the exit code and what was
+// written to stdout and to stderr, including the error line.
+func runExit(t *testing.T, ctx context.Context, args ...string) (code int, stdout, stderr string) {
+	t.Helper()
+	isolateEnv(t)
+	resetFlags(rootCmd)
+	var outBuf, errBuf bytes.Buffer
+	t.Cleanup(func() {
+		rootCmd.SetOut(nil)
+		rootCmd.SetErr(nil)
+	})
+	code = executeArgs(ctx, args, &outBuf, &errBuf)
+	return code, outBuf.String(), errBuf.String()
 }
 
 // execute runs the root command with args and returns what it wrote to stdout and stderr

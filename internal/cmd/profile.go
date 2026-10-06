@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -31,7 +30,7 @@ token. "profile use" picks the profile commands run with when --profile is not p
 // names the command-line flag the value came from, or "profile name" for the name itself.
 func validateProfileValue(flag, value string) error {
 	if flag == "profile name" && value == "" {
-		return errors.New("a profile name is required")
+		return usageError("a profile name is required")
 	}
 	bad := "\r\n"
 	invariant := "a profile value is one line"
@@ -47,7 +46,7 @@ func validateProfileValue(flag, value string) error {
 	if value[idx] == sectionOpen[0] || value[idx] == sectionClose[0] {
 		what = fmt.Sprintf("%q", string(value[idx]))
 	}
-	return fmt.Errorf("%s holds %s; %s", flag, what, invariant)
+	return usageError("%s holds %s; %s", flag, what, invariant)
 }
 
 func newProfileSetCmd() *cobra.Command {
@@ -112,15 +111,15 @@ do not apply to this command.`,
 			token := apiID != "" || apiToken != ""
 			switch {
 			case oauth && token:
-				return errors.New("pass OAuth client credentials or an API token, not both")
+				return usageError("pass OAuth client credentials or an API token, not both")
 			case oauth && (clientID == "" || clientSecret == ""):
-				return errors.New("--client-id and --client-secret go together")
+				return usageError("--client-id and --client-secret go together")
 			case oauth && instance == "":
-				return errors.New("--instance is required with OAuth client credentials")
+				return usageError("--instance is required with OAuth client credentials")
 			case token && (apiID == "" || apiToken == ""):
-				return errors.New("--api-id and --api-token go together")
+				return usageError("--api-id and --api-token go together")
 			case !oauth && !token:
-				return errors.New("pass --client-id, --client-secret and --instance, or --api-id and --api-token")
+				return usageError("pass --client-id, --client-secret and --instance, or --api-id and --api-token")
 			}
 
 			f, err := loadINI(profilesPath(dir))

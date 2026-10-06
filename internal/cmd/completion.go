@@ -30,10 +30,10 @@ func executeCompletion(ctx context.Context, out io.Writer) int {
 	rootCmd.SetOut(prevOut)
 	if err != nil {
 		fmt.Fprint(out, buf.String())
-		return 1
+		return exitCode(ctx, err)
 	}
 	fmt.Fprint(out, reorderCompletions(buf.String(), globalFlagNames()))
-	return 0
+	return exitOK
 }
 
 // globalFlagNames is every spelling of the root command's persistent flags, plus help.

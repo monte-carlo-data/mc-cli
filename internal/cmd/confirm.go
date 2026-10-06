@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -23,17 +24,30 @@ func confirm(cmd *cobra.Command, question string) error {
 	}
 	interactive := stdinIsTerminal(cmd) || cmd.InOrStdin() != os.Stdin
 	if !interactive {
-		return fmt.Errorf("%s: pass --yes to run without a prompt", question)
+		return usageError("%s: pass --yes to run without a prompt", question)
 	}
 	fmt.Fprintf(cmd.ErrOrStderr(), "%s? [y/N] ", question)
-	answer, err := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
-	if err != nil && answer == "" {
-		return errors.New("aborted")
+	ctx := cmd.Context()
+	if ctx == nil {
+		ctx = context.Background()
 	}
-	if confirmed(answer) {
-		return nil
+	// Ctrl-C cancels the context rather than ending the process, so the command waits on the
+	// context, not on the read. An unanswered read is left behind; the process is about to exit.
+	answered := make(chan string, 1)
+	go func() {
+		answer, _ := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
+		answered <- answer
+	}()
+	select {
+	case <-ctx.Done():
+		fmt.Fprintln(cmd.ErrOrStderr())
+		return ctx.Err()
+	case answer := <-answered:
+		if confirmed(answer) {
+			return nil
+		}
+		return withExitCode(exitInterrupted, errors.New("aborted"))
 	}
-	return errors.New("aborted")
 }
 
 // confirmed reports whether answer — as read from the prompt, trailing newline included —
