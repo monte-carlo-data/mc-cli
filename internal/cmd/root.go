@@ -41,6 +41,12 @@ client, or none and let the environment or the profile supply one.
 A secret flag accepts @<path> to read its value from a file, and has a --<name>-prompt companion.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		// A bad --output is caught before the command runs, not when its result is printed,
+		// after a write has already happened. A command with its own hook would skip this one.
+		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+			_, err := outputFormat(cmd)
+			return err
+		},
 	}
 
 	// These names are reserved. The generator keeps the same list and refuses a body or query

@@ -225,3 +225,11 @@ func TestFlagHelpersReturnUsageErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestABadOutputIsRejectedBeforeTheCallIsMade(t *testing.T) {
+	srv, calls := flakyServer(t, 0, http.StatusOK, "")
+	code, _, stderr := runExit(t, context.Background(), "whoami", "--output", "xml", "--endpoint", srv.URL, "--api-id", "i", "--api-token", "s")
+	if code != exitUsage || calls.Load() != 0 {
+		t.Fatalf("exit %d after %d calls; stderr %q", code, calls.Load(), stderr)
+	}
+}
