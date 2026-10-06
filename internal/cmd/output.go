@@ -239,14 +239,40 @@ func cell(v any) string {
 	return string(raw)
 }
 
-// apiErr renders an API failure. With a problem document: its detail, code and request id, then
-// one line per invalid field. Without one, the request, the status and the body's message, which
-// is what the API gateway answers when a credential or a URL is wrong.
+// apiErr renders an API failure, carrying the exit code its status maps to. Any other error is
+// returned as it is.
 func apiErr(resp *http.Response, err error) error {
 	var apiError *sdk.GenericOpenAPIError
 	if !errors.As(err, &apiError) {
 		return err
 	}
+	return withExitCode(statusExitCode(resp, apiError), renderAPIErr(resp, err, apiError))
+}
+
+// statusExitCode is the exit code for a failed call's status, taken from the response, else
+// from the problem document. A decode failure on a success status is a plain failure.
+func statusExitCode(resp *http.Response, apiError *sdk.GenericOpenAPIError) int {
+	status := 0
+	if resp != nil {
+		status = resp.StatusCode
+	} else if problem, ok := apiError.Model().(sdk.ProblemOut); ok {
+		status = int(problem.GetStatus())
+	}
+	switch {
+	case status == http.StatusNotFound:
+		return exitNotFound
+	case status == http.StatusUnauthorized || status == http.StatusForbidden:
+		return exitAuth
+	case retryableStatus(status):
+		return exitTransient
+	}
+	return exitFailure
+}
+
+// renderAPIErr builds the message. With a problem document: its detail, code and request id,
+// then one line per invalid field. Without one, the request, the status and the body's message,
+// which is what the API gateway answers when a credential or a URL is wrong.
+func renderAPIErr(resp *http.Response, err error, apiError *sdk.GenericOpenAPIError) error {
 	if problem, ok := apiError.Model().(sdk.ProblemOut); ok {
 		var b strings.Builder
 		fmt.Fprintf(&b, "%s (%s, request %s)", problem.GetDetail(), problem.GetCode(), problem.GetRequestId())
