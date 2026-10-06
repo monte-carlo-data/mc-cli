@@ -1,3 +1,6 @@
+// Copyright Monte Carlo AI, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 // Package cmd is the montecarlo command: the root, the hand-written commands, and the helpers
 // the generated *_cmd.gen.go files call.
 package cmd
