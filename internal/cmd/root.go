@@ -5,6 +5,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"syscall"
@@ -65,14 +66,21 @@ var rootCmd = newRootCmd()
 func Execute() int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if completionRequest(os.Args[1:]) {
-		return executeCompletion(ctx, os.Stdout)
+	return executeArgs(ctx, os.Args[1:], os.Stdout, os.Stderr)
+}
+
+// executeArgs is Execute with its inputs passed in, so a test can check the exit code. stdout is
+// where completion answers go; commands write to the root's own output.
+func executeArgs(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	rootCmd.SetArgs(args)
+	if completionRequest(args) {
+		return executeCompletion(ctx, stdout)
 	}
-	if err := rootCmd.ExecuteContext(ctx); err != nil {
-		fmt.Fprintf(os.Stderr, "%s: %v\n", binaryName, err)
-		return 1
+	err := rootCmd.ExecuteContext(ctx)
+	if err != nil {
+		fmt.Fprintf(stderr, "%s: %v\n", binaryName, err)
 	}
-	return 0
+	return exitCode(ctx, err)
 }
 
 func init() {
