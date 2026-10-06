@@ -39,6 +39,21 @@ func TestExitCodeMapsErrors(t *testing.T) {
 	}
 }
 
+func TestTheErrorHelpersCarryTheirCodes(t *testing.T) {
+	cases := map[int]error{
+		exitUsage:      usageError("--%s is required", "name"),
+		exitValidation: validationsFailed("not every validation passed"),
+	}
+	for want, err := range cases {
+		if got := exitCode(context.Background(), err); got != want {
+			t.Errorf("%q: exit %d, want %d", err, got, want)
+		}
+	}
+	if got := usageError("--%s is required", "name").Error(); got != "--name is required" {
+		t.Fatalf("message %q", got)
+	}
+}
+
 func TestExitErrorKeepsTheMessage(t *testing.T) {
 	inner := errors.New("the message")
 	err := withExitCode(exitUsage, inner)

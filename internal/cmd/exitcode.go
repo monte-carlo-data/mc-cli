@@ -43,6 +43,11 @@ func usageError(format string, args ...any) error {
 	return withExitCode(exitUsage, fmt.Errorf(format, args...))
 }
 
+// validationsFailed is the error for a command whose validations ran and did not all pass.
+func validationsFailed(format string, args ...any) error {
+	return withExitCode(exitValidation, fmt.Errorf(format, args...))
+}
+
 // exitCode is the exit code for the error a command returned under ctx. An interrupt wins over
 // whatever error it caused, because some errors arrive here flattened into text.
 func exitCode(ctx context.Context, err error) int {
