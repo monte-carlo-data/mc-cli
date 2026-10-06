@@ -84,7 +84,7 @@ func newDeploymentsDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <deployment_id>",
 		Short: "Delete a deployment",
-		Long:  "Delete a deployment, releasing the infrastructure Monte Carlo runs for it.\n\nThe deployment's storage is deleted with it, so empty that storage first. A deployment\nwith an enabled collection agent or data store, or with connections still running through\nit, cannot be deleted. Neither can one hosted by Monte Carlo, which this API does not\nprovision. One that is not enabled is deleted along with the deployment.\n\nDeleting reaches several systems and can stop partway through. Repeating the request\npicks up where it stopped, so clear whatever a refusal named and send it again.",
+		Long:  "Delete a deployment, releasing the infrastructure Monte Carlo runs for it.\n\nThe deployment's storage is deleted with it, so empty that storage first. A deployment\nwith an enabled collection agent or data store, connections still running through it, or\nETL containers on it, cannot be deleted. Neither can one hosted by Monte Carlo, which this\nAPI does not provision. One that is not enabled is deleted along with the deployment.\n\nDeleting reaches several systems and can stop partway through. Repeating the request\npicks up where it stopped, so clear whatever a refusal named and send it again.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := confirm(cmd, "Delete deployment"+" "+args[0]); err != nil {
