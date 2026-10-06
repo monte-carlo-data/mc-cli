@@ -12,7 +12,9 @@ Treat everything here as customer-facing, including things that are easy to forg
 
 So, **in the contents of any file committed here**: no internal file paths, no ticket identifiers, and no design rationale that only makes sense from the inside. That reasoning belongs in the ticket or in the internal repository that owns generation.
 
-Two internal names are the exception: api-codegen, the generator, and monolith, the service the API spec is exported from. Generated files and `.api-codegen-source.json` already name them. Name no other internal repository. Branch names and pull request metadata are the exception: `<person>/<ticket-id>-<slug>` is the convention, and a merged pull request displays its head branch permanently.
+Two internal names are the exception: api-codegen, the generator, and monolith, the service the API spec is exported from. Generated files and `.api-codegen-source.json` already name them. Name no other internal repository.
+
+Branch names and pull request metadata may carry ticket identifiers: `<person>/<ticket-id>-<slug>` is the convention, and a merged pull request displays its head branch permanently.
 
 The generated-file header naming the generator is deliberate and stays.
 
@@ -57,7 +59,7 @@ The release binaries compile in third-party modules, and their licenses require 
 
 api-codegen regenerates this repository and opens a pull request whenever it is behind the API spec or behind `mc-sdk-go`. Nobody runs the generator from outside any more.
 
-That pull request moves the SDK pin in the same commit as the generated commands that need it — they call SDK symbols that do not exist at the older pin — and it has already been built and vetted against that pin before being pushed. The generated files carry no code owner, so it asks nobody for review: a person still approves and merges it, and `go.mod` and `go.sum` are checked to make sure the bot changed nothing there but the SDK's own lines.
+That pull request moves the SDK pin in the same commit as the generated commands that need it — they call SDK symbols that do not exist at the older pin — and it has already been built and vetted against that pin before being pushed. It also runs `go generate ./...`, so `THIRD_PARTY_NOTICES` moves with the pin. The generated files and the notices carry no code owner, so it asks nobody for review: a person still approves and merges it, and `go.mod` and `go.sum` are checked to make sure the bot changed nothing there but the SDK's own lines.
 
 `.api-codegen-source.json` at the root records what produced the tree: the api-codegen commit and run, the `mc-sdk-go` commit pinned, and the monolith export the spec came from. It names no generator version, because the commands come from api-codegen's own templates rather than an external tool, and `api_codegen_commit` already says which.
 
@@ -104,4 +106,4 @@ Branch from `main` as `<person>/<ticket-id>-<slug>`. Never commit directly to `m
 
 ## Releasing
 
-Not yet. Before the first release, a release pipeline must build the per-platform archives and their checksums, and the binary name must be final, since the name reaches every install path. The Go SDK is public, and `go.mod` pins one of its release tags.
+Not yet. Before the first release, a release pipeline must build the per-platform archives, each carrying `LICENSE`, `README.md` and `THIRD_PARTY_NOTICES`, and their checksums, and the binary name must be final, since the name reaches every install path. The Go SDK is public, and `go.mod` pins one of its release tags.
