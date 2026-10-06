@@ -34,7 +34,9 @@ func newCredentialsCreateCmd() *cobra.Command {
 		Use:   "create",
 		Short: "Create credential",
 	}
+	cmd.AddCommand(newCredentialsCreateAirflowCmd())
 	cmd.AddCommand(newCredentialsCreateAwsSecretsManagerCmd())
+	cmd.AddCommand(newCredentialsCreateAzureDataFactoryCmd())
 	cmd.AddCommand(newCredentialsCreateAzureDedicatedSqlPoolCmd())
 	cmd.AddCommand(newCredentialsCreateAzureKeyVaultCmd())
 	cmd.AddCommand(newCredentialsCreateAzureSqlDatabaseCmd())
@@ -45,10 +47,14 @@ func newCredentialsCreateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsCreateDb2Cmd())
 	cmd.AddCommand(newCredentialsCreateEnvVarCmd())
 	cmd.AddCommand(newCredentialsCreateFileCmd())
+	cmd.AddCommand(newCredentialsCreateFivetranCmd())
+	cmd.AddCommand(newCredentialsCreateGcpDataformCmd())
 	cmd.AddCommand(newCredentialsCreateGcpSecretManagerCmd())
+	cmd.AddCommand(newCredentialsCreateInformaticaV2Cmd())
 	cmd.AddCommand(newCredentialsCreateLookerCmd())
 	cmd.AddCommand(newCredentialsCreateLookerGitCloneCmd())
 	cmd.AddCommand(newCredentialsCreateMariadbCmd())
+	cmd.AddCommand(newCredentialsCreateMulesoftCmd())
 	cmd.AddCommand(newCredentialsCreateMysqlCmd())
 	cmd.AddCommand(newCredentialsCreateOracleCmd())
 	cmd.AddCommand(newCredentialsCreatePostgresCmd())
@@ -60,6 +66,36 @@ func newCredentialsCreateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsCreateStarburstGalaxyCmd())
 	cmd.AddCommand(newCredentialsCreateTableauCmd())
 	cmd.AddCommand(newCredentialsCreateTeradataCmd())
+	return cmd
+}
+
+func newCredentialsCreateAirflowCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "airflow",
+		Short: "Create Airflow credentials",
+		Long:  "Store the connection details of an Airflow environment.\n\nAirflow reports its runs to Monte Carlo, so there is no secret to keep. An account\nholds a limited number of credentials; past that the create is refused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreateAirflowCredentials(ctx)
+			hostName, err := flagString(cmd, "host-name")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewAirflowCredentialsIn(hostName)
+			req = req.AirflowCredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host_name")
+		},
+	}
+	cmd.Flags().String("host-name", "", "Host name of the Airflow web server, as Airflow reports it to Monte Carlo.")
+	_ = cmd.MarkFlagRequired("host-name")
 	return cmd
 }
 
@@ -136,6 +172,69 @@ func newCredentialsCreateAwsSecretsManagerCmd() *cobra.Command {
 	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
 	cmd.Flags().String("external-id", "", "External id the assumed role's trust policy requires, if it requires one.")
 	cmd.Flags().String("sql-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
+	return cmd
+}
+
+func newCredentialsCreateAzureDataFactoryCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "azure-data-factory",
+		Short: "Create Azure Data Factory credentials",
+		Long:  "Store Azure Data Factory credentials.\n\nMonte Carlo keeps the client secret and returns everything else. Nothing\nis checked against Azure Data Factory here. An account holds a limited number of credentials;\npast that the create is refused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "app-client-secret", "app-client-secret-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreateAzureDataFactoryCredentials(ctx)
+			tenantId, err := flagString(cmd, "tenant-id")
+			if err != nil {
+				return err
+			}
+			appClientId, err := flagString(cmd, "app-client-id")
+			if err != nil {
+				return err
+			}
+			appClientSecret, err := flagSecret(cmd, "app-client-secret")
+			if err != nil {
+				return err
+			}
+			subscriptionId, err := flagString(cmd, "subscription-id")
+			if err != nil {
+				return err
+			}
+			resourceGroupName, err := flagString(cmd, "resource-group-name")
+			if err != nil {
+				return err
+			}
+			factoryName, err := flagString(cmd, "factory-name")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewAzureDataFactoryCredentialsIn(tenantId, appClientId, appClientSecret, subscriptionId, resourceGroupName, factoryName)
+			req = req.AzureDataFactoryCredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "tenant_id", "app_client_id", "subscription_id", "resource_group_name", "factory_name")
+		},
+	}
+	cmd.Flags().String("tenant-id", "", "Microsoft Entra ID tenant the data factory belongs to.")
+	_ = cmd.MarkFlagRequired("tenant-id")
+	cmd.Flags().String("app-client-id", "", "Client ID of the Entra ID app registration Monte Carlo signs in with.")
+	_ = cmd.MarkFlagRequired("app-client-id")
+	cmd.Flags().String("app-client-secret", "", "Secret of the app registration. Stored by Monte Carlo and never returned. Visible in the process list; --app-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("app-client-secret-prompt", false, "Read --app-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("subscription-id", "", "Azure subscription that holds the data factory.")
+	_ = cmd.MarkFlagRequired("subscription-id")
+	cmd.Flags().String("resource-group-name", "", "Resource group that holds the data factory.")
+	_ = cmd.MarkFlagRequired("resource-group-name")
+	cmd.Flags().String("factory-name", "", "Name of the data factory.")
+	_ = cmd.MarkFlagRequired("factory-name")
 	return cmd
 }
 
@@ -770,6 +869,101 @@ func newCredentialsCreateFileCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsCreateFivetranCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "fivetran",
+		Short: "Create Fivetran credentials",
+		Long:  "Store Fivetran credentials.\n\nMonte Carlo keeps the API key and its secret and returns everything else. Nothing is\nchecked against Fivetran here. An account holds a limited number of credentials; past that the\ncreate is refused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "api-key", "api-key-prompt"); err != nil {
+				return err
+			}
+			if err := requireAny(cmd, "api-password", "api-password-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreateFivetranCredentials(ctx)
+			apiKey, err := flagSecret(cmd, "api-key")
+			if err != nil {
+				return err
+			}
+			apiPassword, err := flagSecret(cmd, "api-password")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewFivetranCredentialsIn(apiKey, apiPassword)
+			if changed(cmd, "base-url") {
+				baseUrl, err := flagString(cmd, "base-url")
+				if err != nil {
+					return err
+				}
+				body.SetBaseUrl(baseUrl)
+			}
+			req = req.FivetranCredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "base_url")
+		},
+	}
+	cmd.Flags().String("api-key", "", "Key of the Fivetran API key. Stored by Monte Carlo and never returned. Visible in the process list; --api-key-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("api-key-prompt", false, "Read --api-key from a hidden prompt instead of the command line.")
+	cmd.Flags().String("api-password", "", "Secret of the Fivetran API key. Stored by Monte Carlo and never returned. Visible in the process list; --api-password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("api-password-prompt", false, "Read --api-password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("base-url", "", "URL of the Fivetran REST API. Leave it out for https://api.fivetran.com/v1/.")
+	return cmd
+}
+
+func newCredentialsCreateGcpDataformCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "gcp-dataform",
+		Short: "Create GCP Dataform credentials",
+		Long:  "Store GCP Dataform credentials.\n\nMonte Carlo keeps the key and returns everything else. Nothing is checked against\nGCP Dataform here. An account holds a limited number of credentials; past that the create is\nrefused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "service-account-key", "service-account-key-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreateGcpDataformCredentials(ctx)
+			projectId, err := flagString(cmd, "project-id")
+			if err != nil {
+				return err
+			}
+			locations, err := flagStringSlice(cmd, "locations")
+			if err != nil {
+				return err
+			}
+			serviceAccountKey, err := flagSecret(cmd, "service-account-key")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewGcpDataformCredentialsIn(projectId, locations, serviceAccountKey)
+			req = req.GcpDataformCredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "project_id", "locations", "client_email")
+		},
+	}
+	cmd.Flags().String("project-id", "", "Google Cloud project that holds the Dataform repositories.")
+	_ = cmd.MarkFlagRequired("project-id")
+	cmd.Flags().StringSlice("locations", nil, "Google Cloud regions to read Dataform repositories in, such as us-central1.")
+	_ = cmd.MarkFlagRequired("locations")
+	cmd.Flags().String("service-account-key", "", "The service account's JSON key file, as its text. It needs Dataform API access. Stored by Monte Carlo and never returned. Visible in the process list; --service-account-key-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("service-account-key-prompt", false, "Read --service-account-key from a hidden prompt instead of the command line.")
+	return cmd
+}
+
 func newCredentialsCreateGcpSecretManagerCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "gcp-secret-manager",
@@ -819,6 +1013,137 @@ func newCredentialsCreateGcpSecretManagerCmd() *cobra.Command {
 	_ = cmd.MarkFlagRequired("gcp-secret")
 	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
 	cmd.Flags().String("sql-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
+	return cmd
+}
+
+func newCredentialsCreateInformaticaV2Cmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "informatica-v2",
+		Short: "Create Informatica credentials",
+		Long:  "Store Informatica credentials.\n\nMonte Carlo keeps the passwords and the client secret and returns everything else. Nothing is\nchecked against Informatica here.\n\n`auth_mode` decides what else to send: `username` and `password` for `password`, or `org_id` and\nthe `oauth_*` fields for `oauth`. An account holds a limited number of credentials; past that\nthe create is refused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreateInformaticaV2Credentials(ctx)
+			authModeValue, err := flagString(cmd, "auth-mode")
+			if err != nil {
+				return err
+			}
+			authMode, err := sdk.NewInformaticaV2AuthModeFromValue(authModeValue)
+			if err != nil {
+				return err
+			}
+			body := sdk.NewInformaticaV2CredentialsIn(*authMode)
+			if changed(cmd, "base-url") {
+				baseUrl, err := flagString(cmd, "base-url")
+				if err != nil {
+					return err
+				}
+				body.SetBaseUrl(baseUrl)
+			}
+			if changed(cmd, "oauth-access-token-endpoint") {
+				oauthAccessTokenEndpoint, err := flagString(cmd, "oauth-access-token-endpoint")
+				if err != nil {
+					return err
+				}
+				body.SetOauthAccessTokenEndpoint(oauthAccessTokenEndpoint)
+			}
+			if changed(cmd, "oauth-client-id") {
+				oauthClientId, err := flagString(cmd, "oauth-client-id")
+				if err != nil {
+					return err
+				}
+				body.SetOauthClientId(oauthClientId)
+			}
+			if changed(cmd, "oauth-client-secret", "oauth-client-secret-prompt") {
+				oauthClientSecret, err := flagSecret(cmd, "oauth-client-secret")
+				if err != nil {
+					return err
+				}
+				body.SetOauthClientSecret(oauthClientSecret)
+			}
+			if changed(cmd, "oauth-grant-type") {
+				oauthGrantTypeValue, err := flagString(cmd, "oauth-grant-type")
+				if err != nil {
+					return err
+				}
+				oauthGrantType, err := sdk.NewOAuthGrantTypeFromValue(oauthGrantTypeValue)
+				if err != nil {
+					return err
+				}
+				body.SetOauthGrantType(*oauthGrantType)
+			}
+			if changed(cmd, "oauth-password", "oauth-password-prompt") {
+				oauthPassword, err := flagSecret(cmd, "oauth-password")
+				if err != nil {
+					return err
+				}
+				body.SetOauthPassword(oauthPassword)
+			}
+			if changed(cmd, "oauth-scope") {
+				oauthScope, err := flagString(cmd, "oauth-scope")
+				if err != nil {
+					return err
+				}
+				body.SetOauthScope(oauthScope)
+			}
+			if changed(cmd, "oauth-username") {
+				oauthUsername, err := flagString(cmd, "oauth-username")
+				if err != nil {
+					return err
+				}
+				body.SetOauthUsername(oauthUsername)
+			}
+			if changed(cmd, "org-id") {
+				orgId, err := flagString(cmd, "org-id")
+				if err != nil {
+					return err
+				}
+				body.SetOrgId(orgId)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "username") {
+				username, err := flagString(cmd, "username")
+				if err != nil {
+					return err
+				}
+				body.SetUsername(username)
+			}
+			req = req.InformaticaV2CredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "auth_mode", "base_url", "username", "org_id", "oauth_client_id", "oauth_grant_type", "oauth_access_token_endpoint", "oauth_scope", "oauth_username")
+		},
+	}
+	cmd.Flags().String("auth-mode", "", "How Monte Carlo signs in. password takes username and password. oauth takes org_id and the oauth_* fields.")
+	_ = cmd.RegisterFlagCompletionFunc("auth-mode", enumCompletion(sdk.AllowedInformaticaV2AuthModeEnumValues))
+	_ = cmd.MarkFlagRequired("auth-mode")
+	cmd.Flags().String("base-url", "", "Informatica login URL for your POD. Leave it out for https://dm-us.informaticacloud.com.")
+	cmd.Flags().String("oauth-access-token-endpoint", "", "Identity provider URL Monte Carlo requests tokens from.")
+	cmd.Flags().String("oauth-client-id", "", "Client ID of the app registered with your identity provider, for oauth.")
+	cmd.Flags().String("oauth-client-secret", "", "Secret of the identity provider app, for oauth. Stored by Monte Carlo and never returned. Visible in the process list; --oauth-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("oauth-client-secret-prompt", false, "Read --oauth-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("oauth-grant-type", "", "Grant Monte Carlo requests the token with, for oauth. password also takes oauth_username and oauth_password.")
+	_ = cmd.RegisterFlagCompletionFunc("oauth-grant-type", enumCompletion(sdk.AllowedOAuthGrantTypeEnumValues))
+	cmd.Flags().String("oauth-password", "", "Password of oauth_username, for the password grant. Stored by Monte Carlo and never returned. Visible in the process list; --oauth-password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("oauth-password-prompt", false, "Read --oauth-password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("oauth-scope", "", "Scope to request the token with. Leave it out to request none.")
+	cmd.Flags().String("oauth-username", "", "Identity provider user, for the password grant.")
+	cmd.Flags().String("org-id", "", "Informatica organization ID, for oauth.")
+	cmd.Flags().String("password", "", "Password of username, for password. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("username", "", "Informatica user, for password.")
 	return cmd
 }
 
@@ -1003,6 +1328,66 @@ func newCredentialsCreateMariadbCmd() *cobra.Command {
 	cmd.Flags().String("password", "", "Password of the database user. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().String("db-name", "", "Database to connect to.")
+	return cmd
+}
+
+func newCredentialsCreateMulesoftCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "mulesoft",
+		Short: "Create MuleSoft credentials",
+		Long:  "Store MuleSoft credentials.\n\nMonte Carlo keeps the client secret and returns everything else. Nothing is checked\nagainst MuleSoft here. An account holds a limited number of credentials; past that the create is\nrefused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "app-client-secret", "app-client-secret-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreateMulesoftCredentials(ctx)
+			appClientId, err := flagString(cmd, "app-client-id")
+			if err != nil {
+				return err
+			}
+			appClientSecret, err := flagSecret(cmd, "app-client-secret")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewMulesoftCredentialsIn(appClientId, appClientSecret)
+			if changed(cmd, "org-id") {
+				orgId, err := flagString(cmd, "org-id")
+				if err != nil {
+					return err
+				}
+				body.SetOrgId(orgId)
+			}
+			if changed(cmd, "region") {
+				regionValue, err := flagString(cmd, "region")
+				if err != nil {
+					return err
+				}
+				region, err := sdk.NewMulesoftRegionFromValue(regionValue)
+				if err != nil {
+					return err
+				}
+				body.SetRegion(*region)
+			}
+			req = req.MulesoftCredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "app_client_id", "region", "org_id")
+		},
+	}
+	cmd.Flags().String("app-client-id", "", "Client ID of the Anypoint connected app. The app needs the View Environment, Read Deployments and Exchange Viewer scopes.")
+	_ = cmd.MarkFlagRequired("app-client-id")
+	cmd.Flags().String("app-client-secret", "", "Secret of the Anypoint connected app. Stored by Monte Carlo and never returned. Visible in the process list; --app-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("app-client-secret-prompt", false, "Read --app-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("org-id", "", "Anypoint organization or business group to collect from. Set it when your Mule applications are deployed in a business group. Leave it out to collect the organization that owns the connected app.")
+	cmd.Flags().String("region", "", "Anypoint Platform instance the organization lives on. US when left out.")
+	_ = cmd.RegisterFlagCompletionFunc("region", enumCompletion(sdk.AllowedMulesoftRegionEnumValues))
 	return cmd
 }
 
@@ -1957,7 +2342,9 @@ func newCredentialsDeleteCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.AddCommand(newCredentialsDeleteAirflowCmd())
 	cmd.AddCommand(newCredentialsDeleteAwsSecretsManagerCmd())
+	cmd.AddCommand(newCredentialsDeleteAzureDataFactoryCmd())
 	cmd.AddCommand(newCredentialsDeleteAzureDedicatedSqlPoolCmd())
 	cmd.AddCommand(newCredentialsDeleteAzureKeyVaultCmd())
 	cmd.AddCommand(newCredentialsDeleteAzureSqlDatabaseCmd())
@@ -1968,10 +2355,14 @@ func newCredentialsDeleteCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsDeleteDb2Cmd())
 	cmd.AddCommand(newCredentialsDeleteEnvVarCmd())
 	cmd.AddCommand(newCredentialsDeleteFileCmd())
+	cmd.AddCommand(newCredentialsDeleteFivetranCmd())
+	cmd.AddCommand(newCredentialsDeleteGcpDataformCmd())
 	cmd.AddCommand(newCredentialsDeleteGcpSecretManagerCmd())
+	cmd.AddCommand(newCredentialsDeleteInformaticaV2Cmd())
 	cmd.AddCommand(newCredentialsDeleteLookerCmd())
 	cmd.AddCommand(newCredentialsDeleteLookerGitCloneCmd())
 	cmd.AddCommand(newCredentialsDeleteMariadbCmd())
+	cmd.AddCommand(newCredentialsDeleteMulesoftCmd())
 	cmd.AddCommand(newCredentialsDeleteMysqlCmd())
 	cmd.AddCommand(newCredentialsDeleteOracleCmd())
 	cmd.AddCommand(newCredentialsDeletePostgresCmd())
@@ -1983,6 +2374,30 @@ func newCredentialsDeleteCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsDeleteStarburstGalaxyCmd())
 	cmd.AddCommand(newCredentialsDeleteTableauCmd())
 	cmd.AddCommand(newCredentialsDeleteTeradataCmd())
+	return cmd
+}
+
+func newCredentialsDeleteAirflowCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "airflow <credentials_id>",
+		Short: "Delete Airflow credentials",
+		Long:  "Delete Airflow connection details.\n\nRefused while a connection still uses them. Delete the connection first.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete airflow credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeleteAirflowCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
 	return cmd
 }
 
@@ -2001,6 +2416,30 @@ func newCredentialsDeleteAwsSecretsManagerCmd() *cobra.Command {
 				return err
 			}
 			req := api.CredentialsAPI.DeleteAwsSecretsManagerCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
+func newCredentialsDeleteAzureDataFactoryCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "azure-data-factory <credentials_id>",
+		Short: "Delete Azure Data Factory credentials",
+		Long:  "Delete Azure Data Factory credentials.\n\nRefused while a connection still uses them. Delete the connection first. Monte Carlo stops using\nthe stored client secret. Rotate it in Microsoft Entra ID if it must be retired.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete azure-data-factory credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeleteAzureDataFactoryCredentials(ctx, args[0])
 			if resp, err := req.Execute(); err != nil {
 				return apiErr(resp, err)
 			}
@@ -2250,6 +2689,54 @@ func newCredentialsDeleteFileCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsDeleteFivetranCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "fivetran <credentials_id>",
+		Short: "Delete Fivetran credentials",
+		Long:  "Delete Fivetran credentials.\n\nRefused while a connection still uses them. Delete the connection first. Monte Carlo stops using\nthe stored API key and secret. Delete the API key in Fivetran if it must be retired.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete fivetran credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeleteFivetranCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
+func newCredentialsDeleteGcpDataformCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "gcp-dataform <credentials_id>",
+		Short: "Delete GCP Dataform credentials",
+		Long:  "Delete GCP Dataform credentials.\n\nRefused while a connection still uses them. Delete the connection first. Monte Carlo stops using\nthe stored service account key. Delete the key in Google Cloud if it must be retired.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete gcp-dataform credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeleteGcpDataformCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
 func newCredentialsDeleteGcpSecretManagerCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "gcp-secret-manager <credentials_id>",
@@ -2265,6 +2752,30 @@ func newCredentialsDeleteGcpSecretManagerCmd() *cobra.Command {
 				return err
 			}
 			req := api.CredentialsAPI.DeleteGcpSecretManagerCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
+func newCredentialsDeleteInformaticaV2Cmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "informatica-v2 <credentials_id>",
+		Short: "Delete Informatica credentials",
+		Long:  "Delete Informatica credentials.\n\nRefused while a connection still uses them. Delete the connection first. Monte Carlo stops using\nthe stored password or client secret. Rotate it in Informatica or your identity provider if it\nmust be retired.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete informatica-v2 credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeleteInformaticaV2Credentials(ctx, args[0])
 			if resp, err := req.Execute(); err != nil {
 				return apiErr(resp, err)
 			}
@@ -2337,6 +2848,30 @@ func newCredentialsDeleteMariadbCmd() *cobra.Command {
 				return err
 			}
 			req := api.CredentialsAPI.DeleteMariadbCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
+func newCredentialsDeleteMulesoftCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "mulesoft <credentials_id>",
+		Short: "Delete MuleSoft credentials",
+		Long:  "Delete MuleSoft credentials.\n\nRefused while a connection still uses them. Delete the connection first. Monte Carlo stops using\nthe stored client secret. Rotate it in Anypoint if it must be retired.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete mulesoft credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeleteMulesoftCredentials(ctx, args[0])
 			if resp, err := req.Execute(); err != nil {
 				return apiErr(resp, err)
 			}
@@ -2615,7 +3150,9 @@ func newCredentialsGetCmd() *cobra.Command {
 		Use:   "get",
 		Short: "Get credential",
 	}
+	cmd.AddCommand(newCredentialsGetAirflowCmd())
 	cmd.AddCommand(newCredentialsGetAwsSecretsManagerCmd())
+	cmd.AddCommand(newCredentialsGetAzureDataFactoryCmd())
 	cmd.AddCommand(newCredentialsGetAzureDedicatedSqlPoolCmd())
 	cmd.AddCommand(newCredentialsGetAzureKeyVaultCmd())
 	cmd.AddCommand(newCredentialsGetAzureSqlDatabaseCmd())
@@ -2626,10 +3163,14 @@ func newCredentialsGetCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsGetDb2Cmd())
 	cmd.AddCommand(newCredentialsGetEnvVarCmd())
 	cmd.AddCommand(newCredentialsGetFileCmd())
+	cmd.AddCommand(newCredentialsGetFivetranCmd())
+	cmd.AddCommand(newCredentialsGetGcpDataformCmd())
 	cmd.AddCommand(newCredentialsGetGcpSecretManagerCmd())
+	cmd.AddCommand(newCredentialsGetInformaticaV2Cmd())
 	cmd.AddCommand(newCredentialsGetLookerCmd())
 	cmd.AddCommand(newCredentialsGetLookerGitCloneCmd())
 	cmd.AddCommand(newCredentialsGetMariadbCmd())
+	cmd.AddCommand(newCredentialsGetMulesoftCmd())
 	cmd.AddCommand(newCredentialsGetMysqlCmd())
 	cmd.AddCommand(newCredentialsGetOracleCmd())
 	cmd.AddCommand(newCredentialsGetPostgresCmd())
@@ -2641,6 +3182,28 @@ func newCredentialsGetCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsGetStarburstGalaxyCmd())
 	cmd.AddCommand(newCredentialsGetTableauCmd())
 	cmd.AddCommand(newCredentialsGetTeradataCmd())
+	return cmd
+}
+
+func newCredentialsGetAirflowCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "airflow <credentials_id>",
+		Short: "Get Airflow credentials",
+		Long:  "Get one set of Airflow connection details.\n\nAn id that does not exist, belongs to another account, or names credentials of another kind\nreturns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetAirflowCredentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host_name")
+		},
+	}
 	return cmd
 }
 
@@ -2661,6 +3224,28 @@ func newCredentialsGetAwsSecretsManagerCmd() *cobra.Command {
 				return apiErr(resp, err)
 			}
 			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "bq_project_id", "sql_warehouse_id", "aws_secret", "aws_region", "assumable_role", "external_id")
+		},
+	}
+	return cmd
+}
+
+func newCredentialsGetAzureDataFactoryCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "azure-data-factory <credentials_id>",
+		Short: "Get Azure Data Factory credentials",
+		Long:  "Get one set of Azure Data Factory credentials, without the client secret.\n\nAn id that does not exist, belongs to another account, or names credentials of another kind\nreturns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetAzureDataFactoryCredentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "tenant_id", "app_client_id", "subscription_id", "resource_group_name", "factory_name")
 		},
 	}
 	return cmd
@@ -2886,6 +3471,50 @@ func newCredentialsGetFileCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsGetFivetranCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "fivetran <credentials_id>",
+		Short: "Get Fivetran credentials",
+		Long:  "Get one set of Fivetran credentials, without the API key and its secret.\n\nAn id that does not exist, belongs to another account, or names credentials of another kind\nreturns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetFivetranCredentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "base_url")
+		},
+	}
+	return cmd
+}
+
+func newCredentialsGetGcpDataformCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "gcp-dataform <credentials_id>",
+		Short: "Get GCP Dataform credentials",
+		Long:  "Get one set of GCP Dataform credentials, without the key.\n\nAn id that does not exist, belongs to another account, or names credentials of another kind\nreturns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetGcpDataformCredentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "project_id", "locations", "client_email")
+		},
+	}
+	return cmd
+}
+
 func newCredentialsGetGcpSecretManagerCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "gcp-secret-manager <credentials_id>",
@@ -2903,6 +3532,28 @@ func newCredentialsGetGcpSecretManagerCmd() *cobra.Command {
 				return apiErr(resp, err)
 			}
 			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "bq_project_id", "sql_warehouse_id", "gcp_secret")
+		},
+	}
+	return cmd
+}
+
+func newCredentialsGetInformaticaV2Cmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "informatica-v2 <credentials_id>",
+		Short: "Get Informatica credentials",
+		Long:  "Get one set of Informatica credentials, without the passwords and the client secret.\n\nAn id that does not exist, belongs to another account, or names credentials of another kind\nreturns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetInformaticaV2Credentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "auth_mode", "base_url", "username", "org_id", "oauth_client_id", "oauth_grant_type", "oauth_access_token_endpoint", "oauth_scope", "oauth_username")
 		},
 	}
 	return cmd
@@ -2969,6 +3620,28 @@ func newCredentialsGetMariadbCmd() *cobra.Command {
 				return apiErr(resp, err)
 			}
 			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user")
+		},
+	}
+	return cmd
+}
+
+func newCredentialsGetMulesoftCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "mulesoft <credentials_id>",
+		Short: "Get MuleSoft credentials",
+		Long:  "Get one set of MuleSoft credentials, without the client secret.\n\nAn id that does not exist, belongs to another account, or names credentials of another kind\nreturns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetMulesoftCredentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "app_client_id", "region", "org_id")
 		},
 	}
 	return cmd
@@ -3276,7 +3949,9 @@ func newCredentialsUpdateCmd() *cobra.Command {
 		Use:   "update",
 		Short: "Update credential",
 	}
+	cmd.AddCommand(newCredentialsUpdateAirflowCmd())
 	cmd.AddCommand(newCredentialsUpdateAwsSecretsManagerCmd())
+	cmd.AddCommand(newCredentialsUpdateAzureDataFactoryCmd())
 	cmd.AddCommand(newCredentialsUpdateAzureDedicatedSqlPoolCmd())
 	cmd.AddCommand(newCredentialsUpdateAzureKeyVaultCmd())
 	cmd.AddCommand(newCredentialsUpdateAzureSqlDatabaseCmd())
@@ -3287,10 +3962,14 @@ func newCredentialsUpdateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsUpdateDb2Cmd())
 	cmd.AddCommand(newCredentialsUpdateEnvVarCmd())
 	cmd.AddCommand(newCredentialsUpdateFileCmd())
+	cmd.AddCommand(newCredentialsUpdateFivetranCmd())
+	cmd.AddCommand(newCredentialsUpdateGcpDataformCmd())
 	cmd.AddCommand(newCredentialsUpdateGcpSecretManagerCmd())
+	cmd.AddCommand(newCredentialsUpdateInformaticaV2Cmd())
 	cmd.AddCommand(newCredentialsUpdateLookerCmd())
 	cmd.AddCommand(newCredentialsUpdateLookerGitCloneCmd())
 	cmd.AddCommand(newCredentialsUpdateMariadbCmd())
+	cmd.AddCommand(newCredentialsUpdateMulesoftCmd())
 	cmd.AddCommand(newCredentialsUpdateMysqlCmd())
 	cmd.AddCommand(newCredentialsUpdateOracleCmd())
 	cmd.AddCommand(newCredentialsUpdatePostgresCmd())
@@ -3302,6 +3981,38 @@ func newCredentialsUpdateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsUpdateStarburstGalaxyCmd())
 	cmd.AddCommand(newCredentialsUpdateTableauCmd())
 	cmd.AddCommand(newCredentialsUpdateTeradataCmd())
+	return cmd
+}
+
+func newCredentialsUpdateAirflowCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "airflow <credentials_id>",
+		Short: "Update Airflow credentials",
+		Long:  "Change Airflow connection details in place.\n\nEvery connection using the credentials picks up the change. Sending an empty body returns the\ncredentials as they are.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdateAirflowCredentials(ctx, args[0])
+			body := sdk.NewAirflowCredentialsPatch()
+			if changed(cmd, "host-name") {
+				hostName, err := flagString(cmd, "host-name")
+				if err != nil {
+					return err
+				}
+				body.SetHostName(hostName)
+			}
+			req = req.AirflowCredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host_name")
+		},
+	}
+	cmd.Flags().String("host-name", "", "Host name of the Airflow web server, as Airflow reports it to Monte Carlo.")
 	return cmd
 }
 
@@ -3374,6 +4085,79 @@ func newCredentialsUpdateAwsSecretsManagerCmd() *cobra.Command {
 	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
 	cmd.Flags().String("external-id", "", "External id the assumed role's trust policy requires, if it requires one.")
 	cmd.Flags().String("sql-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
+	return cmd
+}
+
+func newCredentialsUpdateAzureDataFactoryCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "azure-data-factory <credentials_id>",
+		Short: "Update Azure Data Factory credentials",
+		Long:  "Change Azure Data Factory credentials in place.\n\nEvery connection using the credentials picks up the change. Send only the fields to change.\nSending an empty body returns the credentials as they are.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdateAzureDataFactoryCredentials(ctx, args[0])
+			body := sdk.NewAzureDataFactoryCredentialsPatch()
+			if changed(cmd, "app-client-id") {
+				appClientId, err := flagString(cmd, "app-client-id")
+				if err != nil {
+					return err
+				}
+				body.SetAppClientId(appClientId)
+			}
+			if changed(cmd, "app-client-secret", "app-client-secret-prompt") {
+				appClientSecret, err := flagSecret(cmd, "app-client-secret")
+				if err != nil {
+					return err
+				}
+				body.SetAppClientSecret(appClientSecret)
+			}
+			if changed(cmd, "factory-name") {
+				factoryName, err := flagString(cmd, "factory-name")
+				if err != nil {
+					return err
+				}
+				body.SetFactoryName(factoryName)
+			}
+			if changed(cmd, "resource-group-name") {
+				resourceGroupName, err := flagString(cmd, "resource-group-name")
+				if err != nil {
+					return err
+				}
+				body.SetResourceGroupName(resourceGroupName)
+			}
+			if changed(cmd, "subscription-id") {
+				subscriptionId, err := flagString(cmd, "subscription-id")
+				if err != nil {
+					return err
+				}
+				body.SetSubscriptionId(subscriptionId)
+			}
+			if changed(cmd, "tenant-id") {
+				tenantId, err := flagString(cmd, "tenant-id")
+				if err != nil {
+					return err
+				}
+				body.SetTenantId(tenantId)
+			}
+			req = req.AzureDataFactoryCredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "tenant_id", "app_client_id", "subscription_id", "resource_group_name", "factory_name")
+		},
+	}
+	cmd.Flags().String("app-client-id", "", "Client ID of the Entra ID app registration Monte Carlo signs in with.")
+	cmd.Flags().String("app-client-secret", "", "Secret of the app registration. Stored by Monte Carlo and never returned. Visible in the process list; --app-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("app-client-secret-prompt", false, "Read --app-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("factory-name", "", "Name of the data factory.")
+	cmd.Flags().String("resource-group-name", "", "Resource group that holds the data factory.")
+	cmd.Flags().String("subscription-id", "", "Azure subscription that holds the data factory.")
+	cmd.Flags().String("tenant-id", "", "Microsoft Entra ID tenant the data factory belongs to.")
 	return cmd
 }
 
@@ -4034,6 +4818,105 @@ func newCredentialsUpdateFileCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsUpdateFivetranCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "fivetran <credentials_id>",
+		Short: "Update Fivetran credentials",
+		Long:  "Change Fivetran credentials in place.\n\nEvery connection using the credentials picks up the change. Send only the fields to change.\nSending an empty body returns the credentials as they are.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdateFivetranCredentials(ctx, args[0])
+			body := sdk.NewFivetranCredentialsPatch()
+			if changed(cmd, "api-key", "api-key-prompt") {
+				apiKey, err := flagSecret(cmd, "api-key")
+				if err != nil {
+					return err
+				}
+				body.SetApiKey(apiKey)
+			}
+			if changed(cmd, "api-password", "api-password-prompt") {
+				apiPassword, err := flagSecret(cmd, "api-password")
+				if err != nil {
+					return err
+				}
+				body.SetApiPassword(apiPassword)
+			}
+			if changed(cmd, "base-url") {
+				baseUrl, err := flagString(cmd, "base-url")
+				if err != nil {
+					return err
+				}
+				body.SetBaseUrl(baseUrl)
+			}
+			req = req.FivetranCredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "base_url")
+		},
+	}
+	cmd.Flags().String("api-key", "", "Key of the Fivetran API key. Stored by Monte Carlo and never returned. Visible in the process list; --api-key-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("api-key-prompt", false, "Read --api-key from a hidden prompt instead of the command line.")
+	cmd.Flags().String("api-password", "", "Secret of the Fivetran API key. Stored by Monte Carlo and never returned. Visible in the process list; --api-password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("api-password-prompt", false, "Read --api-password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("base-url", "", "URL of the Fivetran REST API. Leave it out for https://api.fivetran.com/v1/.")
+	return cmd
+}
+
+func newCredentialsUpdateGcpDataformCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "gcp-dataform <credentials_id>",
+		Short: "Update GCP Dataform credentials",
+		Long:  "Change GCP Dataform credentials in place.\n\nEvery connection using the credentials picks up the change. Send only the fields to change.\nSending an empty body returns the credentials as they are.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdateGcpDataformCredentials(ctx, args[0])
+			body := sdk.NewGcpDataformCredentialsPatch()
+			if changed(cmd, "locations") {
+				locations, err := flagStringSlice(cmd, "locations")
+				if err != nil {
+					return err
+				}
+				body.SetLocations(locations)
+			}
+			if changed(cmd, "project-id") {
+				projectId, err := flagString(cmd, "project-id")
+				if err != nil {
+					return err
+				}
+				body.SetProjectId(projectId)
+			}
+			if changed(cmd, "service-account-key", "service-account-key-prompt") {
+				serviceAccountKey, err := flagSecret(cmd, "service-account-key")
+				if err != nil {
+					return err
+				}
+				body.SetServiceAccountKey(serviceAccountKey)
+			}
+			req = req.GcpDataformCredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "project_id", "locations", "client_email")
+		},
+	}
+	cmd.Flags().StringSlice("locations", nil, "Google Cloud regions to read Dataform repositories in, such as us-central1.")
+	cmd.Flags().String("project-id", "", "Google Cloud project that holds the Dataform repositories.")
+	cmd.Flags().String("service-account-key", "", "The service account's JSON key file, as its text. It needs Dataform API access. Stored by Monte Carlo and never returned. Visible in the process list; --service-account-key-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("service-account-key-prompt", false, "Read --service-account-key from a hidden prompt instead of the command line.")
+	return cmd
+}
+
 func newCredentialsUpdateGcpSecretManagerCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "gcp-secret-manager <credentials_id>",
@@ -4079,6 +4962,139 @@ func newCredentialsUpdateGcpSecretManagerCmd() *cobra.Command {
 	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
 	cmd.Flags().String("gcp-secret", "", "Name of the GCP Secret Manager secret holding the connection's credentials.")
 	cmd.Flags().String("sql-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
+	return cmd
+}
+
+func newCredentialsUpdateInformaticaV2Cmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "informatica-v2 <credentials_id>",
+		Short: "Update Informatica credentials",
+		Long:  "Change Informatica credentials in place.\n\nEvery connection using the credentials picks up the change. Send only the fields to change.\nSending an empty body returns the credentials as they are.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdateInformaticaV2Credentials(ctx, args[0])
+			body := sdk.NewInformaticaV2CredentialsPatch()
+			if changed(cmd, "auth-mode") {
+				authModeValue, err := flagString(cmd, "auth-mode")
+				if err != nil {
+					return err
+				}
+				authMode, err := sdk.NewInformaticaV2AuthModeFromValue(authModeValue)
+				if err != nil {
+					return err
+				}
+				body.SetAuthMode(*authMode)
+			}
+			if changed(cmd, "base-url") {
+				baseUrl, err := flagString(cmd, "base-url")
+				if err != nil {
+					return err
+				}
+				body.SetBaseUrl(baseUrl)
+			}
+			if changed(cmd, "oauth-access-token-endpoint") {
+				oauthAccessTokenEndpoint, err := flagString(cmd, "oauth-access-token-endpoint")
+				if err != nil {
+					return err
+				}
+				body.SetOauthAccessTokenEndpoint(oauthAccessTokenEndpoint)
+			}
+			if changed(cmd, "oauth-client-id") {
+				oauthClientId, err := flagString(cmd, "oauth-client-id")
+				if err != nil {
+					return err
+				}
+				body.SetOauthClientId(oauthClientId)
+			}
+			if changed(cmd, "oauth-client-secret", "oauth-client-secret-prompt") {
+				oauthClientSecret, err := flagSecret(cmd, "oauth-client-secret")
+				if err != nil {
+					return err
+				}
+				body.SetOauthClientSecret(oauthClientSecret)
+			}
+			if changed(cmd, "oauth-grant-type") {
+				oauthGrantTypeValue, err := flagString(cmd, "oauth-grant-type")
+				if err != nil {
+					return err
+				}
+				oauthGrantType, err := sdk.NewOAuthGrantTypeFromValue(oauthGrantTypeValue)
+				if err != nil {
+					return err
+				}
+				body.SetOauthGrantType(*oauthGrantType)
+			}
+			if changed(cmd, "oauth-password", "oauth-password-prompt") {
+				oauthPassword, err := flagSecret(cmd, "oauth-password")
+				if err != nil {
+					return err
+				}
+				body.SetOauthPassword(oauthPassword)
+			}
+			if changed(cmd, "oauth-scope") {
+				oauthScope, err := flagString(cmd, "oauth-scope")
+				if err != nil {
+					return err
+				}
+				body.SetOauthScope(oauthScope)
+			}
+			if changed(cmd, "oauth-username") {
+				oauthUsername, err := flagString(cmd, "oauth-username")
+				if err != nil {
+					return err
+				}
+				body.SetOauthUsername(oauthUsername)
+			}
+			if changed(cmd, "org-id") {
+				orgId, err := flagString(cmd, "org-id")
+				if err != nil {
+					return err
+				}
+				body.SetOrgId(orgId)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "username") {
+				username, err := flagString(cmd, "username")
+				if err != nil {
+					return err
+				}
+				body.SetUsername(username)
+			}
+			req = req.InformaticaV2CredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "auth_mode", "base_url", "username", "org_id", "oauth_client_id", "oauth_grant_type", "oauth_access_token_endpoint", "oauth_scope", "oauth_username")
+		},
+	}
+	cmd.Flags().String("auth-mode", "", "How Monte Carlo signs in. password takes username and password. oauth takes org_id and the oauth_* fields.")
+	_ = cmd.RegisterFlagCompletionFunc("auth-mode", enumCompletion(sdk.AllowedInformaticaV2AuthModeEnumValues))
+	cmd.Flags().String("base-url", "", "Informatica login URL for your POD. Leave it out for https://dm-us.informaticacloud.com.")
+	cmd.Flags().String("oauth-access-token-endpoint", "", "Identity provider URL Monte Carlo requests tokens from.")
+	cmd.Flags().String("oauth-client-id", "", "Client ID of the app registered with your identity provider, for oauth.")
+	cmd.Flags().String("oauth-client-secret", "", "Secret of the identity provider app, for oauth. Stored by Monte Carlo and never returned. Visible in the process list; --oauth-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("oauth-client-secret-prompt", false, "Read --oauth-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("oauth-grant-type", "", "Grant Monte Carlo requests the token with, for oauth. password also takes oauth_username and oauth_password.")
+	_ = cmd.RegisterFlagCompletionFunc("oauth-grant-type", enumCompletion(sdk.AllowedOAuthGrantTypeEnumValues))
+	cmd.Flags().String("oauth-password", "", "Password of oauth_username, for the password grant. Stored by Monte Carlo and never returned. Visible in the process list; --oauth-password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("oauth-password-prompt", false, "Read --oauth-password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("oauth-scope", "", "Scope to request the token with. Leave it out to request none.")
+	cmd.Flags().String("oauth-username", "", "Identity provider user, for the password grant.")
+	cmd.Flags().String("org-id", "", "Informatica organization ID, for oauth.")
+	cmd.Flags().String("password", "", "Password of username, for password. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("username", "", "Informatica user, for password.")
 	return cmd
 }
 
@@ -4275,6 +5291,68 @@ func newCredentialsUpdateMariadbCmd() *cobra.Command {
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
 	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	return cmd
+}
+
+func newCredentialsUpdateMulesoftCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "mulesoft <credentials_id>",
+		Short: "Update MuleSoft credentials",
+		Long:  "Change MuleSoft credentials in place.\n\nEvery connection using the credentials picks up the change. Send only the fields to change.\nSending an empty body returns the credentials as they are.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdateMulesoftCredentials(ctx, args[0])
+			body := sdk.NewMulesoftCredentialsPatch()
+			if changed(cmd, "app-client-id") {
+				appClientId, err := flagString(cmd, "app-client-id")
+				if err != nil {
+					return err
+				}
+				body.SetAppClientId(appClientId)
+			}
+			if changed(cmd, "app-client-secret", "app-client-secret-prompt") {
+				appClientSecret, err := flagSecret(cmd, "app-client-secret")
+				if err != nil {
+					return err
+				}
+				body.SetAppClientSecret(appClientSecret)
+			}
+			if changed(cmd, "org-id") {
+				orgId, err := flagString(cmd, "org-id")
+				if err != nil {
+					return err
+				}
+				body.SetOrgId(orgId)
+			}
+			if changed(cmd, "region") {
+				regionValue, err := flagString(cmd, "region")
+				if err != nil {
+					return err
+				}
+				region, err := sdk.NewMulesoftRegionFromValue(regionValue)
+				if err != nil {
+					return err
+				}
+				body.SetRegion(*region)
+			}
+			req = req.MulesoftCredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "app_client_id", "region", "org_id")
+		},
+	}
+	cmd.Flags().String("app-client-id", "", "Client ID of the Anypoint connected app. The app needs the View Environment, Read Deployments and Exchange Viewer scopes.")
+	cmd.Flags().String("app-client-secret", "", "Secret of the Anypoint connected app. Stored by Monte Carlo and never returned. Visible in the process list; --app-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("app-client-secret-prompt", false, "Read --app-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("org-id", "", "Anypoint organization or business group to collect from. Set it when your Mule applications are deployed in a business group. Leave it out to collect the organization that owns the connected app.")
+	cmd.Flags().String("region", "", "Anypoint Platform instance the organization lives on.")
+	_ = cmd.RegisterFlagCompletionFunc("region", enumCompletion(sdk.AllowedMulesoftRegionEnumValues))
 	return cmd
 }
 
@@ -5282,6 +6360,7 @@ func newCredentialsValidateCmd() *cobra.Command {
 		Short: "Validate credential",
 	}
 	cmd.AddCommand(newCredentialsValidateAwsSecretsManagerCmd())
+	cmd.AddCommand(newCredentialsValidateAzureDataFactoryCmd())
 	cmd.AddCommand(newCredentialsValidateAzureDedicatedSqlPoolCmd())
 	cmd.AddCommand(newCredentialsValidateAzureKeyVaultCmd())
 	cmd.AddCommand(newCredentialsValidateAzureSqlDatabaseCmd())
@@ -5292,10 +6371,14 @@ func newCredentialsValidateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsValidateDb2Cmd())
 	cmd.AddCommand(newCredentialsValidateEnvVarCmd())
 	cmd.AddCommand(newCredentialsValidateFileCmd())
+	cmd.AddCommand(newCredentialsValidateFivetranCmd())
+	cmd.AddCommand(newCredentialsValidateGcpDataformCmd())
 	cmd.AddCommand(newCredentialsValidateGcpSecretManagerCmd())
+	cmd.AddCommand(newCredentialsValidateInformaticaV2Cmd())
 	cmd.AddCommand(newCredentialsValidateLookerCmd())
 	cmd.AddCommand(newCredentialsValidateLookerGitCloneCmd())
 	cmd.AddCommand(newCredentialsValidateMariadbCmd())
+	cmd.AddCommand(newCredentialsValidateMulesoftCmd())
 	cmd.AddCommand(newCredentialsValidateMysqlCmd())
 	cmd.AddCommand(newCredentialsValidateOracleCmd())
 	cmd.AddCommand(newCredentialsValidatePostgresCmd())
@@ -5419,6 +6502,106 @@ func newCredentialsValidateAwsSecretsManagerCmd() *cobra.Command {
 	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
 	cmd.Flags().String("external-id", "", "External id the assumed role's trust policy requires, if it requires one.")
 	cmd.Flags().String("sql-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateAzureDataFactoryCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "azure-data-factory",
+		Short: "Validate Azure Data Factory credentials",
+		Long:  "Check candidate Azure Data Factory credentials against Azure Data Factory.\n\nNo credentials are created. Send the values you would create the credentials with, and a\ndeployment to run them from, and the checks run against your data factory.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that until the\nrun's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "app-client-secret", "app-client-secret-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateAzureDataFactoryCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			tenantId, err := flagString(cmd, "tenant-id")
+			if err != nil {
+				return err
+			}
+			appClientId, err := flagString(cmd, "app-client-id")
+			if err != nil {
+				return err
+			}
+			appClientSecret, err := flagSecret(cmd, "app-client-secret")
+			if err != nil {
+				return err
+			}
+			subscriptionId, err := flagString(cmd, "subscription-id")
+			if err != nil {
+				return err
+			}
+			resourceGroupName, err := flagString(cmd, "resource-group-name")
+			if err != nil {
+				return err
+			}
+			factoryName, err := flagString(cmd, "factory-name")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewAzureDataFactoryCredentialsValidateIn(deploymentId, tenantId, appClientId, appClientSecret, subscriptionId, resourceGroupName, factoryName)
+			req = req.AzureDataFactoryCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return fmt.Errorf("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("tenant-id", "", "Microsoft Entra ID tenant the data factory belongs to.")
+	_ = cmd.MarkFlagRequired("tenant-id")
+	cmd.Flags().String("app-client-id", "", "Client ID of the Entra ID app registration Monte Carlo signs in with.")
+	_ = cmd.MarkFlagRequired("app-client-id")
+	cmd.Flags().String("app-client-secret", "", "Secret of the app registration. Used for this check and not kept. Visible in the process list; --app-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("app-client-secret-prompt", false, "Read --app-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("subscription-id", "", "Azure subscription that holds the data factory.")
+	_ = cmd.MarkFlagRequired("subscription-id")
+	cmd.Flags().String("resource-group-name", "", "Resource group that holds the data factory.")
+	_ = cmd.MarkFlagRequired("resource-group-name")
+	cmd.Flags().String("factory-name", "", "Name of the data factory.")
+	_ = cmd.MarkFlagRequired("factory-name")
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }
@@ -6424,6 +7607,175 @@ func newCredentialsValidateFileCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsValidateFivetranCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "fivetran",
+		Short: "Validate Fivetran credentials",
+		Long:  "Check candidate Fivetran credentials against Fivetran.\n\nNo credentials are created. Send the values you would create the credentials with, and a\ndeployment to run them from, and the checks run against your Fivetran account.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that until the\nrun's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "api-key", "api-key-prompt"); err != nil {
+				return err
+			}
+			if err := requireAny(cmd, "api-password", "api-password-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateFivetranCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			apiKey, err := flagSecret(cmd, "api-key")
+			if err != nil {
+				return err
+			}
+			apiPassword, err := flagSecret(cmd, "api-password")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewFivetranCredentialsValidateIn(deploymentId, apiKey, apiPassword)
+			if changed(cmd, "base-url") {
+				baseUrl, err := flagString(cmd, "base-url")
+				if err != nil {
+					return err
+				}
+				body.SetBaseUrl(baseUrl)
+			}
+			req = req.FivetranCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return fmt.Errorf("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("api-key", "", "Key of the Fivetran API key. Used for this check and not kept. Visible in the process list; --api-key-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("api-key-prompt", false, "Read --api-key from a hidden prompt instead of the command line.")
+	cmd.Flags().String("api-password", "", "Secret of the Fivetran API key. Used for this check and not kept. Visible in the process list; --api-password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("api-password-prompt", false, "Read --api-password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("base-url", "", "URL of the Fivetran REST API. Leave it out for https://api.fivetran.com/v1/.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateGcpDataformCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "gcp-dataform",
+		Short: "Validate GCP Dataform credentials",
+		Long:  "Check candidate GCP Dataform credentials against GCP Dataform.\n\nNo credentials are created. Send the values you would create the credentials with, and a\ndeployment to run them from, and the checks run against Dataform in your project.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that until the\nrun's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "service-account-key", "service-account-key-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateGcpDataformCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			projectId, err := flagString(cmd, "project-id")
+			if err != nil {
+				return err
+			}
+			locations, err := flagStringSlice(cmd, "locations")
+			if err != nil {
+				return err
+			}
+			serviceAccountKey, err := flagSecret(cmd, "service-account-key")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewGcpDataformCredentialsValidateIn(deploymentId, projectId, locations, serviceAccountKey)
+			req = req.GcpDataformCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return fmt.Errorf("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("project-id", "", "Google Cloud project that holds the Dataform repositories.")
+	_ = cmd.MarkFlagRequired("project-id")
+	cmd.Flags().StringSlice("locations", nil, "Google Cloud regions to read Dataform repositories in, such as us-central1.")
+	_ = cmd.MarkFlagRequired("locations")
+	cmd.Flags().String("service-account-key", "", "The service account's JSON key file, as its text. It needs Dataform API access. Used for this check and not kept. Visible in the process list; --service-account-key-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("service-account-key-prompt", false, "Read --service-account-key from a hidden prompt instead of the command line.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
 func newCredentialsValidateGcpSecretManagerCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "gcp-secret-manager",
@@ -6509,6 +7861,174 @@ func newCredentialsValidateGcpSecretManagerCmd() *cobra.Command {
 	_ = cmd.MarkFlagRequired("gcp-secret")
 	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
 	cmd.Flags().String("sql-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateInformaticaV2Cmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "informatica-v2",
+		Short: "Validate Informatica credentials",
+		Long:  "Check candidate Informatica credentials against Informatica.\n\nNo credentials are created. Send the values you would create the credentials with, and a\ndeployment to run them from, and the checks run against your Informatica organization.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that until the\nrun's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateInformaticaV2Credentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			authModeValue, err := flagString(cmd, "auth-mode")
+			if err != nil {
+				return err
+			}
+			authMode, err := sdk.NewInformaticaV2AuthModeFromValue(authModeValue)
+			if err != nil {
+				return err
+			}
+			body := sdk.NewInformaticaV2CredentialsValidateIn(deploymentId, *authMode)
+			if changed(cmd, "base-url") {
+				baseUrl, err := flagString(cmd, "base-url")
+				if err != nil {
+					return err
+				}
+				body.SetBaseUrl(baseUrl)
+			}
+			if changed(cmd, "oauth-access-token-endpoint") {
+				oauthAccessTokenEndpoint, err := flagString(cmd, "oauth-access-token-endpoint")
+				if err != nil {
+					return err
+				}
+				body.SetOauthAccessTokenEndpoint(oauthAccessTokenEndpoint)
+			}
+			if changed(cmd, "oauth-client-id") {
+				oauthClientId, err := flagString(cmd, "oauth-client-id")
+				if err != nil {
+					return err
+				}
+				body.SetOauthClientId(oauthClientId)
+			}
+			if changed(cmd, "oauth-client-secret", "oauth-client-secret-prompt") {
+				oauthClientSecret, err := flagSecret(cmd, "oauth-client-secret")
+				if err != nil {
+					return err
+				}
+				body.SetOauthClientSecret(oauthClientSecret)
+			}
+			if changed(cmd, "oauth-grant-type") {
+				oauthGrantTypeValue, err := flagString(cmd, "oauth-grant-type")
+				if err != nil {
+					return err
+				}
+				oauthGrantType, err := sdk.NewOAuthGrantTypeFromValue(oauthGrantTypeValue)
+				if err != nil {
+					return err
+				}
+				body.SetOauthGrantType(*oauthGrantType)
+			}
+			if changed(cmd, "oauth-password", "oauth-password-prompt") {
+				oauthPassword, err := flagSecret(cmd, "oauth-password")
+				if err != nil {
+					return err
+				}
+				body.SetOauthPassword(oauthPassword)
+			}
+			if changed(cmd, "oauth-scope") {
+				oauthScope, err := flagString(cmd, "oauth-scope")
+				if err != nil {
+					return err
+				}
+				body.SetOauthScope(oauthScope)
+			}
+			if changed(cmd, "oauth-username") {
+				oauthUsername, err := flagString(cmd, "oauth-username")
+				if err != nil {
+					return err
+				}
+				body.SetOauthUsername(oauthUsername)
+			}
+			if changed(cmd, "org-id") {
+				orgId, err := flagString(cmd, "org-id")
+				if err != nil {
+					return err
+				}
+				body.SetOrgId(orgId)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "username") {
+				username, err := flagString(cmd, "username")
+				if err != nil {
+					return err
+				}
+				body.SetUsername(username)
+			}
+			req = req.InformaticaV2CredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return fmt.Errorf("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("auth-mode", "", "How Monte Carlo signs in. password takes username and password. oauth takes org_id and the oauth_* fields.")
+	_ = cmd.RegisterFlagCompletionFunc("auth-mode", enumCompletion(sdk.AllowedInformaticaV2AuthModeEnumValues))
+	_ = cmd.MarkFlagRequired("auth-mode")
+	cmd.Flags().String("base-url", "", "Informatica login URL for your POD. Leave it out for https://dm-us.informaticacloud.com.")
+	cmd.Flags().String("oauth-access-token-endpoint", "", "Identity provider URL Monte Carlo requests tokens from.")
+	cmd.Flags().String("oauth-client-id", "", "Client ID of the app registered with your identity provider, for oauth.")
+	cmd.Flags().String("oauth-client-secret", "", "Secret of the identity provider app, for oauth. Used for this check and not kept. Visible in the process list; --oauth-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("oauth-client-secret-prompt", false, "Read --oauth-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("oauth-grant-type", "", "Grant Monte Carlo requests the token with, for oauth. password also takes oauth_username and oauth_password.")
+	_ = cmd.RegisterFlagCompletionFunc("oauth-grant-type", enumCompletion(sdk.AllowedOAuthGrantTypeEnumValues))
+	cmd.Flags().String("oauth-password", "", "Password of oauth_username, for the password grant. Used for this check and not kept. Visible in the process list; --oauth-password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("oauth-password-prompt", false, "Read --oauth-password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("oauth-scope", "", "Scope to request the token with. Leave it out to request none.")
+	cmd.Flags().String("oauth-username", "", "Identity provider user, for the password grant.")
+	cmd.Flags().String("org-id", "", "Informatica organization ID, for oauth.")
+	cmd.Flags().String("password", "", "Password of username, for password. Used for this check and not kept. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("username", "", "Informatica user, for password.")
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }
@@ -6804,6 +8324,103 @@ func newCredentialsValidateMariadbCmd() *cobra.Command {
 	cmd.Flags().String("password", "", "Password of the database user. Used for this check and not kept. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateMulesoftCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "mulesoft",
+		Short: "Validate MuleSoft credentials",
+		Long:  "Check candidate MuleSoft credentials against MuleSoft.\n\nNo credentials are created. Send the values you would create the credentials with, and a\ndeployment to run them from, and the checks run against your Anypoint organization.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that until the\nrun's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "app-client-secret", "app-client-secret-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateMulesoftCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			appClientId, err := flagString(cmd, "app-client-id")
+			if err != nil {
+				return err
+			}
+			appClientSecret, err := flagSecret(cmd, "app-client-secret")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewMulesoftCredentialsValidateIn(deploymentId, appClientId, appClientSecret)
+			if changed(cmd, "org-id") {
+				orgId, err := flagString(cmd, "org-id")
+				if err != nil {
+					return err
+				}
+				body.SetOrgId(orgId)
+			}
+			if changed(cmd, "region") {
+				regionValue, err := flagString(cmd, "region")
+				if err != nil {
+					return err
+				}
+				region, err := sdk.NewMulesoftRegionFromValue(regionValue)
+				if err != nil {
+					return err
+				}
+				body.SetRegion(*region)
+			}
+			req = req.MulesoftCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return fmt.Errorf("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("app-client-id", "", "Client ID of the Anypoint connected app. The app needs the View Environment, Read Deployments and Exchange Viewer scopes.")
+	_ = cmd.MarkFlagRequired("app-client-id")
+	cmd.Flags().String("app-client-secret", "", "Secret of the Anypoint connected app. Used for this check and not kept. Visible in the process list; --app-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("app-client-secret-prompt", false, "Read --app-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("org-id", "", "Anypoint organization or business group to collect from. Set it when your Mule applications are deployed in a business group. Leave it out to collect the organization that owns the connected app.")
+	cmd.Flags().String("region", "", "Anypoint Platform instance the organization lives on. US when left out.")
+	_ = cmd.RegisterFlagCompletionFunc("region", enumCompletion(sdk.AllowedMulesoftRegionEnumValues))
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }
