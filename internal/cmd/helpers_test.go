@@ -64,8 +64,8 @@ func executeStreams(t *testing.T, args ...string) (stdout, stderr string, err er
 }
 
 // runExit runs args the way the binary does, under ctx, and returns the exit code and what was
-// written to stderr, including the error line.
-func runExit(t *testing.T, ctx context.Context, args ...string) (int, string) {
+// written to stdout and to stderr, including the error line.
+func runExit(t *testing.T, ctx context.Context, args ...string) (code int, stdout, stderr string) {
 	t.Helper()
 	isolateEnv(t)
 	resetFlags(rootCmd)
@@ -76,8 +76,8 @@ func runExit(t *testing.T, ctx context.Context, args ...string) (int, string) {
 		rootCmd.SetOut(nil)
 		rootCmd.SetErr(nil)
 	})
-	code := executeArgs(ctx, args, &outBuf, &errBuf)
-	return code, errBuf.String()
+	code = executeArgs(ctx, args, &outBuf, &errBuf)
+	return code, outBuf.String(), errBuf.String()
 }
 
 // execute runs the root command with args and returns what it wrote to stdout and stderr

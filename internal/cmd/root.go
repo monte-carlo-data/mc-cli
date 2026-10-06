@@ -4,10 +4,12 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -56,6 +58,15 @@ A secret flag accepts @<path> to read its value from a file, and has a --<name>-
 	f.String("api-token", "", "API token secret. Defaults to MCD_DEFAULT_API_TOKEN, then the profile's. Visible in the process list; --api-token-prompt asks for it instead, and @<path> reads it from a file.")
 	f.Bool("api-token-prompt", false, "Read --api-token from a hidden prompt instead of the command line.")
 	f.BoolP("yes", "y", false, "Answer yes to every confirmation. Required without a terminal for any command that confirms.")
+
+	// Cobra answers a group given an unknown subcommand with the group's help. Print nothing
+	// instead: executeArgs reports the unknown command.
+	help := cmd.HelpFunc()
+	cmd.SetHelpFunc(func(c *cobra.Command, args []string) {
+		if unknownSubcommand(c) == nil {
+			help(c, args)
+		}
+	})
 	return cmd
 }
 
@@ -76,11 +87,31 @@ func executeArgs(ctx context.Context, args []string, stdout, stderr io.Writer) i
 	if completionRequest(args) {
 		return executeCompletion(ctx, stdout)
 	}
-	err := rootCmd.ExecuteContext(ctx)
+	executed, err := rootCmd.ExecuteContextC(ctx)
+	if err == nil {
+		err = unknownSubcommand(executed)
+	}
 	if err != nil {
 		fmt.Fprintf(stderr, "%s: %v\n", binaryName, err)
 	}
 	return exitCode(ctx, err)
+}
+
+// unknownSubcommand is the usage error for a group command given an argument, which can only be
+// a subcommand it does not have.
+func unknownSubcommand(cmd *cobra.Command) error {
+	args := cmd.Flags().Args()
+	if cmd.Runnable() || !cmd.HasSubCommands() || len(args) == 0 {
+		return nil
+	}
+	msg := fmt.Sprintf("unknown command %q for %q", args[0], cmd.CommandPath())
+	if cmd.SuggestionsMinimumDistance <= 0 {
+		cmd.SuggestionsMinimumDistance = 2 // cobra's default, which it applies only at the root
+	}
+	if suggestions := cmd.SuggestionsFor(args[0]); len(suggestions) > 0 {
+		msg += "\n\nDid you mean this?\n\t" + strings.Join(suggestions, "\n\t")
+	}
+	return withExitCode(exitUsage, errors.New(msg))
 }
 
 func init() {

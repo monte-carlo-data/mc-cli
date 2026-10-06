@@ -49,14 +49,14 @@ func TestExitErrorKeepsTheMessage(t *testing.T) {
 }
 
 func TestRunPrintsTheErrorAndReturnsItsCode(t *testing.T) {
-	code, stderr := runExit(t, context.Background(), "whoami", "--endpoint", "http://127.0.0.1:1", "--api-id", "i", "--api-token", "s")
+	code, _, stderr := runExit(t, context.Background(), "whoami", "--endpoint", "http://127.0.0.1:1", "--api-id", "i", "--api-token", "s")
 	if code != exitFailure || !strings.HasPrefix(stderr, binaryName+": ") {
 		t.Fatalf("exit %d, stderr %q", code, stderr)
 	}
 }
 
 func TestRunReturnsZeroOnSuccess(t *testing.T) {
-	if code, stderr := runExit(t, context.Background(), "version"); code != exitOK {
+	if code, _, stderr := runExit(t, context.Background(), "version"); code != exitOK {
 		t.Fatalf("exit %d, stderr %q", code, stderr)
 	}
 }
@@ -64,7 +64,7 @@ func TestRunReturnsZeroOnSuccess(t *testing.T) {
 func TestRunReturns130WhenInterrupted(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	code, _ := runExit(t, ctx, "whoami", "--endpoint", "http://127.0.0.1:1", "--api-id", "i", "--api-token", "s")
+	code, _, _ := runExit(t, ctx, "whoami", "--endpoint", "http://127.0.0.1:1", "--api-id", "i", "--api-token", "s")
 	if code != exitInterrupted {
 		t.Fatalf("exit %d", code)
 	}
@@ -73,7 +73,8 @@ func TestRunReturns130WhenInterrupted(t *testing.T) {
 // whoamiAgainst runs whoami against srv as the binary would.
 func whoamiAgainst(t *testing.T, srv *httptest.Server) (int, string) {
 	t.Helper()
-	return runExit(t, context.Background(), "whoami", "--endpoint", srv.URL, "--api-id", "i", "--api-token", "s")
+	code, _, stderr := runExit(t, context.Background(), "whoami", "--endpoint", srv.URL, "--api-id", "i", "--api-token", "s")
+	return code, stderr
 }
 
 func TestApiFailuresExitWithTheirStatusCode(t *testing.T) {
@@ -129,5 +130,26 @@ func TestAnUnwoundFailureKeepsTheStepsCode(t *testing.T) {
 	err := &unwoundError{err: step, report: "\nnothing to delete"}
 	if got := exitCode(context.Background(), err); got != exitNotFound {
 		t.Fatalf("exit %d", got)
+	}
+}
+
+func TestAnUnknownSubcommandOfAGroupIsAUsageError(t *testing.T) {
+	code, stdout, stderr := runExit(t, context.Background(), "connections", "bogus")
+	if code != exitUsage || stdout != "" || !strings.Contains(stderr, `unknown command "bogus" for "montecarlo connections"`) {
+		t.Fatalf("exit %d\nstdout %q\nstderr %q", code, stdout, stderr)
+	}
+}
+
+func TestAnUnknownSubcommandSuggestsTheNearest(t *testing.T) {
+	_, _, stderr := runExit(t, context.Background(), "connections", "lst")
+	if !strings.Contains(stderr, "Did you mean this?") || !strings.Contains(stderr, "\tlist\n") {
+		t.Fatalf("stderr %q", stderr)
+	}
+}
+
+func TestAGroupAloneStillShowsItsHelp(t *testing.T) {
+	code, stdout, _ := runExit(t, context.Background(), "connections")
+	if code != exitOK || !strings.Contains(stdout, "Available Commands:") {
+		t.Fatalf("exit %d\nstdout %q", code, stdout)
 	}
 }
