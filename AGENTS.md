@@ -96,4 +96,4 @@ Branch from `main` as `<person>/<ticket-id>-<slug>`. Never commit directly to `m
 
 ## Releasing
 
-Not yet. Before the first release: the Go SDK this CLI depends on must be public and tagged, so `go.mod` can pin a tag instead of a pseudo-version; a tag-triggered release pipeline must build the per-platform archives and their checksums; and the binary name must be final, since the name reaches every install path. On a pull request from a fork, CI's SDK token step fails until mc-sdk-go is public; that is accepted.
+Not yet. Before the first release, a release pipeline must build the per-platform archives and their checksums, and the binary name must be final, since the name reaches every install path. The Go SDK is public, and `go.mod` pins one of its release tags.

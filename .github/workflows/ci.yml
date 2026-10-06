@@ -24,29 +24,6 @@ jobs:
         with:
           go-version-file: go.mod
 
-      # The SDK module lives in a private repository, so the runner needs a short-lived token
-      # scoped to it. Both steps go away when the SDK is public.
-      - uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
-        id: sdk-token
-        with:
-          app-id: ${{ secrets.MC_GITHUB_APP_ID }}
-          private-key: ${{ secrets.MC_GITHUB_APP_PRIVATE_KEY }}
-          owner: monte-carlo-data
-          repositories: mc-sdk-go
-          permission-contents: read
-
-      # GOPRIVATE keeps the module off the public proxy and checksum database. The credential
-      # goes in an Authorization header rather than a rewritten remote URL, so it lands in the
-      # runner's global git config instead of a repository's.
-      - name: Let the build resolve the private SDK module
-        shell: bash
-        env:
-          TOKEN: ${{ steps.sdk-token.outputs.token }}
-        run: |
-          go env -w GOPRIVATE='github.com/monte-carlo-data/*'
-          header="$(printf 'x-access-token:%s' "$TOKEN" | base64 | tr -d '\n')"
-          git config --global http.https://github.com/.extraheader "Authorization: Basic $header"
-
       - name: Build
         run: go build ./...
 
@@ -65,23 +42,6 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
-
-      - uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
-        id: sdk-token
-        with:
-          app-id: ${{ secrets.MC_GITHUB_APP_ID }}
-          private-key: ${{ secrets.MC_GITHUB_APP_PRIVATE_KEY }}
-          owner: monte-carlo-data
-          repositories: mc-sdk-go
-          permission-contents: read
-
-      - name: Let the build resolve the private SDK module
-        env:
-          TOKEN: ${{ steps.sdk-token.outputs.token }}
-        run: |
-          go env -w GOPRIVATE='github.com/monte-carlo-data/*'
-          header="$(printf 'x-access-token:%s' "$TOKEN" | base64 | tr -d '\n')"
-          git config --global http.https://github.com/.extraheader "Authorization: Basic $header"
 
       - name: Vet
         run: go vet ./...
