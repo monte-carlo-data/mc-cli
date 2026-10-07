@@ -5,9 +5,20 @@ on:
     branches: [main]
   pull_request:
 
-# The jobs only read the tree. Nothing here publishes, comments or writes.
+# Every job reads only, except the three that release a merge to main: tag, release and attest,
+# each granted just what it writes.
 permissions:
   contents: read
+
+env:
+  # The release files that get a provenance attestation. release-snapshot checks each pattern
+  # matches, so a typo fails before a merge instead of after the tag.
+  RELEASE_SUBJECTS: |
+    dist/*.tar.gz
+    dist/*.zip
+    dist/*_checksums.txt
+    dist/install.sh
+    dist/install.ps1
 
 jobs:
   build:
@@ -63,6 +74,20 @@ jobs:
       - name: Test
         run: go test -race ./...
 
+      - name: The release tag is worked out correctly
+        run: |
+          .github/scripts/next-tag.sh > /dev/null
+          .github/scripts/next-tag_test.sh
+
+      - name: Lint the shell scripts
+        run: shellcheck install.sh .github/scripts/*.sh
+
+      - name: Lint install.ps1
+        shell: pwsh
+        run: |
+          $findings = Invoke-ScriptAnalyzer -Path install.ps1 -Severity Information, Warning, Error
+          if ($findings) { $findings | Format-Table -AutoSize -Wrap; exit 1 }
+
       - name: Check the third-party notices are current
         run: |
           go generate ./...
@@ -85,6 +110,144 @@ jobs:
               echo "$f says it is generated but its name is outside the generated pattern"; exit 1
             fi
           done
+
+  release-snapshot:
+    name: The release builds for every platform
+    # Tags are immutable, so a release that fails after tagging burns that version. A change that
+    # breaks cross-compiling or packaging has to fail here, before the merge.
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # setup-go's cache key is shared with the build job, whose cache holds only linux/amd64
+      # objects, so this job keeps its cross-compiled ones under a key of its own.
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: release-snapshot-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum') }}
+          restore-keys: release-snapshot-${{ runner.os }}-
+
+      # The tag this commit would be released as, so the snapshot is named and stamped exactly as
+      # that release. A commit with nothing to release still builds, as v0.0.0.
+      - name: Work out the tag
+        id: tag
+        run: |
+          tag=$(.github/scripts/next-tag.sh)
+          echo "RELEASE_TAG=${tag:-v0.0.0}" >> "$GITHUB_ENV"
+          echo "tag=${tag:-v0.0.0}" >> "$GITHUB_OUTPUT"
+
+      # Everything a release does except publishing.
+      - uses: ./.github/actions/goreleaser
+        with:
+          args: release --snapshot --clean
+
+      - name: The archives are what the release publishes
+        run: |
+          version=${RELEASE_TAG#v}
+          for target in darwin_amd64 darwin_arm64 linux_amd64 linux_arm64 windows_amd64 windows_arm64; do
+            case $target in
+              windows_*) archive=dist/montecarlo_${version}_$target.zip; list="unzip -Z1" ;;
+              *) archive=dist/montecarlo_${version}_$target.tar.gz; list="tar tzf" ;;
+            esac
+            [ -f "$archive" ] || { echo "missing $archive"; exit 1; }
+            contents=$($list "$archive" | sort | tr '\n' ' ')
+            case $target in windows_*) binary=montecarlo.exe ;; *) binary=montecarlo ;; esac
+            want=$(printf '%s\n' LICENSE README.md THIRD_PARTY_NOTICES "$binary" | sort | tr '\n' ' ')
+            [ "$contents" = "$want" ] || { echo "$archive holds '$contents', want '$want'"; exit 1; }
+            grep -q "  ${archive#dist/}$" "dist/montecarlo_${version}_checksums.txt" \
+              || { echo "$archive is not in the checksums file"; exit 1; }
+          done
+          echo "Six archives, each with the licenses, the README and the binary, all checksummed."
+
+      - name: The binary reports the release's version, commit and date
+        run: |
+          got=$(dist/montecarlo_linux_amd64_v1/montecarlo version --output json)
+          want=$(jq -cn --arg v "$RELEASE_TAG" --arg c "$(git rev-parse HEAD | cut -c1-12)" \
+            --arg d "$(TZ=UTC git log -1 --date=format-local:%Y-%m-%dT%H:%M:%SZ --format=%cd)" \
+            '{commit: $c, date: $d, version: $v}')
+          [ "$(printf '%s' "$got" | jq -cS .)" = "$want" ] || { echo "version reports $got, want $want"; exit 1; }
+          echo "montecarlo version: $got"
+
+      # The release attaches the installers beside the archives; the snapshot does not publish, so
+      # they are copied in, as listed by .goreleaser.yml's extra_files, to check the patterns
+      # against what a release holds.
+      - name: Every attestation pattern matches a file
+        run: |
+          for f in $(yq '.release.extra_files[].glob' .goreleaser.yml); do cp "$f" dist/; done
+          while read -r pattern; do
+            [ -n "$pattern" ] || continue
+            compgen -G "$pattern" > /dev/null || { echo "$pattern matches nothing in dist/"; exit 1; }
+          done <<< "$RELEASE_SUBJECTS"
+
+      # The installer tests download from these, as from a release.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-snapshot
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*_checksums.txt
+          if-no-files-found: error
+          retention-days: 3
+
+  install-test:
+    name: Install on ${{ matrix.os }} with ${{ matrix.shell }}
+    # The installers are attached to every release, and "latest" serves them to everyone, so they
+    # are tested on every platform against the snapshot, served the way GitHub serves a release.
+    needs: release-snapshot
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, shell: sh }
+          - { os: ubuntu-24.04-arm, shell: sh }
+          - { os: macos-latest, shell: sh }
+          - { os: windows-latest, shell: pwsh }
+          - { os: windows-latest, shell: powershell }
+          - { os: windows-11-arm, shell: pwsh }
+    env:
+      TAG: ${{ needs.release-snapshot.outputs.tag }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-snapshot
+          path: dist
+
+      # The CLI this one shares a name with, to check the installer leaves it alone.
+      - name: Install the Python CLI
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          python3 -m venv "$RUNNER_TEMP/python-cli"
+          "$RUNNER_TEMP/python-cli/bin/pip" install --quiet montecarlodata
+          echo "PYTHON_CLI=$RUNNER_TEMP/python-cli/bin/montecarlo" >> "$GITHUB_ENV"
+
+      - name: Test install.sh
+        if: matrix.shell == 'sh'
+        run: .github/scripts/install_test.sh dist "$TAG"
+
+      - name: Test install.ps1
+        if: matrix.shell != 'sh'
+        shell: pwsh
+        env:
+          INSTALLER_SHELL: ${{ matrix.shell }}
+        run: .github/scripts/install_test.ps1 -Dist dist -Tag $env:TAG -Shell $env:INSTALLER_SHELL
 
   bot-dependency-diff:
     name: The bot's dependency change stays narrow
@@ -117,3 +280,251 @@ jobs:
             exit 1
           fi
           echo "Only the mc-sdk-go lines changed."
+
+      # A merge to main is a release, so the bot may pin only a released SDK: not a pseudo-version,
+      # which can name any commit, and not a replace, which can name another module.
+      - name: The SDK pin is a release tag
+        run: |
+          if grep -E 'monte-carlo-data/mc-sdk-go.*=>' go.mod; then
+            echo "go.mod replaces mc-sdk-go. The bot may only pin a release."
+            exit 1
+          fi
+          pin=$(sed -nE 's#^[[:space:]]*(require[[:space:]]+)?github\.com/monte-carlo-data/mc-sdk-go[[:space:]]+([^[:space:]]+).*#\2#p' go.mod)
+          if ! printf '%s\n' "$pin" | grep -qxE 'v[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "go.mod pins mc-sdk-go at '$pin', which is not a release tag vX.Y.Z."
+            exit 1
+          fi
+          echo "mc-sdk-go is pinned at $pin."
+
+  tag:
+    name: Tag the release
+    needs: [build, check, release-snapshot, install-test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # One run at a time, so two quick merges cannot pick the same tag. A run still waiting here is
+    # replaced by a newer one, whose release then covers both merges.
+    concurrency:
+      group: tag
+      cancel-in-progress: false
+    outputs:
+      tag: ${{ steps.next.outputs.tag }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Work out the tag
+        id: next
+        run: |
+          tag=$(.github/scripts/next-tag.sh)
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      # Tag creation is restricted to the org App and the `apollo` team by a ruleset, and tags are
+      # immutable.
+      - uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
+        id: token
+        if: steps.next.outputs.tag != ''
+        with:
+          app-id: ${{ secrets.MC_GITHUB_APP_ID }}
+          private-key: ${{ secrets.MC_GITHUB_APP_PRIVATE_KEY }}
+          owner: monte-carlo-data
+          repositories: mc-cli
+          permission-contents: write
+
+      - name: Tag ${{ steps.next.outputs.tag }}
+        if: steps.next.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          TAG: ${{ steps.next.outputs.tag }}
+        run: |
+          gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f ref="refs/tags/$TAG" -f sha="$GITHUB_SHA" > /dev/null
+          echo "Tagged $GITHUB_SHA as $TAG."
+
+  # Publishes only from a push to main, never on a tag push, which would run whichever commit was
+  # tagged; the tag is always this run's commit. The `release` environment accepts only main; it
+  # holds no secret, and records each release as a deployment.
+  release:
+    name: Build and publish the release
+    needs: tag
+    if: needs.tag.outputs.tag != ''
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write # GoReleaser creates the release and uploads its assets with GITHUB_TOKEN
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ needs.tag.outputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      # No build cache: a release is built from a clean module download, never from a cache that
+      # another workflow could have written.
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      # Read fresh, so a release that finishes after a newer one does not take "latest" back.
+      - name: Work out whether this is the highest release
+        env:
+          TAG: ${{ needs.tag.outputs.tag }}
+        run: |
+          highest=$(git ls-remote --tags --refs origin 'v*' | sed 's#.*refs/tags/##' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
+          if [ "$highest" = "$TAG" ]; then
+            echo "MAKE_LATEST=true" >> "$GITHUB_ENV"
+          else
+            echo "MAKE_LATEST=false" >> "$GITHUB_ENV"
+          fi
+
+      - uses: ./.github/actions/goreleaser
+        with:
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # GoReleaser uploads the installers from their source paths, so they are copied into dist/
+      # beside the archives, as the attestation expects.
+      - name: Collect the release files
+        run: for f in $(yq '.release.extra_files[].glob' .goreleaser.yml); do cp "$f" dist/; done
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-files
+          path: ${{ env.RELEASE_SUBJECTS }}
+          if-no-files-found: error
+          retention-days: 7
+
+  # Attests the files this run built, after checking the published release holds exactly those, so
+  # an asset swapped into the draft fails here instead of being signed. It can be rerun alone. The
+  # provenance is verified against this workflow file on main, so renaming ci.yml or moving this
+  # job breaks verification for every published installer.
+  attest:
+    name: Attest the release's provenance
+    needs: [tag, release]
+    if: needs.tag.outputs.tag != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # downloads the release
+      id-token: write # signs the attestation through Sigstore
+      attestations: write # stores it with the repository
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-files
+          path: dist
+
+      - name: Download the published release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.tag.outputs.tag }}
+        run: gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir published
+
+      - name: The published release holds exactly the built files
+        run: |
+          for f in dist/*; do
+            cmp "$f" "published/${f#dist/}" || { echo "${f#dist/} differs in the published release"; exit 1; }
+          done
+          while read -r pattern; do
+            [ -n "$pattern" ] || continue
+            for p in ${pattern/dist\//published/}; do
+              [ -e "$p" ] || continue
+              [ -f "dist/${p#published/}" ] || { echo "${p#published/} is published but was not built"; exit 1; }
+            done
+          done <<< "$RELEASE_SUBJECTS"
+
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ env.RELEASE_SUBJECTS }}
+
+  # Installs what was just published, from its real URLs, the way a user does. It cannot stop a
+  # release, but a broken one is flagged at once. GH_TOKEN logs gh in, so the installers verify
+  # the provenance too; it is set per step so the fetched installers see it only where they run.
+  release-smoke:
+    name: Install the release on ${{ matrix.os }} with ${{ matrix.shell }}
+    needs: [tag, attest]
+    if: needs.tag.outputs.tag != ''
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, shell: sh }
+          - { os: macos-latest, shell: sh }
+          - { os: windows-latest, shell: pwsh }
+          - { os: windows-latest, shell: powershell }
+    env:
+      TAG: ${{ needs.tag.outputs.tag }}
+      RELEASES: https://github.com/${{ github.repository }}/releases
+    steps:
+      # A later merge may already have released again, so the install passes if it got the latest
+      # release from before it or from after it.
+      - name: Work out the latest release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: echo "LATEST_BEFORE=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)" >> "$GITHUB_ENV"
+
+      - name: Install with install.sh
+        if: matrix.shell == 'sh'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl -fsSL "$RELEASES/latest/download/install.sh" | MONTECARLO_INSTALL_DIR="$RUNNER_TEMP/bin" sh
+          got=$("$RUNNER_TEMP/bin/montecarlo" version --output json | jq -r .version)
+          after=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)
+          [ "$got" = "$LATEST_BEFORE" ] || [ "$got" = "$after" ] || { echo "installed $got, want $LATEST_BEFORE or $after"; exit 1; }
+
+      - name: Install with install.ps1 in pwsh
+        if: matrix.shell == 'pwsh'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:MONTECARLO_INSTALL_DIR = Join-Path $env:RUNNER_TEMP 'bin'
+          Invoke-RestMethod "$env:RELEASES/latest/download/install.ps1" | Invoke-Expression
+          $got = (& (Join-Path $env:MONTECARLO_INSTALL_DIR 'montecarlo.exe') version --output json | ConvertFrom-Json).version
+          $after = gh release view --repo $env:GITHUB_REPOSITORY --json tagName --jq .tagName
+          if ($got -ne $env:LATEST_BEFORE -and $got -ne $after) { throw "installed $got, want $env:LATEST_BEFORE or $after" }
+
+      - name: Install with install.ps1 in powershell
+        if: matrix.shell == 'powershell'
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:MONTECARLO_INSTALL_DIR = Join-Path $env:RUNNER_TEMP 'bin'
+          Invoke-RestMethod "$env:RELEASES/latest/download/install.ps1" | Invoke-Expression
+          $got = (& (Join-Path $env:MONTECARLO_INSTALL_DIR 'montecarlo.exe') version --output json | ConvertFrom-Json).version
+          $after = gh release view --repo $env:GITHUB_REPOSITORY --json tagName --jq .tagName
+          if ($got -ne $env:LATEST_BEFORE -and $got -ne $after) { throw "installed $got, want $env:LATEST_BEFORE or $after" }
+
+      - name: The release's files verify against this workflow on main
+        if: matrix.os == 'ubuntu-latest'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir "$RUNNER_TEMP/release" \
+            --pattern '*_linux_amd64.tar.gz' --pattern 'install.sh' --pattern 'install.ps1'
+          for f in "$RUNNER_TEMP"/release/*; do
+            gh attestation verify "$f" --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/ci.yml" \
+              --source-ref refs/heads/main --deny-self-hosted-runners
+          done
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        if: matrix.os == 'ubuntu-latest'
+        with:
+          go-version: stable
+          cache: false
+
+      - name: go install reports the tag
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          GOBIN="$RUNNER_TEMP/gobin" go install "github.com/$GITHUB_REPOSITORY/cmd/montecarlo@$TAG"
+          got=$("$RUNNER_TEMP/gobin/montecarlo" version --output json | jq -r .version)
+          [ "$got" = "$TAG" ] || { echo "go install built $got, want $TAG"; exit 1; }

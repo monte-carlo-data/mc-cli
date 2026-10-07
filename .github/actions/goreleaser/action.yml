@@ -1,0 +1,16 @@
+name: Run GoReleaser
+description: >-
+  Runs the pinned GoReleaser, so CI's snapshot build and the release use the same version.
+
+inputs:
+  args:
+    description: Arguments passed to goreleaser.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+      with:
+        version: v2.18.2
+        args: ${{ inputs.args }}

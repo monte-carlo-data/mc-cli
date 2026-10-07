@@ -83,3 +83,60 @@ func TestVersionJSON(t *testing.T) {
 		}
 	}
 }
+
+// stubBuildInfo makes readBuildInfo return info for the rest of the test.
+func stubBuildInfo(t *testing.T, info *debug.BuildInfo) {
+	t.Helper()
+	saved := readBuildInfo
+	readBuildInfo = func() (*debug.BuildInfo, bool) { return info, true }
+	t.Cleanup(func() { readBuildInfo = saved })
+}
+
+// A release build's stamped values win over its build info.
+func TestResolvedVersionPrefersTheStampedValues(t *testing.T) {
+	stubBuildInfo(t, &debug.BuildInfo{Main: debug.Module{Version: "v1.2.3"}})
+	saved := [3]string{version, commit, date}
+	version, commit, date = "v0.1.4", "0123456789ab", "2026-10-07T12:00:00Z"
+	t.Cleanup(func() { version, commit, date = saved[0], saved[1], saved[2] })
+
+	if v, c, d := resolvedVersion(); v != "v0.1.4" || c != "0123456789ab" || d != "2026-10-07T12:00:00Z" {
+		t.Errorf("got %s %s %s, want the stamped values", v, c, d)
+	}
+}
+
+// The commit and date come from a pseudo-version in each of its three forms; a release or prerelease version names neither.
+func TestVersionFromBuildInfoReadsAPseudoVersion(t *testing.T) {
+	cases := []struct {
+		version, commit, date string
+	}{
+		{"v0.0.0-20261006225321-af7e3734da79", "af7e3734da79", "2026-10-06T22:53:21Z"},
+		{"v0.1.1-0.20261006225321-af7e3734da79", "af7e3734da79", "2026-10-06T22:53:21Z"},
+		{"v0.2.0-pre.0.20261006225321-af7e3734da79", "af7e3734da79", "2026-10-06T22:53:21Z"},
+		{"v0.1.0", commit, date},
+		{"v0.1.0-rc1", commit, date},
+		{"v0.0.0-20261306225321-af7e3734da79", commit, date}, // no 13th month
+	}
+	for _, c := range cases {
+		t.Run(c.version, func(t *testing.T) {
+			info := &debug.BuildInfo{Main: debug.Module{Version: c.version}}
+			v, gotCommit, gotDate := versionFromBuildInfo(info, true)
+			if v != c.version || gotCommit != c.commit || gotDate != c.date {
+				t.Errorf("got %s %s %s, want %s %s %s", v, gotCommit, gotDate, c.version, c.commit, c.date)
+			}
+		})
+	}
+}
+
+// When the build does record vcs settings, they win over the pseudo-version.
+func TestVersionFromBuildInfoPrefersVCSSettingsToAPseudoVersion(t *testing.T) {
+	info := &debug.BuildInfo{
+		Main: debug.Module{Version: "v0.0.0-20261006225321-af7e3734da79"},
+		Settings: []debug.BuildSetting{
+			{Key: "vcs.revision", Value: "0123456789abcdef"},
+			{Key: "vcs.time", Value: "2026-10-07T00:00:00Z"},
+		},
+	}
+	if _, c, d := versionFromBuildInfo(info, true); c != "0123456789ab" || d != "2026-10-07T00:00:00Z" {
+		t.Errorf("got %s %s, want the vcs settings", c, d)
+	}
+}
