@@ -37,14 +37,14 @@ var createdBodies = map[string]string{
 	"POST /api/v2/credentials/self-hosted/aws": `{"id":"cr-2","connection_type":"bigquery","storage_type":"aws_secrets_manager","created_time":"2026-09-23T00:00:00Z","bq_project_id":"p","sql_warehouse_id":null,"aws_secret":"s","aws_region":null,"assumable_role":null,"external_id":null}`,
 	"POST /api/v2/bi-containers":               `{"id":"bc-1","type":"tableau","name":"n","deployment_id":"d","deployment_name":"d","created_time":"2026-09-23T00:00:00Z"}`,
 	"POST /api/v2/credentials/tableau":         `{"id":"cr-3","connection_type":"tableau","storage_type":"mc_managed","created_time":"2026-09-23T00:00:00Z","server_name":"s","site_name":null,"verify_ssl":null,"username":"u","token_name":null,"connected_app_client_id":null,"connected_app_secret_id":null}`,
-	"POST /api/v2/connections":                 `{"id":"cn-1","connection_type":"snowflake","name":"n","warehouse_id":"wh-1","warehouse_name":"n","bi_container_id":null,"bi_container_name":null,"deployment_id":"d","deployment_name":"d","credentials_id":"cr-1","credentials_storage_type":"mc_managed","job_types":[],"created_time":"2026-09-23T00:00:00Z"}`,
+	"POST /api/v2/connections":                 `{"id":"cn-1","connection_type":"snowflake","name":"n","warehouse_id":"wh-1","warehouse_name":"n","bi_container_id":null,"bi_container_name":null,"etl_container_id":null,"etl_container_name":null,"deployment_id":"d","deployment_name":"d","credentials_id":"cr-1","credentials_storage_type":"mc_managed","job_types":[],"created_time":"2026-09-23T00:00:00Z"}`,
 }
 
-const connectionOut = `"connection_type":"snowflake","name":"n","warehouse_id":"wh-1","warehouse_name":"n","bi_container_id":null,"bi_container_name":null,` +
+const connectionOut = `"connection_type":"snowflake","name":"n","warehouse_id":"wh-1","warehouse_name":"n","bi_container_id":null,"bi_container_name":null,"etl_container_id":null,"etl_container_name":null,` +
 	`"deployment_id":"d","deployment_name":"d","credentials_storage_type":"mc_managed","job_types":[],"created_time":"2026-09-23T00:00:00Z"`
 
 // biConnectionOut is a connection on a BI container, which has no warehouse.
-const biConnectionOut = `"connection_type":"tableau","name":"n","warehouse_id":null,"warehouse_name":null,"bi_container_id":"bc-1","bi_container_name":"b",` +
+const biConnectionOut = `"connection_type":"tableau","name":"n","warehouse_id":null,"warehouse_name":null,"bi_container_id":"bc-1","bi_container_name":"b","etl_container_id":null,"etl_container_name":null,` +
 	`"deployment_id":"d","deployment_name":"d","credentials_storage_type":"mc_managed","job_types":[],"created_time":"2026-09-23T00:00:00Z"`
 
 // readBodies answers the reads and updates connections update sends.
