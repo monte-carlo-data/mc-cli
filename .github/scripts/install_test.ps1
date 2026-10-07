@@ -166,10 +166,12 @@ try {
     $source = Get-Content $Installer -Raw
     $runtimeName = "'System.Runtime.InteropServices.RuntimeInformation'"
     if (-not $source.Contains($runtimeName)) { throw "install.ps1 no longer names $runtimeName" }
+    # The fallback's own variables are read as a literal, since Windows sets them for each process.
+    $processorArch = if ($arch -eq 'arm64') { "'ARM64'" } else { "'AMD64'" }
     $noArch = Join-Path $root 'install-no-osarchitecture.ps1'
-    [System.IO.File]::WriteAllText($noArch, $source.Replace($runtimeName, "'System.String'"))
-    $processorArch = if ($arch -eq 'arm64') { 'ARM64' } else { 'AMD64' }
-    $r = Invoke-Installer no-osarchitecture @{ PROCESSOR_ARCHITECTURE = $processorArch; PROCESSOR_ARCHITEW6432 = $null } -Piped -Script $noArch
+    $patched = $source.Replace($runtimeName, "'System.String'").Replace('$env:PROCESSOR_ARCHITEW6432', '$null').Replace('$env:PROCESSOR_ARCHITECTURE', $processorArch)
+    [System.IO.File]::WriteAllText($noArch, $patched)
+    $r = Invoke-Installer no-osarchitecture -Piped -Script $noArch
     Test-Case 'an OSArchitecture that reads as null falls back to PROCESSOR_ARCHITECTURE' $r ($r.Code -eq 0 -and (Test-Installed $r))
 
     foreach ($bad in '1.2', 'v0.1', 'v0.1.0;true', 'v0.1.0-rc1') {
