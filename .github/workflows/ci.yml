@@ -79,6 +79,15 @@ jobs:
           .github/scripts/next-tag.sh > /dev/null
           .github/scripts/next-tag_test.sh
 
+      - name: Lint the shell scripts
+        run: shellcheck install.sh .github/scripts/*.sh
+
+      - name: Lint install.ps1
+        shell: pwsh
+        run: |
+          $findings = Invoke-ScriptAnalyzer -Path install.ps1 -Severity Information, Warning, Error
+          if ($findings) { $findings | Format-Table -AutoSize -Wrap; exit 1 }
+
       - name: Check the third-party notices are current
         run: |
           go generate ./...
@@ -107,6 +116,8 @@ jobs:
     # Tags are immutable, so a release that fails after tagging burns that version. A change that
     # breaks cross-compiling or packaging has to fail here, before the merge.
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -131,9 +142,11 @@ jobs:
       # The tag this commit would be released as, so the snapshot is named and stamped exactly as
       # that release. A commit with nothing to release still builds, as v0.0.0.
       - name: Work out the tag
+        id: tag
         run: |
           tag=$(.github/scripts/next-tag.sh)
           echo "RELEASE_TAG=${tag:-v0.0.0}" >> "$GITHUB_ENV"
+          echo "tag=${tag:-v0.0.0}" >> "$GITHUB_OUTPUT"
 
       # Everything a release does except publishing.
       - uses: ./.github/actions/goreleaser
@@ -176,6 +189,64 @@ jobs:
             [ -n "$pattern" ] || continue
             compgen -G "$pattern" > /dev/null || { echo "$pattern matches nothing in dist/"; exit 1; }
           done <<< "$RELEASE_SUBJECTS"
+
+      # The installer tests download from these, as from a release.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-snapshot
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*_checksums.txt
+          if-no-files-found: error
+          retention-days: 3
+
+  install-test:
+    name: Install on ${{ matrix.os }} with ${{ matrix.shell }}
+    # The installers are attached to every release, and "latest" serves them to everyone, so they
+    # are tested on every platform against the snapshot, served the way GitHub serves a release.
+    needs: release-snapshot
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, shell: sh }
+          - { os: ubuntu-24.04-arm, shell: sh }
+          - { os: macos-latest, shell: sh }
+          - { os: windows-latest, shell: pwsh }
+          - { os: windows-latest, shell: powershell }
+          - { os: windows-11-arm, shell: pwsh }
+    env:
+      TAG: ${{ needs.release-snapshot.outputs.tag }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-snapshot
+          path: dist
+
+      # The CLI this one shares a name with, to check the installer leaves it alone.
+      - name: Install the Python CLI
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          python3 -m venv "$RUNNER_TEMP/python-cli"
+          "$RUNNER_TEMP/python-cli/bin/pip" install --quiet montecarlodata
+          echo "PYTHON_CLI=$RUNNER_TEMP/python-cli/bin/montecarlo" >> "$GITHUB_ENV"
+
+      - name: Test install.sh
+        if: matrix.shell == 'sh'
+        run: .github/scripts/install_test.sh dist "$TAG"
+
+      - name: Test install.ps1
+        if: matrix.shell != 'sh'
+        shell: pwsh
+        env:
+          INSTALLER_SHELL: ${{ matrix.shell }}
+        run: .github/scripts/install_test.ps1 -Dist dist -Tag $env:TAG -Shell $env:INSTALLER_SHELL
 
   bot-dependency-diff:
     name: The bot's dependency change stays narrow
@@ -226,7 +297,7 @@ jobs:
 
   tag:
     name: Tag the release
-    needs: [build, check, release-snapshot]
+    needs: [build, check, release-snapshot, install-test]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     # One run at a time, so two quick merges cannot pick the same tag. A run still waiting here is
