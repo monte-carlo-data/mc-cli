@@ -17,6 +17,7 @@ env:
     dist/*.tar.gz
     dist/*.zip
     dist/*_checksums.txt
+    dist/install.sh
 
 jobs:
   build:
@@ -165,8 +166,11 @@ jobs:
           [ "$(printf '%s' "$got" | jq -cS .)" = "$want" ] || { echo "version reports $got, want $want"; exit 1; }
           echo "montecarlo version: $got"
 
+      # The release attaches the installers beside the archives; the snapshot does not publish, so
+      # they are copied in to check the patterns against what a release holds.
       - name: Every attestation pattern matches a file
         run: |
+          cp install.sh dist/
           while read -r pattern; do
             [ -n "$pattern" ] || continue
             compgen -G "$pattern" > /dev/null || { echo "$pattern matches nothing in dist/"; exit 1; }

@@ -58,6 +58,9 @@ snapshot:
 release:
   use_existing_draft: true
   replace_existing_artifacts: true
+  # Served from the release, so "latest" always runs the installer of the latest release.
+  extra_files:
+    - glob: install.sh
 
 changelog:
   disable: true
