@@ -71,6 +71,7 @@ is_release_tag() {
   printf '%s\n' "$1" | grep -Eqx 'v[0-9]+\.[0-9]+\.[0-9]+'
 }
 
+# shellcheck disable=SC3013 # -ef is not POSIX, but dash, bash and busybox have it.
 main() {
   base=${MONTECARLO_DOWNLOAD_BASE:-https://github.com/$repo/releases}
   name=${MONTECARLO_BIN_NAME:-montecarlo}
@@ -129,11 +130,16 @@ main() {
   [ "$got" = "$want" ] || fail "$archive does not match its checksum: got $got, want $want"
 
   if command -v gh > /dev/null 2>&1 && gh auth status > /dev/null 2>&1; then
-    gh attestation verify "$tmp/$archive" --repo "$repo" \
+    # gh before 2.49 has no attestation command, which is not a verdict on the release.
+    if ! gh attestation verify --help 2>&1 | grep -q -- --source-ref; then
+      say "gh is too old to verify the provenance (it needs gh 2.49 or later); checked the checksum only"
+    elif gh attestation verify "$tmp/$archive" --repo "$repo" \
       --signer-workflow "$repo/.github/workflows/ci.yml" --source-ref refs/heads/main \
-      --deny-self-hosted-runners > /dev/null ||
+      --deny-self-hosted-runners > /dev/null; then
+      say "verified the provenance of $archive"
+    else
       fail "$archive has no provenance from $repo's release workflow on main"
-    say "verified the provenance of $archive"
+    fi
   else
     say "checked the checksum; with gh installed and logged in, the provenance is verified too"
   fi
@@ -162,7 +168,9 @@ main() {
   mv -f "$dir/.$name.$$" "$target"
   say "installed $("$target" version --output table) at $target"
 
+  # Entries are compared by file identity, so a trailing slash or a symlink still matches.
   first=""
+  on_path=0
   old_ifs=$IFS
   IFS=:
   set -f
@@ -171,16 +179,18 @@ main() {
       continue
     fi
     [ -n "$first" ] || first=$d/$name
-    if [ "$d/$name" != "$target" ] && ! is_ours "$d/$name"; then
+    if [ "$d/$name" -ef "$target" ]; then
+      on_path=1
+    elif ! is_ours "$d/$name"; then
       say "warning: $d/$name is another program with the same name; whichever comes first on PATH runs."
       say "  Install under another name with MONTECARLO_BIN_NAME to keep both."
     fi
   done
   set +f
   IFS=$old_ifs
-  if [ -z "$first" ]; then
+  if [ $on_path = 0 ]; then
     say "$dir is not on PATH; add it, or run $target"
-  elif [ "$first" != "$target" ]; then
+  elif ! [ "$first" -ef "$target" ]; then
     say "warning: $first comes before $target on PATH, so \"$name\" runs that one"
   fi
 }

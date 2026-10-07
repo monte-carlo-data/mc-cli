@@ -13,8 +13,7 @@ builds:
     mod_timestamp: "{{ .CommitTimestamp }}"
     flags:
       - -trimpath
-    # The version carries the tag's v, as "go install" reports it, so both paths send the same
-    # User-Agent. In a snapshot it is the snapshot version the archives are named with.
+    # The version carries the tag's v, as "go install" reports it, so both paths send the same User-Agent.
     ldflags:
       - -s -w
       - -X github.com/monte-carlo-data/mc-cli/internal/cmd.version=v{{ .Version }}
@@ -58,6 +57,8 @@ snapshot:
 release:
   use_existing_draft: true
   replace_existing_artifacts: true
+  # Releases from back-to-back merges can publish out of order, and only the highest becomes latest.
+  make_latest: '{{ if index .Env "MAKE_LATEST" }}{{ .Env.MAKE_LATEST }}{{ else }}true{{ end }}'
   # Served from the release, so "latest" always runs the installer of the latest release.
   extra_files:
     - glob: install.sh

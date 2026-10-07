@@ -84,7 +84,7 @@ func TestVersionJSON(t *testing.T) {
 	}
 }
 
-// stubBuildInfo makes the binary's build info info for the rest of the test.
+// stubBuildInfo makes readBuildInfo return info for the rest of the test.
 func stubBuildInfo(t *testing.T, info *debug.BuildInfo) {
 	t.Helper()
 	saved := readBuildInfo
@@ -104,9 +104,7 @@ func TestResolvedVersionPrefersTheStampedValues(t *testing.T) {
 	}
 }
 
-// "go install" of a commit builds from a module zip, which carries no vcs settings, so the
-// commit and date come from the pseudo-version, in each of its three forms. A release or
-// prerelease version names neither.
+// The commit and date come from a pseudo-version in each of its three forms; a release or prerelease version names neither.
 func TestVersionFromBuildInfoReadsAPseudoVersion(t *testing.T) {
 	cases := []struct {
 		version, commit, date string

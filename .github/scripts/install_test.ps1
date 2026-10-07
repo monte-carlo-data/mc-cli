@@ -3,7 +3,7 @@
 #
 # Tests install.ps1 against a snapshot dist/ served by mirror.py, laid out like GitHub releases,
 # running the installer in -Shell: powershell (Windows PowerShell 5.1) or pwsh (PowerShell 7).
-# The checks that need Windows, running the binary and the PATH, run only there.
+# Needs Windows: install.ps1 refuses to run elsewhere. Against a copy without that guard (-Installer), the cases that don't run the binary or touch PATH also run on macOS and Linux.
 
 param(
     [Parameter(Mandatory)] [string]$Dist,
@@ -49,13 +49,39 @@ function Start-Mirror([string]$Directory, [switch]$NoRelease) {
 # gh never verifies a snapshot that has no attestation.
 $stubs = Join-Path $root 'stubs'
 New-Item -ItemType Directory -Path $stubs | Out-Null
-function Set-Gh([int]$AuthStatus, [int]$Verify) {
+# Every call writes to stderr, as the real gh does. The stub answers the --source-ref probe like a
+# gh that can verify, or with -Old like one that has no attestation command. The arguments of a
+# real verify call are recorded in $ghArgs.
+$ghArgs = Join-Path $root 'gh-args.txt'
+function Set-Gh([int]$AuthStatus, [int]$Verify, [switch]$Old) {
     if ($onWindows) {
-        Set-Content (Join-Path $stubs 'gh.cmd') "@echo off`r`nif `"%1`"==`"auth`" exit /b $AuthStatus`r`nexit /b $Verify`r`n"
+        $lines = @(
+            '@echo off',
+            'echo some progress 1>&2',
+            'if "%1"=="auth" exit /b @AUTH@',
+            'if "%1"=="attestation" if "@OLD@"=="1" echo unknown command "attestation" 1>&2 & exit /b 1',
+            'if "%3"=="--help" echo   --source-ref string & exit /b 0',
+            'if "%1"=="attestation" echo %* > "@ARGS@"',
+            'exit /b @VERIFY@'
+        )
+        $path = Join-Path $stubs 'gh.cmd'
+        $eol = "`r`n"
     } else {
-        Set-Content (Join-Path $stubs 'gh') "#!/bin/sh`n[ `"`$1`" = auth ] && exit $AuthStatus`nexit $Verify`n"
-        chmod +x (Join-Path $stubs 'gh')
+        $lines = @(
+            '#!/bin/sh',
+            'echo some progress >&2',
+            '[ "$1" = auth ] && exit @AUTH@',
+            '[ "$1" = attestation ] && [ "@OLD@" = 1 ] && { echo ''unknown command "attestation"'' >&2; exit 1; }',
+            '[ "$3" = --help ] && { echo ''  --source-ref string''; exit 0; }',
+            '[ "$1" = attestation ] && printf ''%s\n'' "$@" > "@ARGS@"',
+            'exit @VERIFY@'
+        )
+        $path = Join-Path $stubs 'gh'
+        $eol = "`n"
     }
+    $text = (($lines -join $eol) + $eol).Replace('@AUTH@', "$AuthStatus").Replace('@VERIFY@', "$Verify").Replace('@ARGS@', $ghArgs).Replace('@OLD@', $(if ($Old) { '1' } else { '0' }))
+    [System.IO.File]::WriteAllText($path, $text)
+    if (-not $onWindows) { chmod +x $path }
 }
 Set-Gh -AuthStatus 1 -Verify 1
 
@@ -99,12 +125,22 @@ function Test-Case([string]$Description, [object]$Result, [bool]$Passed) {
     }
 }
 
-# The installed binary's version, or, where a Windows binary cannot run, whether it is there.
+# The installed binary's version; off Windows (a guard-free -Installer copy), only that it is there.
 function Test-Installed([object]$Result, [string]$Name = 'montecarlo') {
     $exe = Join-Path $Result.Bin "$Name.exe"
     if (-not (Test-Path $exe)) { return $false }
     if (-not $onWindows) { return $true }
     return ((& $exe version --output json | ConvertFrom-Json).version -eq $Tag)
+}
+
+function Open-UserEnvironment { [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true) }
+
+# The user PATH as found, raw and with its type, to put back at the end.
+if ($onWindows) {
+    $key = Open-UserEnvironment
+    $origPath = $key.GetValue('Path', $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+    if ($null -ne $origPath) { $origKind = $key.GetValueKind('Path') }
+    $key.Dispose()
 }
 
 function New-Foreign([string]$Path) {
@@ -166,9 +202,16 @@ try {
     Set-Gh -AuthStatus 0 -Verify 1
     $r = Invoke-Installer gh-rejects
     Test-Case 'a provenance gh rejects is refused' $r ($r.Code -ne 0 -and $r.Flat -like '*has no provenance*' -and -not (Test-Path (Join-Path $r.Bin 'montecarlo.exe')))
+    Set-Gh -AuthStatus 0 -Verify 1 -Old
+    $r = Invoke-Installer gh-old
+    Test-Case 'a gh too old to verify provenance installs on the checksum alone' $r ($r.Code -eq 0 -and (Test-Installed $r) -and $r.Flat -like '*too old*')
     Set-Gh -AuthStatus 0 -Verify 0
     $r = Invoke-Installer gh-accepts
-    Test-Case 'a provenance gh accepts is reported' $r ($r.Code -eq 0 -and $r.Flat -like '*verified the provenance*')
+    $recorded = Get-Content $ghArgs -Raw -ErrorAction SilentlyContinue
+    $pins = '--repo\s+monte-carlo-data/mc-cli', '--signer-workflow\s+monte-carlo-data/mc-cli/\.github/workflows/ci\.yml',
+        '--source-ref\s+refs/heads/main', '--deny-self-hosted-runners', [regex]::Escape($archive)
+    $pinned = [bool]$recorded -and @($pins | Where-Object { $recorded -notmatch $_ }).Count -eq 0
+    Test-Case 'a provenance gh accepts is reported' $r ($r.Code -eq 0 -and $r.Flat -like '*verified the provenance*' -and $pinned)
     Set-Gh -AuthStatus 1 -Verify 1
 
     if ($onWindows) {
@@ -177,19 +220,32 @@ try {
         $r = Invoke-Installer shadowed @{ PATH = "$stubs;$shadow;$env:PATH" }
         Test-Case 'another montecarlo earlier on PATH is warned about' $r ($r.Code -eq 0 -and $r.Flat -like "*$shadow\montecarlo.exe is another program*" -and $r.Flat -like '*comes before*')
 
+        $keep = '%USERPROFILE%\montecarlo-test-keep'
+        $key = Open-UserEnvironment
+        $raw = $key.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+        $key.SetValue('Path', ((@($raw.Split(';') | Where-Object { $_ }) + $keep) -join ';'), [Microsoft.Win32.RegistryValueKind]::ExpandString)
+        $key.Dispose()
+
         $r = Invoke-Installer path-once
         $r = Invoke-Installer path-once
         $entries = @([Environment]::GetEnvironmentVariable('Path', 'User').Split(';') | Where-Object { $_.TrimEnd('\') -ieq $r.Bin.TrimEnd('\') })
         Test-Case 'the install dir is added to the user PATH once' $r ($r.Code -eq 0 -and $entries.Count -eq 1)
+
+        $key = Open-UserEnvironment
+        $raw = $key.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+        $kind = $key.GetValueKind('Path')
+        $key.Dispose()
+        Test-Case 'the user PATH keeps its %VAR% entries and its type' $r ($raw.Contains($keep) -and $kind -eq [Microsoft.Win32.RegistryValueKind]::ExpandString)
     } else {
         Write-Output 'skip the PATH cases: not Windows'
     }
 } finally {
     $mirrors | ForEach-Object { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }
     if ($onWindows) {
-        # Leave the user PATH as it was found.
-        $kept = [Environment]::GetEnvironmentVariable('Path', 'User').Split(';') | Where-Object { $_ -and -not $_.StartsWith($root) }
-        [Environment]::SetEnvironmentVariable('Path', ($kept -join ';'), 'User')
+        # Leave the user PATH as it was found, with its value and type.
+        $key = Open-UserEnvironment
+        if ($null -eq $origPath) { $key.DeleteValue('Path', $false) } else { $key.SetValue('Path', $origPath, $origKind) }
+        $key.Dispose()
     }
     Remove-Item -Recurse -Force $root -ErrorAction SilentlyContinue
 }

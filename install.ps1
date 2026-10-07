@@ -126,17 +126,28 @@ function Install-MonteCarlo {
         $got = (Get-FileHash -Algorithm SHA256 -Path (Join-Path $tmp $archive)).Hash.ToLowerInvariant()
         if ($got -cne $want) { Fail "$archive does not match its checksum: got $got, want $want" }
 
+        # Under Stop, Windows PowerShell 5.1 turns a native command's stderr into an error, so gh
+        # runs under Continue and only its exit code decides.
         $loggedIn = $false
         if (Get-Command gh -ErrorAction SilentlyContinue) {
-            & gh auth status *> $null
+            & { $ErrorActionPreference = 'Continue'; & gh auth status *> $null }
             $loggedIn = $LASTEXITCODE -eq 0
         }
         if ($loggedIn) {
-            & gh attestation verify (Join-Path $tmp $archive) --repo $repo `
-                --signer-workflow "$repo/.github/workflows/ci.yml" --source-ref refs/heads/main `
-                --deny-self-hosted-runners *> $null
-            if ($LASTEXITCODE -ne 0) { Fail "$archive has no provenance from $repo's release workflow on main" }
-            Say "verified the provenance of $archive"
+            # gh before 2.49 has no attestation command, which is not a verdict on the release.
+            $help = & { $ErrorActionPreference = 'Continue'; & gh attestation verify --help *>&1 | Out-String }
+            if ($help -notlike '*--source-ref*') {
+                Say 'gh is too old to verify the provenance (it needs gh 2.49 or later); checked the checksum only'
+            } else {
+                & {
+                    $ErrorActionPreference = 'Continue'
+                    & gh attestation verify (Join-Path $tmp $archive) --repo $repo `
+                        --signer-workflow "$repo/.github/workflows/ci.yml" --source-ref refs/heads/main `
+                        --deny-self-hosted-runners *> $null
+                }
+                if ($LASTEXITCODE -ne 0) { Fail "$archive has no provenance from $repo's release workflow on main" }
+                Say "verified the provenance of $archive"
+            }
         } else {
             Say 'checked the checksum; with gh installed and logged in, the provenance is verified too'
         }
@@ -163,15 +174,23 @@ function Install-MonteCarlo {
     }
     Say "installed $(& $target version --output table) at $target"
 
-    # Appended to the user PATH as stored, never rebuilt from this session's PATH, and only once.
-    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-    $entries = @()
-    if ($userPath) { $entries = @($userPath.Split(';') | Where-Object { $_ }) }
-    $listed = $entries | Where-Object { $_.TrimEnd('\') -ieq $dir.TrimEnd('\') }
-    if (-not $listed) {
-        [Environment]::SetEnvironmentVariable('Path', (($entries + $dir) -join ';'), 'User')
-        $env:Path = "$env:Path;$dir"
-        Say "added $dir to your user PATH; open a new terminal to pick it up"
+    # Appended once to the user PATH's registry value, with its %VAR% entries unexpanded, never
+    # rebuilt from this session's PATH.
+    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)
+    try {
+        $userPath = $key.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+        $entries = @($userPath.Split(';') | Where-Object { $_ })
+        $listed = $entries | Where-Object { [Environment]::ExpandEnvironmentVariables($_).TrimEnd('\') -ieq $dir.TrimEnd('\') }
+        if (-not $listed) {
+            $key.SetValue('Path', (($entries + $dir) -join ';'), [Microsoft.Win32.RegistryValueKind]::ExpandString)
+            # Setting and clearing a user variable broadcasts the change to running programs.
+            [Environment]::SetEnvironmentVariable('MONTECARLO_INSTALL_PATH_REFRESH', '1', 'User')
+            [Environment]::SetEnvironmentVariable('MONTECARLO_INSTALL_PATH_REFRESH', $null, 'User')
+            $env:Path = "$env:Path;$dir"
+            Say "added $dir to your user PATH; open a new terminal to pick it up"
+        }
+    } finally {
+        $key.Dispose()
     }
 
     $first = $null

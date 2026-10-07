@@ -12,6 +12,8 @@
 # shellcheck disable=SC2016,SC2086,SC2317,SC2329
 
 set -euo pipefail
+# A caller's own settings must not reach the cases.
+unset MONTECARLO_VERSION MONTECARLO_BIN_NAME MONTECARLO_FORCE MONTECARLO_INSTALL_DIR MONTECARLO_DOWNLOAD_BASE
 
 dist=$(cd "$1" && pwd)
 tag=$2
@@ -144,18 +146,37 @@ if [ $code = 0 ] && [ "$(installed_version)" = "$tag" ]; then pass "MONTECARLO_F
 shadow=$root/shadow
 mkdir -p "$shadow"
 foreign "$shadow/montecarlo"
-run shadowed PATH="$stubs:$shadow:$PATH"
+run shadowed PATH="$stubs:$shadow:$root/shadowed/bin:$PATH"
 if [ $code = 0 ] && [[ $err == *"$shadow/montecarlo is another program"* ]] && [[ $err == *"comes before"* ]]; then pass "another montecarlo earlier on PATH is warned about"; else fail "another montecarlo earlier on PATH is warned about"; fi
+run shadow-only PATH="$stubs:$shadow:$PATH"
+if [ $code = 0 ] && [[ $err == *"$shadow/montecarlo is another program"* ]] && [[ $err == *"is not on PATH"* ]] && [[ $err != *"comes before"* ]]; then pass "an install dir off PATH is said so, even with another montecarlo on it"; else fail "an install dir off PATH is said so, even with another montecarlo on it"; fi
 
-printf '#!/bin/sh\n[ "$1" = auth ] && exit 0\nexit 1\n' > "$root/stub-gh-rejects"
-printf '#!/bin/sh\nexit 0\n' > "$root/stub-gh-accepts"
+# Both stubs pass the installer's probe of `attestation verify --help`; the accepting one records
+# the arguments of the real call, one per line.
+gh_args=$root/gh-args
+printf '#!/bin/sh\n[ "$1" = auth ] && exit 0\ncase "$*" in *--help*) echo "      --source-ref string"; exit 0 ;; esac\nexit 1\n' > "$root/stub-gh-rejects"
+printf '#!/bin/sh\n[ "$1" = auth ] && exit 0\ncase "$*" in *--help*) echo "      --source-ref string"; exit 0 ;; esac\nprintf "%%s\\n" "$@" > "%s"\nexit 0\n' "$gh_args" > "$root/stub-gh-accepts"
 chmod +x "$root/stub-gh-rejects" "$root/stub-gh-accepts"
+has_arg() { grep -qxF -- "$1" "$gh_args"; }
+# has_pair <flag> <value>: the line after <flag> is <value>.
+has_pair() { awk -v f="$1" -v v="$2" '$0 == f { getline n; if (n == v) ok = 1 } END { exit !ok }' "$gh_args"; }
 cp "$root/stub-gh-rejects" "$stubs/gh"
 run gh-rejects
 if [ $code != 0 ] && [[ $err == *"has no provenance"* ]] && [ ! -e "$home/bin/montecarlo" ]; then pass "a provenance gh rejects is refused"; else fail "a provenance gh rejects is refused"; fi
 cp "$root/stub-gh-accepts" "$stubs/gh"
 run gh-accepts
-if [ $code = 0 ] && [[ $err == *"verified the provenance"* ]]; then pass "a provenance gh accepts is reported"; else fail "a provenance gh accepts is reported"; fi
+if [ $code = 0 ] && [[ $err == *"verified the provenance"* ]] \
+  && has_pair --repo monte-carlo-data/mc-cli \
+  && has_pair --signer-workflow monte-carlo-data/mc-cli/.github/workflows/ci.yml \
+  && has_pair --source-ref refs/heads/main \
+  && has_arg --deny-self-hosted-runners \
+  && grep -q -- "$archive\$" "$gh_args"; then pass "a provenance gh accepts is reported"; else fail "a provenance gh accepts is reported"; fi
+# A gh older than 2.49 has no attestation command, so it cannot refuse a genuine release.
+printf '#!/bin/sh\n[ "$1" = auth ] && exit 0\necho "unknown command \\"attestation\\" for \\"gh\\"" >&2\nexit 1\n' > "$root/stub-gh-old"
+chmod +x "$root/stub-gh-old"
+cp "$root/stub-gh-old" "$stubs/gh"
+run gh-old
+if [ $code = 0 ] && [ "$(installed_version)" = "$tag" ] && [[ $err == *"too old"* ]]; then pass "a gh too old to verify provenance installs on the checksum alone"; else fail "a gh too old to verify provenance installs on the checksum alone"; fi
 printf '#!/bin/sh\nexit 1\n' > "$stubs/gh"
 
 # Each system and architecture uname can report picks its archive. The binary may not run here,
