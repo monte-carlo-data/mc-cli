@@ -393,3 +393,81 @@ jobs:
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: ${{ env.RELEASE_SUBJECTS }}
+
+  # Installs what was just published, from its real URLs, the way a user does. It cannot stop a
+  # release, but a broken one is flagged at once. GH_TOKEN logs gh in, so the installers verify
+  # the provenance too.
+  release-smoke:
+    name: Install the release on ${{ matrix.os }} with ${{ matrix.shell }}
+    needs: [tag, attest]
+    if: needs.tag.outputs.tag != ''
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, shell: sh }
+          - { os: macos-latest, shell: sh }
+          - { os: windows-latest, shell: pwsh }
+          - { os: windows-latest, shell: powershell }
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ needs.tag.outputs.tag }}
+      RELEASES: https://github.com/${{ github.repository }}/releases
+    steps:
+      # A later merge may already have released again, so the installer is checked against
+      # whatever is latest now.
+      - name: Work out the latest release
+        shell: bash
+        run: echo "LATEST=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)" >> "$GITHUB_ENV"
+
+      - name: Install with install.sh
+        if: matrix.shell == 'sh'
+        run: |
+          curl -fsSL "$RELEASES/latest/download/install.sh" | MONTECARLO_INSTALL_DIR="$RUNNER_TEMP/bin" sh
+          got=$("$RUNNER_TEMP/bin/montecarlo" version --output json | jq -r .version)
+          [ "$got" = "$LATEST" ] || { echo "installed $got, want $LATEST"; exit 1; }
+
+      - name: Install with install.ps1 in pwsh
+        if: matrix.shell == 'pwsh'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:MONTECARLO_INSTALL_DIR = Join-Path $env:RUNNER_TEMP 'bin'
+          Invoke-RestMethod "$env:RELEASES/latest/download/install.ps1" | Invoke-Expression
+          $got = (& (Join-Path $env:MONTECARLO_INSTALL_DIR 'montecarlo.exe') version --output json | ConvertFrom-Json).version
+          if ($got -ne $env:LATEST) { throw "installed $got, want $env:LATEST" }
+
+      - name: Install with install.ps1 in powershell
+        if: matrix.shell == 'powershell'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:MONTECARLO_INSTALL_DIR = Join-Path $env:RUNNER_TEMP 'bin'
+          Invoke-RestMethod "$env:RELEASES/latest/download/install.ps1" | Invoke-Expression
+          $got = (& (Join-Path $env:MONTECARLO_INSTALL_DIR 'montecarlo.exe') version --output json | ConvertFrom-Json).version
+          if ($got -ne $env:LATEST) { throw "installed $got, want $env:LATEST" }
+
+      - name: The release's files verify against this workflow on main
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir "$RUNNER_TEMP/release" \
+            --pattern '*_linux_amd64.tar.gz' --pattern 'install.sh' --pattern 'install.ps1'
+          for f in "$RUNNER_TEMP"/release/*; do
+            gh attestation verify "$f" --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/ci.yml" \
+              --source-ref refs/heads/main --deny-self-hosted-runners
+          done
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        if: matrix.os == 'ubuntu-latest'
+        with:
+          go-version: stable
+          cache: false
+
+      - name: go install reports the tag
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          GOBIN="$RUNNER_TEMP/gobin" go install "github.com/$GITHUB_REPOSITORY/cmd/montecarlo@$TAG"
+          got=$("$RUNNER_TEMP/gobin/montecarlo" version --output json | jq -r .version)
+          [ "$got" = "$TAG" ] || { echo "go install built $got, want $TAG"; exit 1; }
