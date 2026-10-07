@@ -1,8 +1,8 @@
 # mc-cli
 
-> The official command-line interface for the Monte Carlo REST API. The binary is `montecarlo`. It is **not released yet**: there is no tag, no release pipeline and no package; see [Releasing](#releasing). Until then, build it locally.
+> The official command-line interface for the Monte Carlo REST API. The binary is `montecarlo`. Every merge to `main` is a release; see [Releasing](#releasing).
 
-## This repository will be public
+## This repository is public
 
 Treat everything here as customer-facing, including things that are easy to forget:
 
@@ -35,6 +35,11 @@ go generate ./...               # rewrites THIRD_PARTY_NOTICES
 
 go build -o . ./cmd/montecarlo  # writes ./montecarlo
 ./montecarlo --help
+
+# The release build, without publishing, into dist/; then the installer tests against it
+RELEASE_TAG=v0.1.0 go run github.com/goreleaser/goreleaser/v2@v2.18.2 release --snapshot --clean
+.github/scripts/install_test.sh dist v0.1.0
+pwsh .github/scripts/install_test.ps1 -Dist dist -Tag v0.1.0   # needs Windows for every case
 ```
 
 ## Key Directories
@@ -44,6 +49,9 @@ go build -o . ./cmd/montecarlo  # writes ./montecarlo
 | `cmd/montecarlo/` | The main package. |
 | `internal/cmd/` | The command tree: hand-written base files and the generated `*_cmd.gen.go`. |
 | `tools/notices/` | Writes `THIRD_PARTY_NOTICES`; `go generate ./...` runs it. |
+| `install.sh`, `install.ps1` | The installers, attached to every release. |
+| `.github/scripts/` | The release-tag script, the installer tests and the release mirror they run against. |
+| `.github/actions/goreleaser/` | The pinned GoReleaser, shared by the snapshot and the release. |
 
 ## What is generated
 
@@ -108,4 +116,23 @@ Branch from `main` as `<person>/<ticket-id>-<slug>`. Never commit directly to `m
 
 ## Releasing
 
-Not yet. Before the first release, a release pipeline must build the per-platform archives, each carrying `LICENSE`, `README.md` and `THIRD_PARTY_NOTICES`, and their checksums, and the binary name must be final, since the name reaches every install path. The release targets and the `goos` list in `tools/notices` stay in step, so the notices cover every platform shipped. The Go SDK is public, and `go.mod` pins one of its release tags.
+Every merge to `main` is a release, and a published version can't be changed or withdrawn: releases are immutable, and the Go module proxy keeps every version it has served. `.github/scripts/next-tag.sh` works out the tag `v<base>.<n>`: `<base>` is the major.minor in `VERSION`, and `<n>` is one past the highest patch already tagged on that base. CI runs its test, and validates `VERSION`, on every pull request. The org App and the `apollo` team are the only actors allowed to create tags. The same script, its test and the `tag` job also live in mc-sdk-go and the Terraform provider; change them together.
+
+Only the patch is bumped automatically. A merge that breaks scripts written against the CLI, by removing or renaming a command or flag, changing an exit code, or changing the JSON output's shape, must bump the minor: change `VERSION` (`0.1` to `0.2`) in the same pull request, and its merge is tagged `v0.2.0`. A regeneration from api-codegen is a release too, and the same rule applies to what it changes. The bot may only pin a tagged mc-sdk-go release, which CI checks.
+
+### How a release is built
+
+On a push to `main`, once the build, the checks, `release-snapshot` and every `install-test` leg pass:
+
+1. `tag` tags the merge commit through the org App.
+2. `release` runs GoReleaser (`.goreleaser.yml`) only in a push-to-main run, never on a tag push, which would run whichever commit was tagged; the tag is always that run's commit. Only the highest release is marked latest, since releases from back-to-back merges can publish out of order. It cross-compiles darwin, linux and windows on amd64 and arm64, packs each with `LICENSE`, `README.md` and `THIRD_PARTY_NOTICES`, writes the checksums file, and attaches it all, with both installers, to a GitHub release that is published once every asset is uploaded. The release targets and the `goos` list in `tools/notices` stay in step, so the notices cover every platform shipped.
+3. `attest` attests the archives, the checksums and the installers that `release` built, after checking that the published release holds exactly those files.
+4. `release-smoke` installs the release from its real URLs on Linux, macOS and Windows, verifies its provenance, and checks `go install` of the tag.
+
+Don't create a release in the GitHub UI. If `release` or `attest` fails, use "Re-run failed jobs": a rerun of `release` finishes the draft it left, and `attest` can be rerun alone. Re-running all jobs finds the commit already tagged and releases nothing. A commit older than an already-tagged one is never tagged.
+
+CI's `release-snapshot` builds the same release on every pull request, at the tag the merge would get, without publishing, and checks what it built; `install-test` then runs both installers against it, served the way GitHub serves a release. A change that would break a release fails there, before it merges. [Common Commands](#common-commands) shows how to run both locally.
+
+The App key that creates tags is an org secret, readable from any branch's workflow, so anyone who can push a branch could tag and publish from it. A release built anywhere else fails `gh attestation verify` pinned to this workflow on `main`. That catches it when the archive or a downloaded installer is verified, which the README documents and the installers do for the archive when `gh` 2.49 or later is logged in. It does not when `latest/install.sh` is piped to a shell, since a rogue latest release serves its own installer; pinning a version guards against that. The `release` environment holds no secret and is no guard.
+
+The installers and the README verify provenance against `.github/workflows/ci.yml` on `main`, so renaming that file or moving `attest` out of it breaks verification for every published installer.

@@ -4,7 +4,103 @@ The command-line interface for the Monte Carlo REST API.
 
 ## Install
 
-Until the first release, build from source with a Go toolchain:
+### macOS and Linux
+
+```bash
+curl -fsSL https://github.com/monte-carlo-data/mc-cli/releases/latest/download/install.sh | sh
+```
+
+The script installs the latest release to `/usr/local/bin` if it can write there, otherwise to `~/.local/bin`, without `sudo`. It checks the download against the release's checksums and, if [`gh`](https://cli.github.com) (2.49 or later) is installed and logged in, its provenance. To verify the script before running it:
+
+```bash
+curl -fsSLO https://github.com/monte-carlo-data/mc-cli/releases/latest/download/install.sh
+gh attestation verify install.sh --repo monte-carlo-data/mc-cli \
+  --signer-workflow monte-carlo-data/mc-cli/.github/workflows/ci.yml --source-ref refs/heads/main \
+  --deny-self-hosted-runners
+sh install.sh
+```
+
+Piping the script to `sh` trusts whatever the latest release serves; verifying it first, or pinning a version, does not.
+
+In CI or a script, pin the version, both of the installer and of what it installs:
+
+```bash
+curl -fsSL https://github.com/monte-carlo-data/mc-cli/releases/download/vX.Y.Z/install.sh | MONTECARLO_VERSION=vX.Y.Z sh
+```
+
+### Windows
+
+In PowerShell:
+
+```powershell
+irm https://github.com/monte-carlo-data/mc-cli/releases/latest/download/install.ps1 | iex
+```
+
+It installs to `%LOCALAPPDATA%\Programs\montecarlo` and adds that directory to your user `PATH`; open a new terminal to pick it up. It runs the same checks as `install.sh`. To verify the script first, with the same `gh attestation verify` command as above on `install.ps1`:
+
+```powershell
+irm https://github.com/monte-carlo-data/mc-cli/releases/latest/download/install.ps1 -OutFile install.ps1
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+To pin the version:
+
+```powershell
+$env:MONTECARLO_VERSION = 'vX.Y.Z'
+irm https://github.com/monte-carlo-data/mc-cli/releases/download/vX.Y.Z/install.ps1 | iex
+```
+
+### Installer settings
+
+Both scripts read these environment variables:
+
+| Variable | Effect |
+|----------|--------|
+| `MONTECARLO_VERSION` | The release to install, `0.1.3` or `v0.1.3`. The latest by default. |
+| `MONTECARLO_INSTALL_DIR` | Where to install. |
+| `MONTECARLO_BIN_NAME` | The installed name, `montecarlo` by default. |
+| `MONTECARLO_FORCE=1` | Replace a `montecarlo` at the target that is not this CLI. |
+| `MONTECARLO_DOWNLOAD_BASE` | Where releases are downloaded from, for a mirror of the releases page. |
+
+Run again to upgrade: the installers replace their own earlier install.
+
+### Download an archive
+
+Each [release](https://github.com/monte-carlo-data/mc-cli/releases) has an archive per platform, a `.tar.gz` for macOS and Linux and a `.zip` for Windows, and a checksums file. Check the archive, then put the binary on your `PATH`:
+
+```bash
+sha256sum --ignore-missing -c montecarlo_X.Y.Z_checksums.txt     # macOS: shasum -a 256 --ignore-missing -c
+tar xzf montecarlo_X.Y.Z_linux_amd64.tar.gz montecarlo
+```
+
+In PowerShell, compare the hash with the archive's line in the checksums file, then extract:
+
+```powershell
+(Get-FileHash montecarlo_X.Y.Z_windows_amd64.zip).Hash.ToLower()
+Expand-Archive montecarlo_X.Y.Z_windows_amd64.zip
+```
+
+A file downloaded in a browser is marked as coming from the internet, and macOS or Windows may then refuse to run the binary, which is not notarized or signed. Clear the mark with `xattr -d com.apple.quarantine montecarlo` on macOS, or `Unblock-File montecarlo.exe` in PowerShell. The install scripts, `curl` and `go install` don't set it.
+
+### Verify where a file came from
+
+The checksums catch a damaged download. To check that a file was built by this repository's release workflow on `main`, verify its provenance with `gh`:
+
+```bash
+gh attestation verify montecarlo_X.Y.Z_linux_amd64.tar.gz --repo monte-carlo-data/mc-cli \
+  --signer-workflow monte-carlo-data/mc-cli/.github/workflows/ci.yml --source-ref refs/heads/main \
+  --deny-self-hosted-runners
+```
+
+The archives, the checksums file and both install scripts are attested.
+
+### With Go
+
+```bash
+go install github.com/monte-carlo-data/mc-cli/cmd/montecarlo@latest
+```
+
+### From source
 
 ```bash
 git clone https://github.com/monte-carlo-data/mc-cli.git
@@ -12,7 +108,15 @@ cd mc-cli
 go build -o . ./cmd/montecarlo
 ```
 
-Once released, `go install github.com/monte-carlo-data/mc-cli/cmd/montecarlo@latest` will work too.
+### Alongside the Python CLI
+
+The Python CLI, `pip install montecarlodata`, also installs a command named `montecarlo`. The install scripts don't replace it unless `MONTECARLO_FORCE=1` is set: if it is where they would install, they stop and say so; if it is elsewhere on `PATH`, they install and warn. Keep both by installing this one under another name:
+
+```bash
+curl -fsSL https://github.com/monte-carlo-data/mc-cli/releases/latest/download/install.sh | MONTECARLO_BIN_NAME=mc sh
+```
+
+If both keep the name `montecarlo`, whichever comes first on `PATH` runs. An activated virtual environment puts its own `bin` first, so inside it `montecarlo` is the Python CLI; call this one by its full path there. `which -a montecarlo` lists every `montecarlo` on `PATH`, in the order they are found.
 
 ## Credentials
 
