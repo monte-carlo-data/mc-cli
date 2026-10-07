@@ -9,6 +9,14 @@ on:
 permissions:
   contents: read
 
+env:
+  # The release files that get a provenance attestation. release-snapshot checks each pattern
+  # matches, so a typo fails before a merge instead of after the tag.
+  RELEASE_SUBJECTS: |
+    dist/*.tar.gz
+    dist/*.zip
+    dist/*_checksums.txt
+
 jobs:
   build:
     name: Build on ${{ matrix.os }}
@@ -90,6 +98,78 @@ jobs:
               echo "$f says it is generated but its name is outside the generated pattern"; exit 1
             fi
           done
+
+  release-snapshot:
+    name: The release builds for every platform
+    # Tags are immutable, so a release that fails after tagging burns that version. A change that
+    # breaks cross-compiling or packaging has to fail here, before the merge.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # setup-go's cache key is shared with the build job, whose cache holds only linux/amd64
+      # objects, so this job keeps its cross-compiled ones under a key of its own.
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: release-snapshot-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum') }}
+          restore-keys: release-snapshot-${{ runner.os }}-
+
+      # The tag this commit would be released as, so the snapshot is named and stamped exactly as
+      # that release. A commit with nothing to release still builds, as v0.0.0.
+      - name: Work out the tag
+        run: |
+          tag=$(.github/scripts/next-tag.sh)
+          echo "RELEASE_TAG=${tag:-v0.0.0}" >> "$GITHUB_ENV"
+
+      # Everything a release does except publishing.
+      - uses: ./.github/actions/goreleaser
+        with:
+          args: release --snapshot --clean
+
+      - name: The archives are what the release publishes
+        run: |
+          version=${RELEASE_TAG#v}
+          for target in darwin_amd64 darwin_arm64 linux_amd64 linux_arm64 windows_amd64 windows_arm64; do
+            case $target in
+              windows_*) archive=dist/montecarlo_${version}_$target.zip; list="unzip -Z1" ;;
+              *) archive=dist/montecarlo_${version}_$target.tar.gz; list="tar tzf" ;;
+            esac
+            [ -f "$archive" ] || { echo "missing $archive"; exit 1; }
+            contents=$($list "$archive" | sort | tr '\n' ' ')
+            case $target in windows_*) binary=montecarlo.exe ;; *) binary=montecarlo ;; esac
+            want=$(printf '%s\n' LICENSE README.md THIRD_PARTY_NOTICES "$binary" | sort | tr '\n' ' ')
+            [ "$contents" = "$want" ] || { echo "$archive holds '$contents', want '$want'"; exit 1; }
+            grep -q "  ${archive#dist/}$" "dist/montecarlo_${version}_checksums.txt" \
+              || { echo "$archive is not in the checksums file"; exit 1; }
+          done
+          echo "Six archives, each with the licenses, the README and the binary, all checksummed."
+
+      - name: The binary reports the release's version, commit and date
+        run: |
+          got=$(dist/montecarlo_linux_amd64_v1/montecarlo version --output json)
+          want=$(jq -cn --arg v "$RELEASE_TAG" --arg c "$(git rev-parse HEAD | cut -c1-12)" \
+            --arg d "$(TZ=UTC git log -1 --date=format-local:%Y-%m-%dT%H:%M:%SZ --format=%cd)" \
+            '{commit: $c, date: $d, version: $v}')
+          [ "$(printf '%s' "$got" | jq -cS .)" = "$want" ] || { echo "version reports $got, want $want"; exit 1; }
+          echo "montecarlo version: $got"
+
+      - name: Every attestation pattern matches a file
+        run: |
+          while read -r pattern; do
+            [ -n "$pattern" ] || continue
+            compgen -G "$pattern" > /dev/null || { echo "$pattern matches nothing in dist/"; exit 1; }
+          done <<< "$RELEASE_SUBJECTS"
 
   bot-dependency-diff:
     name: The bot's dependency change stays narrow
