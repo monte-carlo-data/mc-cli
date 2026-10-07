@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Serves a GoReleaser dist/ the way GitHub serves a repository's releases, for the installer
 tests: <base>/latest redirects to <base>/tag/<tag>, and <base>/download/<tag>/<file> is a file
-from dist/. With --no-release, latest is a 404, as before the first release.
+from dist/. With --no-release, latest redirects to the releases page itself, as GitHub's does
+before a repository's first release.
 
 Prints the base URL, then serves until killed.
 """
@@ -30,12 +31,12 @@ def main() -> None:
 
         def respond(self, body: bool) -> None:
             base = f"http://127.0.0.1:{self.server.server_port}"
-            if self.path == "/latest" and not args.no_release:
+            if self.path == "/latest":
                 self.send_response(302)
-                self.send_header("Location", f"{base}/tag/{args.tag}")
+                self.send_header("Location", base if args.no_release else f"{base}/tag/{args.tag}")
                 self.end_headers()
                 return
-            if self.path == f"/tag/{args.tag}" and not args.no_release:
+            if self.path == "" or self.path == "/" or (self.path == f"/tag/{args.tag}" and not args.no_release):
                 self.send_response(200)
                 self.send_header("Content-Length", "0")
                 self.end_headers()

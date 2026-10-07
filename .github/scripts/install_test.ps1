@@ -35,11 +35,14 @@ function Start-Mirror([string]$Directory, [switch]$NoRelease) {
     $arguments = @((Join-Path $PSScriptRoot 'mirror.py'), '--dist', $Directory, '--tag', $Tag)
     if ($NoRelease) { $arguments += '--no-release' }
     $script:mirrors += Start-Process $python -ArgumentList $arguments -RedirectStandardOutput $out -PassThru -NoNewWindow
-    for ($i = 0; $i -lt 50; $i++) {
+    for ($i = 0; $i -lt 300; $i++) {
         if ((Test-Path $out -PathType Leaf) -and (Get-Content $out -Raw)) { break }
         Start-Sleep -Milliseconds 100
     }
-    return (Get-Content $out -Raw).Trim()
+    # An empty base would send the installer to the real releases.
+    $url = Get-Content $out -Raw -ErrorAction SilentlyContinue
+    if (-not $url) { throw 'mirror.py did not start' }
+    return $url.Trim()
 }
 
 # A gh that is installed but not logged in, unless a case says otherwise, so a developer's own

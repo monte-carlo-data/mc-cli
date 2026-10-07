@@ -101,9 +101,10 @@ function Install-MonteCarlo {
     if ($env:MONTECARLO_VERSION) {
         $tag = 'v' + $env:MONTECARLO_VERSION.TrimStart('v')
     } else {
+        # Before a first release, GitHub redirects latest to the releases page instead of a tag.
         $location = Get-Url "$base/latest" -Head
-        if (-not $location) { Fail "found no release at $base/latest" }
-        $tag = $location.Substring($location.LastIndexOf('/') + 1)
+        if (-not $location -or $location -notmatch '/tag/([^/]+)$') { Fail "found no release at $base/latest" }
+        $tag = $Matches[1]
     }
     if ($tag -cnotmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') { Fail "'$tag' is not a release version like v0.1.3" }
     $version = $tag.Substring(1)

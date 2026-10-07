@@ -41,7 +41,7 @@ fetch() {
     if [ "$2" = - ]; then
       # wget exits non-zero on the redirect it is told not to follow; the Location is the answer.
       # shellcheck disable=SC2086
-      wget $wget_flags --max-redirect=0 --spider -S "$1" 2>&1 | sed -n 's/^ *Location: *//p' | tail -1 | tr -d '\r'
+      wget $wget_flags --max-redirect=0 --spider -S "$1" 2>&1 | sed -n 's/^ *Location: *\([^ ]*\).*/\1/p' | tail -1 | tr -d '\r'
     else
       # shellcheck disable=SC2086
       wget $wget_flags -q -O "$2" "$1"
@@ -105,11 +105,12 @@ main() {
   if [ -n "${MONTECARLO_VERSION:-}" ]; then
     tag=v${MONTECARLO_VERSION#v}
   else
+    # Before a first release, GitHub redirects latest to the releases page instead of a tag.
     location=$(fetch "$base/latest" -) || location=""
-    tag=${location##*/}
-    if [ -z "$location" ] || [ "$tag" = latest ]; then
-      fail "found no release at $base/latest"
-    fi
+    case $location in
+      */tag/*) tag=${location##*/tag/} ;;
+      *) fail "found no release at $base/latest" ;;
+    esac
   fi
   is_release_tag "$tag" || fail "'$tag' is not a release version like v0.1.3"
   version=${tag#v}

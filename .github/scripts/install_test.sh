@@ -21,7 +21,7 @@ root=$(mktemp -d)
 failures=0
 pids=()
 cleanup() {
-  for pid in "${pids[@]}"; do kill "$pid" 2> /dev/null || true; done
+  for pid in ${pids[@]+"${pids[@]}"}; do kill "$pid" 2> /dev/null || true; done
   chmod -R u+w "$root" && rm -rf "$root"
 }
 trap cleanup EXIT
@@ -33,14 +33,18 @@ esac
 archive=montecarlo_${tag#v}_$native.tar.gz
 sums=montecarlo_${tag#v}_checksums.txt
 
-# mirror <dist> [--no-release]: starts a mirror and prints its base URL.
+# mirror <var> <dist> [--no-release]: starts a mirror and sets <var> to its base URL. Not run in
+# a subshell, so the mirror's pid is kept for cleanup; a mirror that never starts ends the test,
+# since an empty base would send the installer to the real releases.
 mirror() {
-  local out
+  local var=$1 out
+  shift
   out=$(mktemp "$root/mirror.XXXXXX")
   python3 "$here/mirror.py" --dist "$1" --tag "$tag" "${@:2}" > "$out" &
   pids+=($!)
-  for _ in $(seq 50); do [ -s "$out" ] && break; sleep 0.1; done
-  cat "$out"
+  for _ in $(seq 300); do [ -s "$out" ] && break; sleep 0.1; done
+  [ -s "$out" ] || { echo "mirror.py did not start"; exit 1; }
+  printf -v "$var" '%s' "$(cat "$out")"
 }
 
 # A gh that is installed but not logged in, unless a case says otherwise, so a developer's own
@@ -50,7 +54,9 @@ mkdir -p "$stubs"
 printf '#!/bin/sh\nexit 1\n' > "$stubs/gh"
 chmod +x "$stubs/gh"
 
-base=$(mirror "$dist")
+# Set by mirror.
+base="" no_release="" tampered_base="" unlisted_base=""
+mirror base "$dist"
 
 # run <name> [VAR=value...]: runs install.sh in a fresh home with the variables given, leaving
 # its exit code in $code and its stderr in $err.
@@ -102,20 +108,22 @@ done
 run bad-name MONTECARLO_BIN_NAME=../mc
 if [ $code != 0 ] && [[ $err == *"plain file name"* ]]; then pass "a bin name with a path is refused"; else fail "a bin name with a path is refused"; fi
 
-no_release=$(mirror "$dist" --no-release)
+mirror no_release "$dist" --no-release
 run no-release MONTECARLO_DOWNLOAD_BASE="$no_release"
 if [ $code != 0 ] && [[ $err == *"found no release"* ]]; then pass "no release yet is said so"; else fail "no release yet is said so"; fi
 
 tampered=$root/tampered-dist
 cp -R "$dist" "$tampered"
 printf 'x' >> "$tampered/$archive"
-run tampered MONTECARLO_DOWNLOAD_BASE="$(mirror "$tampered")"
+mirror tampered_base "$tampered"
+run tampered MONTECARLO_DOWNLOAD_BASE="$tampered_base"
 if [ $code != 0 ] && [[ $err == *"does not match its checksum"* ]] && [ ! -e "$home/bin/montecarlo" ]; then pass "a tampered archive is refused"; else fail "a tampered archive is refused"; fi
 
 unlisted=$root/unlisted-dist
 cp -R "$dist" "$unlisted"
 grep -v " $archive\$" "$dist/$sums" > "$unlisted/$sums"
-run unlisted MONTECARLO_DOWNLOAD_BASE="$(mirror "$unlisted")"
+mirror unlisted_base "$unlisted"
+run unlisted MONTECARLO_DOWNLOAD_BASE="$unlisted_base"
 if [ $code != 0 ] && [[ $err == *"has no checksum"* ]]; then pass "an archive missing from the checksums is refused"; else fail "an archive missing from the checksums is refused"; fi
 
 run upgrade
