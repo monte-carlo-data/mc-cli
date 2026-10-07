@@ -83,3 +83,23 @@ func TestVersionJSON(t *testing.T) {
 		}
 	}
 }
+
+// stubBuildInfo makes the binary's build info info for the rest of the test.
+func stubBuildInfo(t *testing.T, info *debug.BuildInfo) {
+	t.Helper()
+	saved := readBuildInfo
+	readBuildInfo = func() (*debug.BuildInfo, bool) { return info, true }
+	t.Cleanup(func() { readBuildInfo = saved })
+}
+
+// A release build's stamped values win over its build info.
+func TestResolvedVersionPrefersTheStampedValues(t *testing.T) {
+	stubBuildInfo(t, &debug.BuildInfo{Main: debug.Module{Version: "v1.2.3"}})
+	saved := [3]string{version, commit, date}
+	version, commit, date = "v0.1.4", "0123456789ab", "2026-10-07T12:00:00Z"
+	t.Cleanup(func() { version, commit, date = saved[0], saved[1], saved[2] })
+
+	if v, c, d := resolvedVersion(); v != "v0.1.4" || c != "0123456789ab" || d != "2026-10-07T12:00:00Z" {
+		t.Errorf("got %s %s %s, want the stamped values", v, c, d)
+	}
+}

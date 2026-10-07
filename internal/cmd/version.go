@@ -17,6 +17,9 @@ var (
 	date    = "unknown"
 )
 
+// readBuildInfo is debug.ReadBuildInfo, replaced in tests.
+var readBuildInfo = debug.ReadBuildInfo
+
 func init() {
 	rootCmd.AddCommand(&cobra.Command{
 		Use:   "version",
@@ -27,11 +30,7 @@ func init() {
 			if err != nil {
 				return err
 			}
-			v, c, d := version, commit, date
-			if v == "dev" {
-				info, ok := debug.ReadBuildInfo()
-				v, c, d = versionFromBuildInfo(info, ok)
-			}
+			v, c, d := resolvedVersion()
 			if format == "json" {
 				return writeJSON(cmd.OutOrStdout(), map[string]string{
 					"version": v, "commit": c, "date": d,
@@ -41,6 +40,16 @@ func init() {
 			return nil
 		},
 	})
+}
+
+// resolvedVersion is the version, commit and date the release build stamped, or, for a build
+// without them such as "go install", what the binary's build info records. Both "version" and
+// the User-Agent use it, so they agree.
+func resolvedVersion() (v, c, d string) {
+	if version != "dev" {
+		return version, commit, date
+	}
+	return versionFromBuildInfo(readBuildInfo())
 }
 
 // versionFromBuildInfo derives version, commit and date from a binary's build info, for a build

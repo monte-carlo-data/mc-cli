@@ -51,6 +51,7 @@ func clientOptions(cmd *cobra.Command) (sdk.Options, error) {
 	if err != nil {
 		return sdk.Options{}, err
 	}
+	v, _, _ := resolvedVersion()
 	opts := sdk.Options{
 		Endpoint:     str("endpoint"),
 		ClientID:     str("client-id"),
@@ -60,7 +61,7 @@ func clientOptions(cmd *cobra.Command) (sdk.Options, error) {
 		TokenSecret:  apiToken,
 		Profile:      str("profile"),
 		ConfigDir:    dir,
-		UserAgent:    binaryName + "/" + version,
+		UserAgent:    binaryName + "/" + v,
 		// The gateway drops User-Agent, so these are what identify the CLI to usage telemetry.
 		TelemetryReason:  "cli",
 		TelemetryService: "mc-cli",

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"runtime/debug"
 	"strings"
 	"testing"
 )
@@ -207,5 +208,22 @@ func TestRequestsCarryTheCLITelemetryHeaders(t *testing.T) {
 				t.Errorf("x-mcd-source: expected none, got %q", v)
 			}
 		})
+	}
+}
+
+// A build without the release ldflags, such as "go install", sends the version its build info
+// records, the one "version" prints, not "dev".
+func TestUserAgentCarriesTheBuildInfoVersion(t *testing.T) {
+	stubBuildInfo(t, &debug.BuildInfo{Main: debug.Module{Version: "v1.2.3"}})
+	var got string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.UserAgent()
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+
+	_, _ = execute(t, "whoami", "--endpoint", srv.URL, "--api-id", "i", "--api-token", "s", "--config-dir", t.TempDir())
+	if want := binaryName + "/v1.2.3"; got != want {
+		t.Errorf("User-Agent = %q, want %q", got, want)
 	}
 }
