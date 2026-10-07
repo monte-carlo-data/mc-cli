@@ -107,7 +107,9 @@ main() {
   else
     location=$(fetch "$base/latest" -) || location=""
     tag=${location##*/}
-    [ -n "$location" ] && [ "$tag" != latest ] || fail "found no release at $base/latest"
+    if [ -z "$location" ] || [ "$tag" = latest ]; then
+      fail "found no release at $base/latest"
+    fi
   fi
   is_release_tag "$tag" || fail "'$tag' is not a release version like v0.1.3"
   version=${tag#v}
@@ -164,7 +166,9 @@ main() {
   IFS=:
   set -f
   for d in $PATH; do
-    [ -n "$d" ] && [ -x "$d/$name" ] || continue
+    if [ -z "$d" ] || [ ! -x "$d/$name" ]; then
+      continue
+    fi
     [ -n "$first" ] || first=$d/$name
     if [ "$d/$name" != "$target" ] && ! is_ours "$d/$name"; then
       say "warning: $d/$name is another program with the same name; whichever comes first on PATH runs."

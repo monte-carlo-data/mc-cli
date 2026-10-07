@@ -9,7 +9,7 @@
 #
 # The stubs are written with a literal $1, cleanup runs from the trap, and each case list is split
 # into words on purpose.
-# shellcheck disable=SC2016,SC2086,SC2329
+# shellcheck disable=SC2016,SC2086,SC2317,SC2329
 
 set -euo pipefail
 
