@@ -61,6 +61,7 @@ release:
   # Served from the release, so "latest" always runs the installer of the latest release.
   extra_files:
     - glob: install.sh
+    - glob: install.ps1
 
 changelog:
   disable: true

@@ -18,6 +18,7 @@ env:
     dist/*.zip
     dist/*_checksums.txt
     dist/install.sh
+    dist/install.ps1
 
 jobs:
   build:
@@ -170,7 +171,7 @@ jobs:
       # they are copied in to check the patterns against what a release holds.
       - name: Every attestation pattern matches a file
         run: |
-          cp install.sh dist/
+          cp install.sh install.ps1 dist/
           while read -r pattern; do
             [ -n "$pattern" ] || continue
             compgen -G "$pattern" > /dev/null || { echo "$pattern matches nothing in dist/"; exit 1; }
