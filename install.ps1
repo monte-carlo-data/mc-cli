@@ -87,10 +87,11 @@ function Install-MonteCarlo {
     if ($name -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]*$') { Fail "MONTECARLO_BIN_NAME must be a plain file name, got '$name'" }
 
     # The OS's architecture, not this process's, which is x64 under emulation on Arm. Windows
-    # PowerShell on .NET Framework before 4.7.1 lacks RuntimeInformation.
+    # PowerShell may lack RuntimeInformation or read its OSArchitecture as null, so it is read
+    # as a string and an empty one falls back.
     $os = $null
     $runtime = 'System.Runtime.InteropServices.RuntimeInformation' -as [type]
-    if ($runtime) { $os = $runtime::OSArchitecture.ToString() }
+    if ($runtime) { $os = "$($runtime::OSArchitecture)" }
     if (-not $os) { $os = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE } }
     switch ($os) {
         { $_ -in 'X64', 'AMD64' } { $arch = 'amd64' }

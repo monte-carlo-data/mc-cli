@@ -89,7 +89,7 @@ $base = Start-Mirror $Dist
 $sep = [System.IO.Path]::PathSeparator
 
 # Runs the installer in a fresh directory with the variables given.
-function Invoke-Installer([string]$Name, [hashtable]$Vars = @{}, [switch]$Piped) {
+function Invoke-Installer([string]$Name, [hashtable]$Vars = @{}, [switch]$Piped, [string]$Script = $Installer) {
     $bin = Join-Path (Join-Path $root $Name) 'bin'
     New-Item -ItemType Directory -Force -Path $bin | Out-Null
     $all = @{ MONTECARLO_DOWNLOAD_BASE = $base; MONTECARLO_INSTALL_DIR = $bin; PATH = "$stubs$sep$env:PATH" }
@@ -101,9 +101,9 @@ function Invoke-Installer([string]$Name, [hashtable]$Vars = @{}, [switch]$Piped)
     }
     try {
         if ($Piped) {
-            $out = & $Shell -NoProfile -Command "Get-Content -Raw '$Installer' | Invoke-Expression" 2>&1 | Out-String
+            $out = & $Shell -NoProfile -Command "Get-Content -Raw '$Script' | Invoke-Expression" 2>&1 | Out-String
         } else {
-            $out = & $Shell -NoProfile -ExecutionPolicy Bypass -File $Installer 2>&1 | Out-String
+            $out = & $Shell -NoProfile -ExecutionPolicy Bypass -File $Script 2>&1 | Out-String
         }
         $code = $LASTEXITCODE
     } finally {
@@ -160,6 +160,19 @@ try {
 
     $r = Invoke-Installer piped -Piped
     Test-Case 'the script runs through Invoke-Expression' $r ($r.Code -eq 0 -and (Test-Installed $r))
+
+    # Some Windows PowerShell 5.1 installs resolve RuntimeInformation but read its OSArchitecture as
+    # null. System.String, which has no such property, stands in for it.
+    $source = Get-Content $Installer -Raw
+    $runtimeName = "'System.Runtime.InteropServices.RuntimeInformation'"
+    if (-not $source.Contains($runtimeName)) { throw "install.ps1 no longer names $runtimeName" }
+    # The fallback's own variables are read as a literal, since Windows sets them for each process.
+    $processorArch = if ($arch -eq 'arm64') { "'ARM64'" } else { "'AMD64'" }
+    $noArch = Join-Path $root 'install-no-osarchitecture.ps1'
+    $patched = $source.Replace($runtimeName, "'System.String'").Replace('$env:PROCESSOR_ARCHITEW6432', '$null').Replace('$env:PROCESSOR_ARCHITECTURE', $processorArch)
+    [System.IO.File]::WriteAllText($noArch, $patched)
+    $r = Invoke-Installer no-osarchitecture -Piped -Script $noArch
+    Test-Case 'an OSArchitecture that reads as null falls back to PROCESSOR_ARCHITECTURE' $r ($r.Code -eq 0 -and (Test-Installed $r))
 
     foreach ($bad in '1.2', 'v0.1', 'v0.1.0;true', 'v0.1.0-rc1') {
         $r = Invoke-Installer "bad-version-$($bad -replace '[^a-z0-9]', '_')" @{ MONTECARLO_VERSION = $bad }
