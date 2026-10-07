@@ -63,6 +63,11 @@ jobs:
       - name: Test
         run: go test -race ./...
 
+      - name: The release tag is worked out correctly
+        run: |
+          .github/scripts/next-tag.sh > /dev/null
+          .github/scripts/next-tag_test.sh
+
       - name: Check the third-party notices are current
         run: |
           go generate ./...
