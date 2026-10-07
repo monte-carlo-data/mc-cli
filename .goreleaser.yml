@@ -1,0 +1,63 @@
+# Builds a release: one archive per platform, each with the licenses and the README, and a
+# checksums file, attached to a GitHub release. CI's release job runs it on every merge to main.
+version: 2
+
+project_name: montecarlo
+
+builds:
+  - id: montecarlo
+    main: ./cmd/montecarlo
+    binary: montecarlo
+    env:
+      - CGO_ENABLED=0
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    flags:
+      - -trimpath
+    # The version carries the tag's v, as "go install" reports it, so both paths send the same
+    # User-Agent. In a snapshot it is the snapshot version the archives are named with.
+    ldflags:
+      - -s -w
+      - -X github.com/monte-carlo-data/mc-cli/internal/cmd.version=v{{ .Version }}
+      - -X github.com/monte-carlo-data/mc-cli/internal/cmd.commit={{ slice .FullCommit 0 12 }}
+      - -X github.com/monte-carlo-data/mc-cli/internal/cmd.date={{ .CommitDate }}
+    # Keep in step with the goos list in tools/notices, so the notices cover every platform.
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    # Setting files replaces GoReleaser's defaults, so LICENSE and README.md are listed too.
+    # THIRD_PARTY_NOTICES carries the licenses of the modules compiled into the binary.
+    files:
+      - LICENSE
+      - README.md
+      - THIRD_PARTY_NOTICES
+
+checksum:
+  name_template: "{{ .ProjectName }}_{{ .Version }}_checksums.txt"
+  algorithm: sha256
+
+# CI's snapshot sets RELEASE_TAG to the tag the merge would get, so it builds exactly what that
+# release will publish. Without it, a local snapshot is named as GoReleaser names one.
+snapshot:
+  version_template: >-
+    {{ if index .Env "RELEASE_TAG" }}{{ trimprefix (index .Env "RELEASE_TAG") "v" }}{{ else }}{{ incpatch .Version }}-SNAPSHOT-{{ .ShortCommit }}{{ end }}
+
+# A GitHub release stays a draft until every asset is uploaded. A rerun after a failed upload
+# picks the draft up again and replaces what it already holds; once published, the release is
+# immutable.
+release:
+  use_existing_draft: true
+  replace_existing_artifacts: true
+
+changelog:
+  disable: true
