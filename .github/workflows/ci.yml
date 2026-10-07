@@ -122,3 +122,18 @@ jobs:
             exit 1
           fi
           echo "Only the mc-sdk-go lines changed."
+
+      # A merge to main is a release, so the bot may pin only a released SDK: not a pseudo-version,
+      # which can name any commit, and not a replace, which can name another module.
+      - name: The SDK pin is a release tag
+        run: |
+          if grep -E 'monte-carlo-data/mc-sdk-go.*=>' go.mod; then
+            echo "go.mod replaces mc-sdk-go. The bot may only pin a release."
+            exit 1
+          fi
+          pin=$(sed -nE 's#^[[:space:]]*(require[[:space:]]+)?github\.com/monte-carlo-data/mc-sdk-go[[:space:]]+([^[:space:]]+).*#\2#p' go.mod)
+          if ! printf '%s\n' "$pin" | grep -qxE 'v[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "go.mod pins mc-sdk-go at '$pin', which is not a release tag vX.Y.Z."
+            exit 1
+          fi
+          echo "mc-sdk-go is pinned at $pin."
