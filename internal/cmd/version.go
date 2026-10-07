@@ -5,7 +5,9 @@ package cmd
 
 import (
 	"fmt"
+	"regexp"
 	"runtime/debug"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -56,7 +58,7 @@ func resolvedVersion() (v, c, d string) {
 // that did not go through the release ldflags, for example "go install". ok is ReadBuildInfo's
 // own result; it is false only for a binary built without module support, in which case the "dev"
 // defaults stand as they are. The commit is trimmed to a short 12-character form, matching how
-// the release process names one.
+// the release process names one. Without vcs settings, a pseudo-version supplies both.
 func versionFromBuildInfo(info *debug.BuildInfo, ok bool) (v, c, d string) {
 	v, c, d = version, commit, date
 	if !ok || info == nil {
@@ -64,6 +66,9 @@ func versionFromBuildInfo(info *debug.BuildInfo, ok bool) (v, c, d string) {
 	}
 	if info.Main.Version != "" && info.Main.Version != "(devel)" {
 		v = info.Main.Version
+		if pc, pd, ok := fromPseudoVersion(v); ok {
+			c, d = pc, pd
+		}
 	}
 	for _, s := range info.Settings {
 		switch s.Key {
@@ -77,4 +82,23 @@ func versionFromBuildInfo(info *debug.BuildInfo, ok bool) (v, c, d string) {
 		}
 	}
 	return v, c, d
+}
+
+// pseudoVersion matches the three forms the go command gives an untagged commit: vX.0.0-<ts>-<rev>,
+// vX.Y.Z-0.<ts>-<rev> after a release and vX.Y.Z-<pre>.0.<ts>-<rev> after a prerelease.
+var pseudoVersion = regexp.MustCompile(`^v[0-9]+\.(?:0\.0-|[0-9]+\.[0-9]+-(?:[^+]*\.)?0\.)([0-9]{14})-([0-9a-f]{12})(?:\+[0-9A-Za-z.-]+)?$`)
+
+// fromPseudoVersion returns the commit and date a pseudo-version names, the date in the form of
+// the vcs.time setting. A "go install" of a commit builds from a module zip, which records no vcs
+// settings, so this is the only place they survive.
+func fromPseudoVersion(v string) (commit, date string, ok bool) {
+	m := pseudoVersion.FindStringSubmatch(v)
+	if m == nil {
+		return "", "", false
+	}
+	t, err := time.Parse("20060102150405", m[1])
+	if err != nil {
+		return "", "", false
+	}
+	return m[2], t.UTC().Format(time.RFC3339), true
 }
