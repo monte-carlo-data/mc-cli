@@ -5,7 +5,8 @@ on:
     branches: [main]
   pull_request:
 
-# The jobs only read the tree. Nothing here publishes, comments or writes.
+# Every job reads only, except the three that release a merge to main: tag, release and attest,
+# each granted just what it writes.
 permissions:
   contents: read
 
@@ -217,3 +218,102 @@ jobs:
             exit 1
           fi
           echo "mc-sdk-go is pinned at $pin."
+
+  tag:
+    name: Tag the release
+    needs: [build, check, release-snapshot]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # One run at a time, so two quick merges cannot pick the same tag. A run still waiting here is
+    # replaced by a newer one, whose release then covers both merges.
+    concurrency:
+      group: tag
+      cancel-in-progress: false
+    outputs:
+      tag: ${{ steps.next.outputs.tag }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Work out the tag
+        id: next
+        run: |
+          tag=$(.github/scripts/next-tag.sh)
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      # Tag creation is restricted to the org App and the `apollo` team by a ruleset, and tags are
+      # immutable.
+      - uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
+        id: token
+        if: steps.next.outputs.tag != ''
+        with:
+          app-id: ${{ secrets.MC_GITHUB_APP_ID }}
+          private-key: ${{ secrets.MC_GITHUB_APP_PRIVATE_KEY }}
+          owner: monte-carlo-data
+          repositories: mc-cli
+          permission-contents: write
+
+      - name: Tag ${{ steps.next.outputs.tag }}
+        if: steps.next.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          TAG: ${{ steps.next.outputs.tag }}
+        run: |
+          gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f ref="refs/tags/$TAG" -f sha="$GITHUB_SHA" > /dev/null
+          echo "Tagged $GITHUB_SHA as $TAG."
+
+  # Runs from main's own workflow file, never from the tagged commit's. The `release`
+  # environment accepts only main; it holds no secret, and records each release as a deployment.
+  release:
+    name: Build and publish the release
+    needs: tag
+    if: needs.tag.outputs.tag != ''
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write # GoReleaser creates the release and uploads its assets with GITHUB_TOKEN
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ needs.tag.outputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      # No build cache: a release is built from a clean module download, never from a cache that
+      # another workflow could have written.
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - uses: ./.github/actions/goreleaser
+        with:
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Attests what the release published, downloaded back from it, so a failure here is fixed by
+  # rerunning this job alone. gh attestation verify, pinned to this workflow on main, then tells
+  # a published release from one built anywhere else.
+  attest:
+    name: Attest the release's provenance
+    needs: [tag, release]
+    if: needs.tag.outputs.tag != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # downloads the release
+      id-token: write # signs the attestation through Sigstore
+      attestations: write # stores it with the repository
+    steps:
+      - name: Download the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.tag.outputs.tag }}
+        run: gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir dist
+
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ env.RELEASE_SUBJECTS }}
