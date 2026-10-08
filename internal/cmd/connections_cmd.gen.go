@@ -36,7 +36,7 @@ func newConnectionsCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create a connection",
-		Long:  "Add a connection to a warehouse, a BI container or an ETL container.\n\nCreate the credentials first, through one of the credentials endpoints, then name them\nhere. The connection's type comes from them, and has to be a type the parent accepts and\nits deployment supports. Send exactly one of `warehouse_id`, `bi_container_id` and\n`etl_container_id`.\n\nA type that depends on a metastore, such as `databricks-sql-warehouse`, goes on a data\nlake warehouse that already has a metastore connection. Tableau, Looker and Power BI\ncredentials go on a BI container of the same tool; a `looker` container takes both the\n`looker` and the `looker-git-clone` connection.\n\nETL tool credentials go on an empty ETL container of the same type, created through\n`/etl-containers`. A container takes one connection. A container of a type this API does\nnot create, such as Snowflake Tasks, takes none.\n\nOmit `job_types` to run what the type runs by default.\n\nAn unknown warehouse, BI container, ETL container or credentials id returns 404.",
+		Long:  "Add a connection to a warehouse, a BI container or an ETL container.\n\nCreate the credentials first, through one of the credentials endpoints, then name them\nhere. The connection's type comes from them, and has to be a type the parent accepts and\nits deployment supports. Send exactly one of `warehouse_id`, `bi_container_id` and\n`etl_container_id`.\n\nA type that depends on a metastore, such as `databricks-sql-warehouse`, goes on a data\nlake warehouse that already has a metastore connection. Tableau, Looker and Power BI\ncredentials go on a BI container of the same tool; a `looker` container takes both the\n`looker` and the `looker-git-clone` connection.\n\nETL tool credentials go on an empty ETL container of the same type, created through\n`/etl-containers`. A container takes one connection. A container of a type this API does\nnot create, such as Snowflake Tasks, takes none.\n\nOmit `job_types` to run what the type runs by default. `etl` on a Snowflake, Power BI or\nSalesforce Data Cloud connection also turns on its ETL, as adding it later through the\nupdate does. Snowflake takes `etl` alone, the other two only beside their other jobs.\n\nAn unknown warehouse, BI container, ETL container or credentials id returns 404.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			api, ctx, err := apiClient(cmd)
@@ -95,7 +95,7 @@ func newConnectionsCreateCmd() *cobra.Command {
 	_ = cmd.MarkFlagRequired("credentials-id")
 	cmd.Flags().String("bi-container-id", "", "The BI container to add the connection to, for Tableau, Looker or Power BI credentials. Its type has to match what the credentials are for: a looker container takes both looker and looker-git-clone credentials. Send exactly one of this, warehouse_id and etl_container_id.")
 	cmd.Flags().String("etl-container-id", "", "The ETL container to add the connection to, for ETL tool credentials such as Fivetran or Airflow. The container's type has to equal the credentials' type, and the container must not have a connection yet. Send exactly one of this, warehouse_id and bi_container_id.")
-	cmd.Flags().StringSlice("job-types", nil, "The jobs to run on this connection. Omit it to run what the connection type runs by default, which is what the app does. Which values are accepted depends on the connection type. An empty list is not accepted; omit the field to take the defaults.")
+	cmd.Flags().StringSlice("job-types", nil, "The jobs to run on this connection. Omit it to run what the connection type runs by default, which is what the app does. Which values are accepted depends on the connection type. etl on a Snowflake, Power BI or Salesforce Data Cloud connection also creates its ETL container. An empty list is not accepted; omit the field to take the defaults.")
 	cmd.Flags().String("warehouse-id", "", "The warehouse to add the connection to. Its type has to match what the credentials are for. Send exactly one of this, bi_container_id and etl_container_id.")
 	return cmd
 }
@@ -293,6 +293,7 @@ func newConnectionsAddCmd() *cobra.Command {
 	cmd.AddCommand(newConnectionsAddAzureSqlDatabaseCmd())
 	cmd.AddCommand(newConnectionsAddAzureDedicatedSqlPoolCmd())
 	cmd.AddCommand(newConnectionsAddSapHanaCmd())
+	cmd.AddCommand(newConnectionsAddSqlServerCmd())
 	cmd.AddCommand(newConnectionsAddMysqlCmd())
 	cmd.AddCommand(newConnectionsAddOracleCmd())
 	cmd.AddCommand(newConnectionsAddDb2Cmd())
@@ -580,6 +581,37 @@ func newConnectionsAddSapHanaCmd() *cobra.Command {
 	cmd.Flags().String("password", "", "Password of the database user. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().String("db-name", "", "Database to connect to.")
+	registerConnectionsAddFlags(cmd)
+	return cmd
+}
+
+func newConnectionsAddSqlServerCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "sql-server",
+		Short: "Add a sql-server connection, creating its warehouse and credentials",
+		Long:  "Adds a sql-server connection in one step, as the add command does. Pass sql-server credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsAdd(cmd, "sql-server", &connectionsAddNative{
+				group:          flagGroup{"sql-server", []string{"host", "port", "auth-mode", "db-name", "kdc", "keytab-base64", "keytab-base64-prompt", "password", "password-prompt", "principal", "realm", "user"}},
+				selfHostedOnly: []string{"bq-project-id", "sql-warehouse-id"},
+				build:          buildConnectionsAddSqlServer,
+			})
+		},
+	}
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. For kerberos, the fully qualified name the server's service principal is registered under.")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	cmd.Flags().String("auth-mode", "", "How Monte Carlo signs in. sql takes user and password. kerberos takes realm, kdc, principal, and one of keytab_base64 or password.")
+	_ = cmd.RegisterFlagCompletionFunc("auth-mode", enumCompletion(sdk.AllowedSqlServerAuthModeEnumValues))
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("kdc", "", "Hostname of the key distribution center, optionally with :port, for kerberos.")
+	cmd.Flags().String("keytab-base64", "", "Base64-encoded keytab for principal, for kerberos. Send this or password. Stored by Monte Carlo and never returned. Visible in the process list; --keytab-base64-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("keytab-base64-prompt", false, "Read --keytab-base64 from a hidden prompt instead of the command line.")
+	cmd.Flags().String("password", "", "Password of user for sql, or of the Active Directory account behind principal for kerberos. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("principal", "", "Active Directory principal Monte Carlo signs in as, for kerberos.")
+	cmd.Flags().String("realm", "", "Kerberos realm, normally the Active Directory domain in capitals, for kerberos.")
+	cmd.Flags().String("user", "", "SQL login Monte Carlo signs in as, for sql.")
 	registerConnectionsAddFlags(cmd)
 	return cmd
 }
@@ -1029,7 +1061,7 @@ func registerConnectionsAddFlags(cmd *cobra.Command) {
 	cmd.Flags().String("bi-container-id", "", "Existing BI container to add a BI connection to. Without it, a BI container is created for the connection first.")
 	cmd.Flags().String("etl-container-id", "", "Existing ETL container to add an ETL connection to. Without it, an ETL container is created for the connection first.")
 	cmd.Flags().String("deployment-id", "", "The deployment the warehouse's connections will run through. Pick one from the deployments list. Only a deployment on Monte Carlo's current collection platform is accepted. A new BI container or ETL container runs through it too. Required when none of --warehouse-id, --bi-container-id and --etl-container-id is given, refused with any of them. Refused for airflow, whose ETL container runs through no deployment.")
-	cmd.Flags().StringSlice("job-types", nil, "The jobs to run on this connection. Omit it to run what the connection type runs by default, which is what the app does. Which values are accepted depends on the connection type. An empty list is not accepted; omit the field to take the defaults.")
+	cmd.Flags().StringSlice("job-types", nil, "The jobs to run on this connection. Omit it to run what the connection type runs by default, which is what the app does. Which values are accepted depends on the connection type. etl on a Snowflake, Power BI or Salesforce Data Cloud connection also creates its ETL container. An empty list is not accepted; omit the field to take the defaults.")
 	cmd.Flags().Bool("validate-only", false, "Validate the credentials and create nothing.")
 	cmd.Flags().Bool("skip-validations", false, "Create the connection without validating the credentials first, and without asking.")
 }
@@ -1843,6 +1875,151 @@ func buildConnectionsAddSapHana(cmd *cobra.Command, api *sdk.APIClient, connecti
 			return api.CredentialsAPI.DeleteSapHanaCredentials(ctx, id).Execute()
 		},
 		deleteCmd: "credentials delete sap-hana",
+		listCmd:   "credentials list",
+	}, nil
+}
+
+func buildConnectionsAddSqlServer(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
+	var err error
+	if err := requireAny(cmd, "host"); err != nil {
+		return nil, err
+	}
+	host, err := flagString(cmd, "host")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "port"); err != nil {
+		return nil, err
+	}
+	port, err := flagInt(cmd, "port")
+	if err != nil {
+		return nil, err
+	}
+	var authMode *sdk.SqlServerAuthMode
+	if changed(cmd, "auth-mode") {
+		authModeValue, err := flagString(cmd, "auth-mode")
+		if err != nil {
+			return nil, err
+		}
+		authMode, err = sdk.NewSqlServerAuthModeFromValue(authModeValue)
+		if err != nil {
+			return nil, usageError("%w", err)
+		}
+	}
+	var dbName string
+	if changed(cmd, "db-name") {
+		dbName, err = flagString(cmd, "db-name")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var kdc string
+	if changed(cmd, "kdc") {
+		kdc, err = flagString(cmd, "kdc")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var keytabBase64 string
+	if changed(cmd, "keytab-base64", "keytab-base64-prompt") {
+		keytabBase64, err = flagSecret(cmd, "keytab-base64")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var password string
+	if changed(cmd, "password", "password-prompt") {
+		password, err = flagSecret(cmd, "password")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var principal string
+	if changed(cmd, "principal") {
+		principal, err = flagString(cmd, "principal")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var realm string
+	if changed(cmd, "realm") {
+		realm, err = flagString(cmd, "realm")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var user string
+	if changed(cmd, "user") {
+		user, err = flagString(cmd, "user")
+		if err != nil {
+			return nil, err
+		}
+	}
+	body := sdk.NewSqlServerCredentialsIn(host, port)
+	if changed(cmd, "auth-mode") {
+		body.SetAuthMode(*authMode)
+	}
+	if changed(cmd, "db-name") {
+		body.SetDbName(dbName)
+	}
+	if changed(cmd, "kdc") {
+		body.SetKdc(kdc)
+	}
+	if changed(cmd, "keytab-base64", "keytab-base64-prompt") {
+		body.SetKeytabBase64(keytabBase64)
+	}
+	if changed(cmd, "password", "password-prompt") {
+		body.SetPassword(password)
+	}
+	if changed(cmd, "principal") {
+		body.SetPrincipal(principal)
+	}
+	if changed(cmd, "realm") {
+		body.SetRealm(realm)
+	}
+	if changed(cmd, "user") {
+		body.SetUser(user)
+	}
+	return &connectionsAddCredentials{
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			candidate := sdk.NewSqlServerCredentialsValidateIn(deploymentId, host, port)
+			if changed(cmd, "auth-mode") {
+				candidate.SetAuthMode(*authMode)
+			}
+			if changed(cmd, "db-name") {
+				candidate.SetDbName(dbName)
+			}
+			if changed(cmd, "kdc") {
+				candidate.SetKdc(kdc)
+			}
+			if changed(cmd, "keytab-base64", "keytab-base64-prompt") {
+				candidate.SetKeytabBase64(keytabBase64)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				candidate.SetPassword(password)
+			}
+			if changed(cmd, "principal") {
+				candidate.SetPrincipal(principal)
+			}
+			if changed(cmd, "realm") {
+				candidate.SetRealm(realm)
+			}
+			if changed(cmd, "user") {
+				candidate.SetUser(user)
+			}
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateSqlServerCredentials(ctx).SqlServerCredentialsValidateIn(*candidate).Execute)
+		},
+		create: func(ctx context.Context) (string, *http.Response, error) {
+			out, resp, err := retryOnTransient(cmd, api.CredentialsAPI.CreateSqlServerCredentials(ctx).SqlServerCredentialsIn(*body).Execute)
+			if err != nil {
+				return "", resp, err
+			}
+			return out.GetId(), resp, nil
+		},
+		del: func(ctx context.Context, id string) (*http.Response, error) {
+			return api.CredentialsAPI.DeleteSqlServerCredentials(ctx, id).Execute()
+		},
+		deleteCmd: "credentials delete sql-server",
 		listCmd:   "credentials list",
 	}, nil
 }
@@ -4046,6 +4223,7 @@ func newConnectionsUpdateCmd() *cobra.Command {
 	cmd.AddCommand(newConnectionsUpdateAzureSqlDatabaseCmd())
 	cmd.AddCommand(newConnectionsUpdateAzureDedicatedSqlPoolCmd())
 	cmd.AddCommand(newConnectionsUpdateSapHanaCmd())
+	cmd.AddCommand(newConnectionsUpdateSqlServerCmd())
 	cmd.AddCommand(newConnectionsUpdateMysqlCmd())
 	cmd.AddCommand(newConnectionsUpdateOracleCmd())
 	cmd.AddCommand(newConnectionsUpdateDb2Cmd())
@@ -4335,6 +4513,37 @@ func newConnectionsUpdateSapHanaCmd() *cobra.Command {
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
 	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	registerConnectionsUpdateFlags(cmd)
+	return cmd
+}
+
+func newConnectionsUpdateSqlServerCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "sql-server <connection_id>",
+		Short: "Update a sql-server connection, and change its credentials",
+		Long:  "Updates a sql-server connection, as the update command does, changing its sql-server credentials with the flags below.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
+				group:   flagGroup{"sql-server", []string{"auth-mode", "db-name", "host", "kdc", "keytab-base64", "keytab-base64-prompt", "password", "password-prompt", "port", "principal", "realm", "user"}},
+				storage: "mc_managed",
+				build:   buildConnectionsUpdateSqlServer,
+			})
+		},
+	}
+	cmd.Flags().String("auth-mode", "", "How Monte Carlo signs in. sql takes user and password. kerberos takes realm, kdc, principal, and one of keytab_base64 or password.")
+	_ = cmd.RegisterFlagCompletionFunc("auth-mode", enumCompletion(sdk.AllowedSqlServerAuthModeEnumValues))
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. For kerberos, the fully qualified name the server's service principal is registered under.")
+	cmd.Flags().String("kdc", "", "Hostname of the key distribution center, optionally with :port, for kerberos.")
+	cmd.Flags().String("keytab-base64", "", "Base64-encoded keytab for principal, for kerberos. Send this or password. Stored by Monte Carlo and never returned. Visible in the process list; --keytab-base64-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("keytab-base64-prompt", false, "Read --keytab-base64 from a hidden prompt instead of the command line.")
+	cmd.Flags().String("password", "", "Password of user for sql, or of the Active Directory account behind principal for kerberos. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	cmd.Flags().String("principal", "", "Active Directory principal Monte Carlo signs in as, for kerberos.")
+	cmd.Flags().String("realm", "", "Kerberos realm, normally the Active Directory domain in capitals, for kerberos.")
+	cmd.Flags().String("user", "", "SQL login Monte Carlo signs in as, for sql.")
 	registerConnectionsUpdateFlags(cmd)
 	return cmd
 }
@@ -4767,6 +4976,7 @@ func newConnectionsUpdateAirflowCmd() *cobra.Command {
 // registerConnectionsUpdateFlags registers the flags every update command takes. A connection's
 // credentials keep their storage, so a native type's subcommand takes no self-hosted flags.
 func registerConnectionsUpdateFlags(cmd *cobra.Command) {
+	cmd.Flags().StringSlice("job-types", nil, "The connection's job types with etl added or removed. Adding etl turns on ETL collection for a Snowflake (Snowflake Tasks), Power BI (dataflows) or Salesforce Data Cloud connection, and creates the ETL container that etl_container_id then names. Removing it deletes that container. No other job can be added or removed. Omit it to leave the job types unchanged.")
 	cmd.Flags().String("name", "", "New display name for the connection. Omit it to leave the name unchanged. An explicit null is ignored, the same as omitting the field.")
 	cmd.Flags().Bool("validate-only", false, "Validate the credentials change and change nothing.")
 	cmd.Flags().Bool("skip-validations", false, "Change the credentials without validating them first, and without asking.")
@@ -6253,6 +6463,228 @@ func buildConnectionsUpdateSapHana(cmd *cobra.Command, api *sdk.APIClient, crede
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateSapHanaCredentials(ctx, credentialsId).SapHanaCredentialsPatch(*patch).Execute)
+			return resp, err
+		},
+	}, nil
+}
+
+func buildConnectionsUpdateSqlServer(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+	var err error
+	var authMode *sdk.SqlServerAuthMode
+	if changed(cmd, "auth-mode") {
+		authModeValue, err := flagString(cmd, "auth-mode")
+		if err != nil {
+			return nil, err
+		}
+		authMode, err = sdk.NewSqlServerAuthModeFromValue(authModeValue)
+		if err != nil {
+			return nil, usageError("%w", err)
+		}
+	}
+	var dbName string
+	if changed(cmd, "db-name") {
+		dbName, err = flagString(cmd, "db-name")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var host string
+	if changed(cmd, "host") {
+		host, err = flagString(cmd, "host")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var kdc string
+	if changed(cmd, "kdc") {
+		kdc, err = flagString(cmd, "kdc")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var keytabBase64 string
+	if changed(cmd, "keytab-base64", "keytab-base64-prompt") {
+		keytabBase64, err = flagSecret(cmd, "keytab-base64")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var password string
+	if changed(cmd, "password", "password-prompt") {
+		password, err = flagSecret(cmd, "password")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var port int32
+	if changed(cmd, "port") {
+		port, err = flagInt(cmd, "port")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var principal string
+	if changed(cmd, "principal") {
+		principal, err = flagString(cmd, "principal")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var realm string
+	if changed(cmd, "realm") {
+		realm, err = flagString(cmd, "realm")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var user string
+	if changed(cmd, "user") {
+		user, err = flagString(cmd, "user")
+		if err != nil {
+			return nil, err
+		}
+	}
+	patch := sdk.NewSqlServerCredentialsPatchWithDefaults()
+	if changed(cmd, "auth-mode") {
+		patch.SetAuthMode(*authMode)
+	}
+	if changed(cmd, "db-name") {
+		if dbName == "" {
+			patch.SetDbNameNil()
+		} else {
+			patch.SetDbName(dbName)
+		}
+	}
+	if changed(cmd, "host") {
+		if host == "" {
+			patch.SetHostNil()
+		} else {
+			patch.SetHost(host)
+		}
+	}
+	if changed(cmd, "kdc") {
+		if kdc == "" {
+			patch.SetKdcNil()
+		} else {
+			patch.SetKdc(kdc)
+		}
+	}
+	if changed(cmd, "keytab-base64", "keytab-base64-prompt") {
+		if keytabBase64 == "" {
+			patch.SetKeytabBase64Nil()
+		} else {
+			patch.SetKeytabBase64(keytabBase64)
+		}
+	}
+	if changed(cmd, "password", "password-prompt") {
+		if password == "" {
+			patch.SetPasswordNil()
+		} else {
+			patch.SetPassword(password)
+		}
+	}
+	if changed(cmd, "port") {
+		patch.SetPort(port)
+	}
+	if changed(cmd, "principal") {
+		if principal == "" {
+			patch.SetPrincipalNil()
+		} else {
+			patch.SetPrincipal(principal)
+		}
+	}
+	if changed(cmd, "realm") {
+		if realm == "" {
+			patch.SetRealmNil()
+		} else {
+			patch.SetRealm(realm)
+		}
+	}
+	if changed(cmd, "user") {
+		if user == "" {
+			patch.SetUserNil()
+		} else {
+			patch.SetUser(user)
+		}
+	}
+	return &connectionsUpdateCredentials{
+		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
+			stored, resp, err := api.CredentialsAPI.GetSqlServerCredentials(ctx, credentialsId).Execute()
+			if err != nil {
+				return nil, resp, err
+			}
+			candidate := sdk.NewSqlServerCredentialsValidateInWithDefaults()
+			var missing []string
+			candidate.SetDeploymentId(deploymentId)
+			if changed(cmd, "host") {
+				if host != "" {
+					candidate.SetHost(host)
+				}
+			} else if v, ok := stored.GetHostOk(); ok && v != nil {
+				candidate.SetHost(*v)
+			}
+			if changed(cmd, "port") {
+				candidate.SetPort(port)
+			} else if v, ok := stored.GetPortOk(); ok && v != nil {
+				candidate.SetPort(*v)
+			}
+			if changed(cmd, "auth-mode") {
+				candidate.SetAuthMode(*authMode)
+			} else if v, ok := stored.GetAuthModeOk(); ok && v != nil {
+				candidate.SetAuthMode(*v)
+			}
+			if changed(cmd, "db-name") {
+				if dbName != "" {
+					candidate.SetDbName(dbName)
+				}
+			} else if v, ok := stored.GetDbNameOk(); ok && v != nil {
+				candidate.SetDbName(*v)
+			}
+			if changed(cmd, "kdc") {
+				if kdc != "" {
+					candidate.SetKdc(kdc)
+				}
+			} else if v, ok := stored.GetKdcOk(); ok && v != nil {
+				candidate.SetKdc(*v)
+			}
+			if changed(cmd, "keytab-base64", "keytab-base64-prompt") {
+				if keytabBase64 != "" {
+					candidate.SetKeytabBase64(keytabBase64)
+				}
+			}
+			if changed(cmd, "password", "password-prompt") {
+				if password != "" {
+					candidate.SetPassword(password)
+				}
+			}
+			if changed(cmd, "principal") {
+				if principal != "" {
+					candidate.SetPrincipal(principal)
+				}
+			} else if v, ok := stored.GetPrincipalOk(); ok && v != nil {
+				candidate.SetPrincipal(*v)
+			}
+			if changed(cmd, "realm") {
+				if realm != "" {
+					candidate.SetRealm(realm)
+				}
+			} else if v, ok := stored.GetRealmOk(); ok && v != nil {
+				candidate.SetRealm(*v)
+			}
+			if changed(cmd, "user") {
+				if user != "" {
+					candidate.SetUser(user)
+				}
+			} else if v, ok := stored.GetUserOk(); ok && v != nil {
+				candidate.SetUser(*v)
+			}
+			if len(missing) > 0 {
+				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
+			}
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateSqlServerCredentials(ctx).SqlServerCredentialsValidateIn(*candidate).Execute)
+		},
+		patch: func(ctx context.Context) (*http.Response, error) {
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateSqlServerCredentials(ctx, credentialsId).SqlServerCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
@@ -9314,7 +9746,7 @@ func runConnectionsUpdate(cmd *cobra.Command, connectionId string, native *conne
 		}
 	}
 	changing := changed(cmd, credentialsFlags...)
-	renaming := changed(cmd, "name")
+	renaming := changed(cmd, "job-types", "name")
 	if !changing && !renaming {
 		return usageError("nothing to update: pass the flags of what changes")
 	}
@@ -9394,6 +9826,13 @@ func runConnectionsUpdate(cmd *cobra.Command, connectionId string, native *conne
 		}
 	}
 	rename := sdk.NewConnectionPatch()
+	if changed(cmd, "job-types") {
+		jobTypes, err := flagStringSlice(cmd, "job-types")
+		if err != nil {
+			return err
+		}
+		rename.SetJobTypes(jobTypes)
+	}
 	if changed(cmd, "name") {
 		name, err := flagString(cmd, "name")
 		if err != nil {
