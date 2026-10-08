@@ -15,6 +15,7 @@ import (
 
 	sdk "github.com/monte-carlo-data/mc-sdk-go/montecarlo"
 	"github.com/spf13/cobra"
+	"golang.org/x/oauth2"
 )
 
 // outputFormat is --output, else table on a terminal and json otherwise.
@@ -253,6 +254,17 @@ func apiErr(resp *http.Response, err error) error {
 
 // apiErrWithHint is apiErr with its own hint for a refused credential.
 func apiErrWithHint(resp *http.Response, err error, hint string) error {
+	// A refused OAuth client fails at the token exchange, before any API response exists.
+	var retrieve *oauth2.RetrieveError
+	if errors.As(err, &retrieve) && retrieve.Response != nil {
+		switch retrieve.Response.StatusCode {
+		case http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden:
+			return withExitCode(exitAuth, fmt.Errorf("%w\n%s", err, hint))
+		case http.StatusServiceUnavailable, http.StatusTooManyRequests:
+			return withExitCode(exitTransient, err)
+		}
+		return err
+	}
 	var apiError *sdk.GenericOpenAPIError
 	if !errors.As(err, &apiError) {
 		return err

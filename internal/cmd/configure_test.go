@@ -14,6 +14,12 @@ import (
 // runConfigure runs configure with input typed at a terminal, hidden answers included.
 func runConfigure(t *testing.T, input string, args ...string) (code int, stdout, stderr string) {
 	t.Helper()
+	return runConfigureIn(t, context.Background(), input, false, args...)
+}
+
+// runConfigureIn is runConfigure with a context; keepOpen leaves the input open after input.
+func runConfigureIn(t *testing.T, ctx context.Context, input string, keepOpen bool, args ...string) (code int, stdout, stderr string) {
+	t.Helper()
 	prevTerminal, prevPassword := isTerminal, readPassword
 	isTerminal = func(*os.File) bool { return true }
 	readPassword = func(f *os.File) ([]byte, error) {
@@ -27,14 +33,27 @@ func runConfigure(t *testing.T, input string, args ...string) (code int, stdout,
 	if _, err := w.WriteString(input); err != nil {
 		t.Fatal(err)
 	}
-	w.Close()
+	if keepOpen {
+		t.Cleanup(func() { w.Close() })
+	} else {
+		w.Close()
+	}
 	rootCmd.SetIn(r)
+	// Cobra keeps the context an earlier run gave the subcommand, so hand it this one, and
+	// leave neither it nor the root holding a cancelled one for the tests that follow.
+	configure, _, err := rootCmd.Find([]string{"configure"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	configure.SetContext(ctx)
 	t.Cleanup(func() {
+		configure.SetContext(context.Background())
+		rootCmd.SetContext(context.Background())
 		isTerminal, readPassword = prevTerminal, prevPassword
 		rootCmd.SetIn(nil)
 		r.Close()
 	})
-	return runExit(t, context.Background(), append([]string{"configure"}, args...)...)
+	return runExit(t, ctx, append([]string{"configure"}, args...)...)
 }
 
 func TestConfigureSetsUpAnAPIToken(t *testing.T) {
@@ -141,6 +160,45 @@ func TestConfigureFailsWhenInputEndsEarly(t *testing.T) {
 	dir := t.TempDir()
 	code, _, stderr := runConfigure(t, "2\n", "--config-dir", dir)
 	if code != exitFailure || !strings.Contains(stderr, "input ended before setup finished") {
+		t.Fatalf("exit %d; stderr:\n%s", code, stderr)
+	}
+	if _, err := os.Stat(profilesPath(dir)); !os.IsNotExist(err) {
+		t.Fatal("the file was written")
+	}
+}
+
+func TestConfigureSucceedsWhenInputEndsAtTheActiveProfileOffer(t *testing.T) {
+	dir := writeProfiles(t, legacyProfiles)
+	if err := setActiveProfile(dir, "staging"); err != nil {
+		t.Fatal(err)
+	}
+	code, stdout, stderr := runConfigure(t, "2\ni\n"+testAPIToken+"\n",
+		"--config-dir", dir, "--profile", "dev", "--no-validate")
+	if code != exitOK || !strings.Contains(stdout, `Wrote profile "dev"`) {
+		t.Fatalf("exit %d; stdout:\n%s\nstderr:\n%s", code, stdout, stderr)
+	}
+	if active, _ := activeProfile(dir); active != "staging" {
+		t.Fatalf("active = %q, want staging", active)
+	}
+}
+
+func TestConfigureRejectsCredentialFlags(t *testing.T) {
+	dir := t.TempDir()
+	code, _, stderr := runConfigure(t, "", "--config-dir", dir, "--api-id", "i")
+	if code != exitUsage || !strings.Contains(stderr, "profile set") {
+		t.Fatalf("exit %d; stderr:\n%s", code, stderr)
+	}
+	if _, err := os.Stat(profilesPath(dir)); !os.IsNotExist(err) {
+		t.Fatal("the file was written")
+	}
+}
+
+func TestConfigureStopsWhenCancelledAtAPrompt(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	dir := t.TempDir()
+	code, _, stderr := runConfigureIn(t, ctx, "", true, "--config-dir", dir)
+	if code != exitInterrupted {
 		t.Fatalf("exit %d; stderr:\n%s", code, stderr)
 	}
 	if _, err := os.Stat(profilesPath(dir)); !os.IsNotExist(err) {

@@ -17,7 +17,7 @@ const (
 	exitUsage       = 2   // the command line is wrong: an unknown command or flag, a bad value
 	exitNotFound    = 3   // the API answered 404
 	exitAuth        = 4   // the API refused the request: 401 or 403, or the token exchange refused an OAuth client
-	exitTransient   = 5   // the API was still answering 503 or 429 when the command ended
+	exitTransient   = 5   // the API or the OAuth token exchange was still answering 503 or 429 when the command ended
 	exitValidation  = 6   // the command ran, but the validations it ran did not pass
 	exitInterrupted = 130 // declined at a confirmation, or interrupted
 )

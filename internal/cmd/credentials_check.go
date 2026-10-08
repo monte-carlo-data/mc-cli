@@ -14,20 +14,19 @@ import (
 
 	sdk "github.com/monte-carlo-data/mc-sdk-go/montecarlo"
 	"github.com/spf13/cobra"
-	"golang.org/x/oauth2"
 )
 
 // validationTimeout bounds the call that checks new credentials; the API client has no timeout
 // of its own.
 var validationTimeout = 30 * time.Second
 
-// validateCredentials asks the API whom c belongs to. Only c and --endpoint are used, never the
-// environment or an existing profile, so the credentials are checked exactly as they will be
+// validationOptions builds the client options that check c. Only c and --endpoint are used, never
+// the environment or an existing profile, so the credentials are checked exactly as they will be
 // written.
-func validateCredentials(cmd *cobra.Command, c profileCredentials) (*sdk.CurrentUserOut, error) {
+func validationOptions(cmd *cobra.Command, c profileCredentials) (sdk.Options, error) {
 	endpoint, err := flagString(cmd, "endpoint")
 	if err != nil {
-		return nil, err
+		return sdk.Options{}, err
 	}
 	if endpoint == "" {
 		endpoint = defaultEndpoint
@@ -36,6 +35,15 @@ func validateCredentials(cmd *cobra.Command, c profileCredentials) (*sdk.Current
 	opts.Endpoint = endpoint
 	opts.ClientID, opts.ClientSecret, opts.Instance = c.ClientID, c.ClientSecret, c.Instance
 	opts.TokenID, opts.TokenSecret = c.APIID, c.APIToken
+	return opts, nil
+}
+
+// validateCredentials asks the API whom c belongs to.
+func validateCredentials(cmd *cobra.Command, c profileCredentials) (*sdk.CurrentUserOut, error) {
+	opts, err := validationOptions(cmd, c)
+	if err != nil {
+		return nil, err
+	}
 	api, err := sdk.NewClient(cmd.Context(), opts)
 	if err != nil {
 		return nil, err
@@ -51,13 +59,8 @@ func validateCredentials(cmd *cobra.Command, c profileCredentials) (*sdk.Current
 }
 
 // validationErr says whether the credentials were rejected, or could not be checked at all.
-// A rejected OAuth client fails at the token exchange, before any API response exists.
 func validationErr(resp *http.Response, err error) error {
 	err = apiErrWithHint(resp, err, "Check the credentials, and --endpoint if you passed one.")
-	var retrieve *oauth2.RetrieveError
-	if errors.As(err, &retrieve) && retrieve.Response != nil && retrieve.Response.StatusCode < http.StatusInternalServerError {
-		err = withExitCode(exitAuth, err)
-	}
 	code := exitFailure
 	var coded *exitError
 	if errors.As(err, &coded) {
@@ -115,8 +118,8 @@ func printWritten(w io.Writer, name, path string, madeActive bool) {
 	}
 }
 
-// printIdentity is the part of whoami that shows whether these are the credentials meant: who,
-// in which account, and with what access.
+// printIdentity shows whether these are the credentials meant: who, in which account, and with
+// what access.
 func printIdentity(w io.Writer, u *sdk.CurrentUserOut) {
 	who := u.GetEmail()
 	if name := strings.TrimSpace(u.GetFirstName() + " " + u.GetLastName()); name != "" {

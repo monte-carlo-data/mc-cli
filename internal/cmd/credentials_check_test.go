@@ -4,14 +4,20 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
+
+	sdk "github.com/monte-carlo-data/mc-sdk-go/montecarlo"
+	"github.com/spf13/cobra"
 )
 
 // credentialServer fakes the token exchange and the current-user call. A non-200 status makes
@@ -136,6 +142,10 @@ func TestProfileSetWritesNothingWhenValidationFails(t *testing.T) {
 		{"forbidden token", http.StatusOK, http.StatusForbidden, false, "", exitAuth, "were rejected"},
 		{"rejected OAuth client", http.StatusUnauthorized, http.StatusOK, true, "", exitAuth, "were rejected"},
 		{"invalid OAuth request", http.StatusBadRequest, http.StatusOK, true, "", exitAuth, "were rejected"},
+		{"forbidden OAuth client", http.StatusForbidden, http.StatusOK, true, "", exitAuth, "were rejected"},
+		{"token endpoint not found", http.StatusNotFound, http.StatusOK, true, "", exitFailure, "--no-validate"},
+		{"token endpoint rate limited", http.StatusTooManyRequests, http.StatusOK, true, "", exitTransient, "--no-validate"},
+		{"token endpoint unavailable", http.StatusServiceUnavailable, http.StatusOK, true, "", exitTransient, "--no-validate"},
 		{"token exchange down", http.StatusBadGateway, http.StatusOK, true, "", exitFailure, "--no-validate"},
 		{"API unavailable", http.StatusOK, http.StatusServiceUnavailable, false, "", exitTransient, "--no-validate"},
 		{"network failure", http.StatusOK, http.StatusOK, false, closed.URL, exitFailure, "--no-validate"},
@@ -167,16 +177,106 @@ func TestProfileSetWritesNothingWhenValidationFails(t *testing.T) {
 	}
 }
 
-// TestProfileSetValidatesOnlyWhatItWrites checks that neither the environment nor the profile
-// being replaced lends validation an endpoint or credentials.
-func TestProfileSetValidatesOnlyWhatItWrites(t *testing.T) {
-	srv, calls := credentialServer(t, http.StatusOK, http.StatusOK)
-	dir := writeProfiles(t, "[dev]\nmcd_api_endpoint = "+srv.URL+"/graphql\n")
-	closed := httptest.NewServer(http.NotFoundHandler())
-	closed.Close()
+// TestValidationOptionsIgnoreEnvironmentAndProfile checks that neither the environment nor a
+// profile lends validation an endpoint or credentials.
+func TestValidationOptionsIgnoreEnvironmentAndProfile(t *testing.T) {
+	home := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(home, ".mcd"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	profile := "[default]\nmcd_api_endpoint = http://elsewhere.example/graphql\n" +
+		"mcd_id = env-id\nmcd_token = env-token\n"
+	if err := os.WriteFile(filepath.Join(home, ".mcd", "profiles.ini"), []byte(profile), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", home)
+	t.Setenv("MCD_DEFAULT_PROFILE", "default")
+	t.Setenv("MCD_DEFAULT_API_ID", "env-id")
+	t.Setenv("MCD_DEFAULT_API_TOKEN", "env-token")
 
-	code, _, stderr := runExit(t, context.Background(), tokenSetArgs(dir, closed.URL)...)
-	if code != exitFailure || calls.Load() != 0 {
-		t.Fatalf("exit %d, %d calls to the profile's endpoint; stderr:\n%s", code, calls.Load(), stderr)
+	cases := []struct{ name, endpoint, want string }{
+		{"default endpoint", "", defaultEndpoint},
+		{"endpoint flag", "https://custom.example", "https://custom.example"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd := &cobra.Command{Use: "t"}
+			cmd.Flags().String("endpoint", "", "")
+			if tc.endpoint != "" {
+				if err := cmd.Flags().Set("endpoint", tc.endpoint); err != nil {
+					t.Fatal(err)
+				}
+			}
+			opts, err := validationOptions(cmd, profileCredentials{APIID: "i", APIToken: testAPIToken})
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := opts.Resolve()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Endpoint != tc.want || got.TokenID != "i" || got.TokenSecret != testAPIToken {
+				t.Fatalf("got endpoint %q, token id %q, secret %q", got.Endpoint, got.TokenID, got.TokenSecret)
+			}
+		})
+	}
+}
+
+func TestProfileSetTimesOutHangingValidation(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v2/users/me" {
+			http.NotFound(w, r)
+			return
+		}
+		<-r.Context().Done()
+	}))
+	t.Cleanup(func() {
+		srv.CloseClientConnections()
+		srv.Close()
+	})
+	orig := validationTimeout
+	validationTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { validationTimeout = orig })
+
+	dir := t.TempDir()
+	code, _, stderr := runExit(t, context.Background(), tokenSetArgs(dir, srv.URL)...)
+	if code != exitFailure || !strings.Contains(stderr, "--no-validate") {
+		t.Fatalf("exit %d, want %d; stderr:\n%s", code, exitFailure, stderr)
+	}
+	if _, err := os.Stat(profilesPath(dir)); !os.IsNotExist(err) {
+		t.Fatal("a timed-out validation wrote the file")
+	}
+}
+
+func TestProfileSetReportsInactiveProfile(t *testing.T) {
+	srv, _ := credentialServer(t, http.StatusOK, http.StatusOK)
+	dir := writeProfiles(t, legacyProfiles)
+	if err := setActiveProfile(dir, "staging"); err != nil {
+		t.Fatal(err)
+	}
+	out, err := execute(t, tokenSetArgs(dir, srv.URL)...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got profileWrittenJSON
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("not JSON: %v\n%s", err, out)
+	}
+	if got.Active || !got.Validated {
+		t.Fatalf("got %+v", got)
+	}
+}
+
+func TestPrintIdentityFallsBackWhenFieldsAreMissing(t *testing.T) {
+	var u sdk.CurrentUserOut
+	body := `{"user_id":"u","email":"e@example.com","identity_type":"service","account_id":"acct-1","account_frozen":false}`
+	if err := json.Unmarshal([]byte(body), &u); err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	printIdentity(&buf, &u)
+	want := "Validated: e@example.com, account acct-1\n  identity: service   groups: none\n"
+	if buf.String() != want {
+		t.Fatalf("got:\n%s\nwant:\n%s", buf.String(), want)
 	}
 }

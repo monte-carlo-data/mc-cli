@@ -171,8 +171,8 @@ Scripts can tell failures apart by the exit code:
 | 1 | The command failed for a reason not listed below: an API error such as a 500 or a 409, a network failure, or a local error. |
 | 2 | The command line is wrong: an unknown command or flag, a flag value of the wrong type or outside its allowed values, a missing argument or required flag, a `@<path>` that cannot be read, flags that do not go together, or something that needs a terminal run without one: a confirmation without `--yes`, a `--<name>-prompt`, or `configure`. |
 | 3 | Not found: the API answered 404. |
-| 4 | The API refused the request: it answered 401 (credentials rejected) or 403 (not permitted). `profile set` and `configure` also exit 4 when the OAuth token exchange rejects the client. |
-| 5 | The API answered 503 or 429, unavailable or limiting requests, and was still answering it when the command ended, after any retries. |
+| 4 | The API refused the request: it answered 401 (credentials rejected) or 403 (not permitted). The OAuth token exchange refusing the client (400, 401 or 403) exits 4 too. |
+| 5 | The API or the OAuth token exchange answered 503 or 429, unavailable or limiting requests, and was still answering it when the command ended, after any retries. |
 | 6 | The validations the command ran did not all pass. |
 | 130 | A confirmation was declined, or the command was interrupted with Ctrl-C or SIGTERM. |
 

@@ -31,12 +31,17 @@ Choose an OAuth client, with its client id, secret and instance, or an API token
 and secret. Secrets are read with echo off. Nothing is written unless Monte Carlo accepts the
 credentials; --no-validate writes them without checking.
 
-The credential flags are not read here; every value is asked for. --endpoint only changes where
-the credentials are checked, and is not written to the profile.
+The first profile written becomes the active one; when another is active, configure offers to
+switch. --endpoint only changes where the credentials are checked, and is not written to the
+profile. Output is always text, whatever --output says.
 
 configure needs a terminal. To write a profile from a script, use "` + binaryName + ` profile set".`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if changed(cmd, "client-id", "client-secret", "client-secret-prompt", "instance",
+				"api-id", "api-token", "api-token-prompt") {
+				return usageError("configure asks for every value; to pass credentials as flags, use \"%s profile set\"", binaryName)
+			}
 			name, err := flagString(cmd, "profile")
 			if err != nil {
 				return err
@@ -79,12 +84,17 @@ configure needs a terminal. To write a profile from a script, use "` + binaryNam
 			if err != nil {
 				return err
 			}
-			if !madeActive {
-				if madeActive, err = p.offerActive(dir, name); err != nil {
-					return err
-				}
-			}
 			printWritten(out, name, path, madeActive)
+			if madeActive {
+				return nil
+			}
+			switched, err := p.offerActive(dir, name)
+			if err != nil {
+				return err
+			}
+			if switched {
+				fmt.Fprintf(out, "Profile %q is now the active profile\n", name)
+			}
 			return nil
 		},
 	}
@@ -135,7 +145,8 @@ func (p *prompter) credentials() (profileCredentials, error) {
 	return c, err
 }
 
-// offerActive asks to make name the active profile when another one is.
+// offerActive asks to make name the active profile when another one is, and reports whether it
+// did. Input that ends or is cancelled at the question counts as no; the profile is written.
 func (p *prompter) offerActive(dir, name string) (bool, error) {
 	active, err := activeProfile(dir)
 	if err != nil || active == name {
@@ -143,9 +154,12 @@ func (p *prompter) offerActive(dir, name string) (bool, error) {
 	}
 	answer, err := p.read(fmt.Sprintf("Make %q the active profile instead of %q? [y/N] ", name, active), false)
 	if err != nil || !confirmed(answer) {
+		return false, nil
+	}
+	if err := setActiveProfile(dir, name); err != nil {
 		return false, err
 	}
-	return true, setActiveProfile(dir, name)
+	return true, nil
 }
 
 // ask repeats the question until the answer is not empty and check, when given, accepts it.
