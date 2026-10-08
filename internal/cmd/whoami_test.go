@@ -4,6 +4,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -107,5 +108,29 @@ func TestWhoamiJSON(t *testing.T) {
 	}
 	if got["email"] != "ada@example.com" {
 		t.Fatalf("email = %v", got["email"])
+	}
+}
+
+// A refused OAuth client fails at the token exchange, not with an API response; whoami exits 4.
+func TestWhoamiOAuthClientRejectedExitsAuth(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/oauth2/token" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"error":"invalid_client"}`))
+			return
+		}
+		t.Errorf("unexpected request to %s", r.URL.Path)
+	}))
+	defer srv.Close()
+
+	code, _, stderr := runExit(t, context.Background(), "whoami",
+		"--client-id", "cid", "--client-secret", "sec", "--instance", "us1",
+		"--endpoint", srv.URL, "--config-dir", t.TempDir())
+	if code != exitAuth {
+		t.Errorf("exit code = %d, want %d; stderr: %s", code, exitAuth, stderr)
+	}
+	if !strings.Contains(stderr, "Check the credentials") {
+		t.Errorf("stderr lacks the hint: %s", stderr)
 	}
 }

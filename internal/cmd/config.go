@@ -17,6 +17,9 @@ const (
 	keyClientID  = "mcd_oauth_client_id"
 	keySecret    = "mcd_oauth_client_secret"
 	keyInstance  = "mcd_instance_id"
+	// keyEndpoint holds a GraphQL URL in every Monte Carlo tool; the SDK derives the REST base
+	// from it by dropping /graphql.
+	keyEndpoint = "mcd_api_endpoint"
 )
 
 // The CLI's own settings file, beside profiles.ini. The other tools do not read it.

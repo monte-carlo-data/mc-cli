@@ -15,6 +15,7 @@ import (
 
 	sdk "github.com/monte-carlo-data/mc-sdk-go/montecarlo"
 	"github.com/spf13/cobra"
+	"golang.org/x/oauth2"
 )
 
 // outputFormat is --output, else table on a terminal and json otherwise.
@@ -242,14 +243,33 @@ func cell(v any) string {
 	return string(raw)
 }
 
-// apiErr renders an API failure, carrying the exit code its status maps to. Any other error is
-// returned as it is.
+// authHint follows a 401 or 403 the gateway answered without a problem document.
+const authHint = "Check the credentials and --endpoint, or the profile they come from."
+
+// apiErr renders an API failure, or a token-exchange failure, carrying the exit code its status
+// maps to. Any other error is returned as it is.
 func apiErr(resp *http.Response, err error) error {
+	return apiErrWithHint(resp, err, authHint)
+}
+
+// apiErrWithHint is apiErr with its own hint for a refused credential.
+func apiErrWithHint(resp *http.Response, err error, hint string) error {
+	// A refused OAuth client fails at the token exchange, before any API response exists.
+	var retrieve *oauth2.RetrieveError
+	if errors.As(err, &retrieve) && retrieve.Response != nil {
+		switch retrieve.Response.StatusCode {
+		case http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden:
+			return withExitCode(exitAuth, fmt.Errorf("%w\n%s", err, hint))
+		case http.StatusServiceUnavailable, http.StatusTooManyRequests:
+			return withExitCode(exitTransient, err)
+		}
+		return err
+	}
 	var apiError *sdk.GenericOpenAPIError
 	if !errors.As(err, &apiError) {
 		return err
 	}
-	return withExitCode(statusExitCode(resp, apiError), renderAPIErr(resp, err, apiError))
+	return withExitCode(statusExitCode(resp, apiError), renderAPIErr(resp, err, apiError, hint))
 }
 
 // statusExitCode is the exit code for a failed call's status, taken from the response, else
@@ -274,8 +294,9 @@ func statusExitCode(resp *http.Response, apiError *sdk.GenericOpenAPIError) int 
 
 // renderAPIErr builds the message. With a problem document: its detail, code and request id,
 // then one line per invalid field. Without one, the request, the status and the body's message,
-// which is what the API gateway answers when a credential or a URL is wrong.
-func renderAPIErr(resp *http.Response, err error, apiError *sdk.GenericOpenAPIError) error {
+// which is what the API gateway answers when a credential or a URL is wrong, and hint when the
+// status is 401 or 403.
+func renderAPIErr(resp *http.Response, err error, apiError *sdk.GenericOpenAPIError, hint string) error {
 	if problem, ok := apiError.Model().(sdk.ProblemOut); ok {
 		var b strings.Builder
 		fmt.Fprintf(&b, "%s (%s, request %s)", problem.GetDetail(), problem.GetCode(), problem.GetRequestId())
@@ -296,7 +317,7 @@ func renderAPIErr(resp *http.Response, err error, apiError *sdk.GenericOpenAPIEr
 		msg += ": " + body
 	}
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		msg += "\nCheck the credentials and --endpoint, or the profile they come from."
+		msg += "\n" + hint
 	}
 	return errors.New(msg)
 }

@@ -9,9 +9,10 @@ import (
 
 func init() {
 	rootCmd.AddCommand(&cobra.Command{
-		Use:   "whoami",
-		Short: "Show the user and account the credentials belong to",
-		Args:  cobra.NoArgs,
+		Use:     "whoami",
+		GroupID: groupGettingStarted,
+		Short:   "Show the user and account the credentials belong to",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			api, ctx, err := apiClient(cmd)
 			if err != nil {

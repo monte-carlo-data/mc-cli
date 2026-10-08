@@ -5,7 +5,10 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -51,22 +54,19 @@ func clientOptions(cmd *cobra.Command) (sdk.Options, error) {
 	if err != nil {
 		return sdk.Options{}, err
 	}
-	v, _, _ := resolvedVersion()
-	opts := sdk.Options{
-		Endpoint:     str("endpoint"),
-		ClientID:     str("client-id"),
-		ClientSecret: clientSecret,
-		Instance:     str("instance"),
-		TokenID:      str("api-id"),
-		TokenSecret:  apiToken,
-		Profile:      str("profile"),
-		ConfigDir:    dir,
-		UserAgent:    binaryName + "/" + v,
-		// The gateway drops User-Agent, so these are what identify the CLI to usage telemetry.
-		TelemetryReason:  "cli",
-		TelemetryService: "mc-cli",
-		TelemetryCommand: telemetryCommand(cmd),
+	endpoint, err := endpointFlag(cmd)
+	if err != nil {
+		return sdk.Options{}, err
 	}
+	opts := cliOptions(cmd)
+	opts.Endpoint = endpoint
+	opts.ClientID = str("client-id")
+	opts.ClientSecret = clientSecret
+	opts.Instance = str("instance")
+	opts.TokenID = str("api-id")
+	opts.TokenSecret = apiToken
+	opts.Profile = str("profile")
+	opts.ConfigDir = dir
 
 	// The active profile set with "profile use" is a CLI-only fallback, layered in only when
 	// nothing else names a profile or already supplies a complete credential mechanism. Once
@@ -96,6 +96,65 @@ func clientOptions(cmd *cobra.Command) (sdk.Options, error) {
 		resolved.Endpoint = defaultEndpoint
 	}
 	return resolved, nil
+}
+
+// endpointFlag is --endpoint as an API base URL, or empty when it was not passed.
+func endpointFlag(cmd *cobra.Command) (string, error) {
+	v, err := flagString(cmd, "endpoint")
+	if err != nil {
+		return "", err
+	}
+	endpoint, err := normalizeEndpoint(v)
+	if err != nil {
+		return "", usageError("--endpoint %q is not an https URL", endpoint)
+	}
+	return endpoint, nil
+}
+
+// storedEndpoint is the endpoint stored in the profile name, or empty when it has none. It reads
+// that one key and nothing else.
+func storedEndpoint(dir, name string) (string, error) {
+	f, err := loadINI(profilesPath(dir))
+	if err != nil {
+		return "", err
+	}
+	value, ok := f.get(name, keyEndpoint)
+	if !ok {
+		return "", nil
+	}
+	endpoint, err := normalizeEndpoint(value)
+	if err != nil {
+		return "", fmt.Errorf("profile %q: %s %q is not an https URL; pass --endpoint", name, keyEndpoint, value)
+	}
+	return endpoint, nil
+}
+
+// normalizeEndpoint returns v as an API base URL, empty for empty input. A trailing /graphql,
+// which a URL copied from another Monte Carlo tool carries, is dropped. Only https is accepted,
+// and http to a loopback host.
+func normalizeEndpoint(v string) (string, error) {
+	v = strings.TrimSuffix(strings.TrimRight(strings.TrimSpace(v), "/"), "/graphql")
+	if v == "" {
+		return "", nil
+	}
+	u, err := url.Parse(v)
+	loopback := err == nil && (u.Hostname() == "localhost" || net.ParseIP(u.Hostname()).IsLoopback())
+	if err != nil || u.Host == "" || (u.Scheme != "https" && !(u.Scheme == "http" && loopback)) {
+		return v, errors.New("not an https URL")
+	}
+	return v, nil
+}
+
+// cliOptions is the Options every client the CLI builds starts from: how it identifies itself.
+func cliOptions(cmd *cobra.Command) sdk.Options {
+	v, _, _ := resolvedVersion()
+	return sdk.Options{
+		UserAgent: binaryName + "/" + v,
+		// The gateway drops User-Agent, so these are what identify the CLI to usage telemetry.
+		TelemetryReason:  "cli",
+		TelemetryService: "mc-cli",
+		TelemetryCommand: telemetryCommand(cmd),
+	}
 }
 
 // telemetryCommand names the command without the binary, e.g. "connections add snowflake".

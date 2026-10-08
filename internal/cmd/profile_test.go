@@ -4,6 +4,8 @@
 package cmd
 
 import (
+	"context"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,7 +14,7 @@ import (
 
 func TestProfileSetWritesOAuthAndBecomesActive(t *testing.T) {
 	dir := t.TempDir()
-	out, err := execute(t, "profile", "set", "dev", "--config-dir", dir,
+	out, err := execute(t, "profile", "set", "dev", "--config-dir", dir, "--no-validate", "--output", "table",
 		"--client-id", "cid", "--client-secret", "sec", "--instance", "us1")
 	if err != nil {
 		t.Fatal(err)
@@ -35,7 +37,7 @@ func TestProfileSetSwitchesMechanismAndKeepsForeignKeys(t *testing.T) {
 	if err := setActiveProfile(dir, "staging"); err != nil {
 		t.Fatal(err)
 	}
-	out, err := execute(t, "profile", "set", "default", "--config-dir", dir,
+	out, err := execute(t, "profile", "set", "default", "--config-dir", dir, "--no-validate", "--output", "table",
 		"--client-id", "cid", "--client-secret", "sec", "--instance", "eu1")
 	if err != nil {
 		t.Fatal(err)
@@ -77,6 +79,43 @@ func TestProfileSetRefusesMixedOrPartialCredentials(t *testing.T) {
 	}
 	if _, err := os.Stat(profilesPath(dir)); !os.IsNotExist(err) {
 		t.Fatal("a refused set wrote the file")
+	}
+}
+
+// testAPIToken has the length of a real API token secret.
+var testAPIToken = strings.Repeat("t", apiTokenLength)
+
+func TestProfileSetTrimsPastedValues(t *testing.T) {
+	dir := t.TempDir()
+	tokenFile := filepath.Join(t.TempDir(), "token")
+	if err := os.WriteFile(tokenFile, []byte("  "+testAPIToken+" \n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := execute(t, "profile", "set", "dev", "--config-dir", dir, "--no-validate",
+		"--api-id", " i\t", "--api-token", "@"+tokenFile); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(profilesPath(dir))
+	want := "[dev]\nmcd_id = i\nmcd_token = " + testAPIToken + "\n"
+	if string(got) != want {
+		t.Fatalf("profiles.ini:\n%s", got)
+	}
+}
+
+func TestProfileSetRejectsMalformedValues(t *testing.T) {
+	dir := t.TempDir()
+	cases := map[string][]string{
+		"not an instance id": {"--client-id", "c", "--client-secret", "s", "--instance", "us1.eu"},
+		"is 5 characters":    {"--api-id", "i", "--api-token", "short"},
+	}
+	for want, flags := range cases {
+		code, _, stderr := runExit(t, context.Background(), append([]string{"profile", "set", "p", "--config-dir", dir}, flags...)...)
+		if code != exitUsage || !strings.Contains(stderr, want) {
+			t.Errorf("%v: exit %d, stderr %q, want %q", flags, code, stderr, want)
+		}
+	}
+	if _, err := os.Stat(profilesPath(dir)); !os.IsNotExist(err) {
+		t.Fatal("a rejected set wrote the file")
 	}
 }
 
@@ -191,5 +230,116 @@ func TestResolvedProfileNameIsEmptyWithNoSignal(t *testing.T) {
 	}
 	if got, err := resolvedProfileName(dir, f); err != nil || got != "" {
 		t.Fatalf("got %q, %v", got, err)
+	}
+}
+
+// TestProfileSetHelpListsTheCredentialFlagsAsItsOwn checks that help shows the credentials
+// profile set writes among its own flags, not under the global ones that read credentials.
+func TestProfileSetHelpListsTheCredentialFlagsAsItsOwn(t *testing.T) {
+	out, err := execute(t, "profile", "set", "--help")
+	if err != nil {
+		t.Fatal(err)
+	}
+	own, global, ok := strings.Cut(out, "Global Flags:")
+	if !ok || !strings.Contains(own, "Examples:") {
+		t.Fatalf("help:\n%s", out)
+	}
+	for _, flag := range []string{"--client-id", "--client-secret", "--client-secret-prompt", "--instance",
+		"--api-id", "--api-token", "--api-token-prompt", "--no-validate"} {
+		if !strings.Contains(own, flag+" ") {
+			t.Errorf("%s is not among the command's flags", flag)
+		}
+		if strings.Contains(global, flag+" ") {
+			t.Errorf("%s is still listed as a global flag", flag)
+		}
+	}
+}
+
+func TestProfileSetReadsAPromptedSecretThroughItsOwnFlag(t *testing.T) {
+	prevTerminal, prevPassword := isTerminal, readPassword
+	isTerminal = func(*os.File) bool { return true }
+	readPassword = func(*os.File) ([]byte, error) { return []byte(testAPIToken), nil }
+	f, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rootCmd.SetIn(f)
+	t.Cleanup(func() {
+		isTerminal, readPassword = prevTerminal, prevPassword
+		rootCmd.SetIn(nil)
+		f.Close()
+	})
+
+	dir := t.TempDir()
+	if _, err := execute(t, "profile", "set", "dev", "--config-dir", dir, "--no-validate",
+		"--api-id", "i", "--api-token-prompt"); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(profilesPath(dir))
+	if !strings.Contains(string(got), "mcd_token = "+testAPIToken+"\n") {
+		t.Fatalf("profiles.ini:\n%s", got)
+	}
+}
+
+func TestProfileSetStoresANonDefaultEndpoint(t *testing.T) {
+	srv, calls := credentialServer(t, http.StatusOK, http.StatusOK)
+	dir := t.TempDir()
+	// A URL copied from another tool carries /graphql; it is checked and stored without doubling.
+	if _, err := execute(t, "profile", "set", "dev", "--config-dir", dir, "--endpoint", srv.URL+"/graphql/",
+		"--api-id", "i", "--api-token", testAPIToken); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(profilesPath(dir))
+	if !strings.Contains(string(got), "mcd_api_endpoint = "+srv.URL+"/graphql\n") {
+		t.Fatalf("profiles.ini:\n%s", got)
+	}
+
+	// Later commands with the profile use the stored endpoint without --endpoint.
+	if _, err := execute(t, "whoami", "--config-dir", dir, "--profile", "dev"); err != nil {
+		t.Fatal(err)
+	}
+	if calls.Load() != 2 {
+		t.Fatalf("%d calls reached the stored endpoint, want 2", calls.Load())
+	}
+}
+
+func TestProfileSetEndpointRules(t *testing.T) {
+	const stored = "[dev]\nmcd_api_endpoint = https://dev.example/graphql\n"
+	cases := []struct {
+		name     string
+		endpoint []string
+		want     string
+	}{
+		{"not passed keeps a stored endpoint", nil, "mcd_api_endpoint = https://dev.example/graphql\n"},
+		{"the default removes it", []string{"--endpoint", defaultEndpoint + "/"}, ""},
+		{"another replaces it", []string{"--endpoint", "https://other.example"}, "mcd_api_endpoint = https://other.example/graphql\n"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := writeProfiles(t, stored)
+			args := append([]string{"profile", "set", "dev", "--config-dir", dir, "--no-validate",
+				"--api-id", "i", "--api-token", testAPIToken}, tc.endpoint...)
+			if _, err := execute(t, args...); err != nil {
+				t.Fatal(err)
+			}
+			got, _ := os.ReadFile(profilesPath(dir))
+			if tc.want == "" && strings.Contains(string(got), "mcd_api_endpoint") || !strings.Contains(string(got), tc.want) {
+				t.Fatalf("profiles.ini:\n%s", got)
+			}
+		})
+	}
+}
+
+func TestProfileSetRejectsAnEndpointThatIsNotHTTPS(t *testing.T) {
+	for _, endpoint := range []string{"http://dev.example", "ftp://dev.example", "dev.example"} {
+		dir := t.TempDir()
+		code, _, stderr := runExit(t, context.Background(), "profile", "set", "dev", "--config-dir", dir,
+			"--no-validate", "--endpoint", endpoint, "--api-id", "i", "--api-token", testAPIToken)
+		if code != exitUsage || !strings.Contains(stderr, "not an https URL") {
+			t.Errorf("%s: exit %d, stderr %q", endpoint, code, stderr)
+		}
+		if _, err := os.Stat(profilesPath(dir)); !os.IsNotExist(err) {
+			t.Errorf("%s: the file was written", endpoint)
+		}
 	}
 }

@@ -48,12 +48,22 @@ func resetFlags(cmd *cobra.Command) {
 	}
 }
 
+// setContexts gives every command in the tree ctx. Cobra hands a subcommand a context only
+// when it has none, so one a previous run left, possibly cancelled, would otherwise stay.
+func setContexts(cmd *cobra.Command, ctx context.Context) {
+	cmd.SetContext(ctx)
+	for _, sub := range cmd.Commands() {
+		setContexts(sub, ctx)
+	}
+}
+
 // executeStreams runs the root command with args and returns what it wrote to stdout and to
 // stderr separately.
 func executeStreams(t *testing.T, args ...string) (stdout, stderr string, err error) {
 	t.Helper()
 	isolateEnv(t)
 	resetFlags(rootCmd)
+	setContexts(rootCmd, context.Background())
 	var outBuf, errBuf bytes.Buffer
 	rootCmd.SetOut(&outBuf)
 	rootCmd.SetErr(&errBuf)
@@ -72,6 +82,7 @@ func runExit(t *testing.T, ctx context.Context, args ...string) (code int, stdou
 	t.Helper()
 	isolateEnv(t)
 	resetFlags(rootCmd)
+	setContexts(rootCmd, ctx)
 	var outBuf, errBuf bytes.Buffer
 	t.Cleanup(func() {
 		rootCmd.SetOut(nil)
