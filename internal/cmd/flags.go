@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
 )
 
 // flagString is the flag's value, taken literally. A leading @ is not expanded; only
@@ -88,8 +87,7 @@ func readSecret(cmd *cobra.Command, name string) (string, error) {
 		return "", usageError("--%s-prompt needs a terminal; pass --%s @<path> instead", name, name)
 	}
 	fmt.Fprintf(cmd.ErrOrStderr(), "%s: ", name)
-	f := cmd.InOrStdin().(*os.File)
-	secret, err := term.ReadPassword(int(f.Fd()))
+	secret, err := readPassword(cmd.InOrStdin().(*os.File))
 	fmt.Fprintln(cmd.ErrOrStderr())
 	if err != nil {
 		return "", err

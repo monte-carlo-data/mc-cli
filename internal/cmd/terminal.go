@@ -13,6 +13,9 @@ import (
 // isTerminal reports whether f is a terminal. Tests replace it.
 var isTerminal = func(f *os.File) bool { return term.IsTerminal(int(f.Fd())) }
 
+// readPassword reads one line from the terminal f with echo off. Tests replace it.
+var readPassword = func(f *os.File) ([]byte, error) { return term.ReadPassword(int(f.Fd())) }
+
 // stdinIsTerminal reports whether the command's input is a terminal. Input a test injects
 // with cmd.SetIn is never one.
 func stdinIsTerminal(cmd *cobra.Command) bool {

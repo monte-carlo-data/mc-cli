@@ -170,11 +170,32 @@ func (c *profileCredentials) check() error {
 	case !oauth && !token:
 		return usageError("pass --client-id, --client-secret and --instance, or --api-id and --api-token")
 	}
-	if c.Instance != "" && !instancePattern.MatchString(c.Instance) {
-		return usageError("--instance %q is not an instance id; it is letters, digits and hyphens, for example us1", c.Instance)
+	if c.Instance != "" {
+		if err := checkInstance(c.Instance); err != nil {
+			return usageError("--instance %v", err)
+		}
 	}
-	if token && len(c.APIToken) != apiTokenLength {
-		return usageError("--api-token is %d characters, but an API token is %d; check it was copied whole", len(c.APIToken), apiTokenLength)
+	if token {
+		if err := checkAPIToken(c.APIToken); err != nil {
+			return usageError("--api-token %v", err)
+		}
+	}
+	return nil
+}
+
+// checkInstance rejects a value that cannot be an instance id.
+func checkInstance(v string) error {
+	if !instancePattern.MatchString(v) {
+		return fmt.Errorf("%q is not an instance id; it is letters, digits and hyphens, for example us1", v)
+	}
+	return nil
+}
+
+// checkAPIToken rejects an API token secret of the wrong length, which is what a partial paste
+// leaves.
+func checkAPIToken(v string) error {
+	if len(v) != apiTokenLength {
+		return fmt.Errorf("is %d characters, but an API token is %d; check it was copied whole", len(v), apiTokenLength)
 	}
 	return nil
 }

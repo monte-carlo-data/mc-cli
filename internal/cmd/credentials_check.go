@@ -103,11 +103,16 @@ func reportProfileWritten(cmd *cobra.Command, dir, name, path string, madeActive
 	if user != nil {
 		printIdentity(out, user)
 	}
-	fmt.Fprintf(out, "Wrote profile %q to %s\n", name, path)
-	if madeActive {
-		fmt.Fprintf(out, "Profile %q is now the active profile\n", name)
-	}
+	printWritten(out, name, path, madeActive)
 	return nil
+}
+
+// printWritten says where the profile went, and whether it became the active one.
+func printWritten(w io.Writer, name, path string, madeActive bool) {
+	fmt.Fprintf(w, "Wrote profile %q to %s\n", name, path)
+	if madeActive {
+		fmt.Fprintf(w, "Profile %q is now the active profile\n", name)
+	}
 }
 
 // printIdentity is the part of whoami that shows whether these are the credentials meant: who,
