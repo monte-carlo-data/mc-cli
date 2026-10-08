@@ -71,7 +71,10 @@ command does not know are left as they are. The first profile written becomes th
 The credentials are checked with Monte Carlo first, and nothing is written unless they are
 accepted; --no-validate skips the check. --endpoint changes where they are checked, but is not
 written to the profile. Only the flags below are written: the MCD_DEFAULT_* environment variables
-do not apply to this command.`,
+do not apply to this command.
+
+As JSON, the result is one object: profile, path, active, validated, and user, the user the
+credentials belong to, which is null when they were not checked.`,
 		Example: `  # An OAuth client, with the secret read from a hidden prompt
   ` + binaryName + ` profile set prod --client-id <id> --client-secret-prompt --instance us1
 

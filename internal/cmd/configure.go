@@ -31,6 +31,9 @@ Choose an OAuth client, with its client id, secret and instance, or an API token
 and secret. Secrets are read with echo off. Nothing is written unless Monte Carlo accepts the
 credentials; --no-validate writes them without checking.
 
+The credential flags are not read here; every value is asked for. --endpoint only changes where
+the credentials are checked, and is not written to the profile.
+
 configure needs a terminal. To write a profile from a script, use "` + binaryName + ` profile set".`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
