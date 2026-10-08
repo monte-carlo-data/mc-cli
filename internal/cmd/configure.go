@@ -21,8 +21,9 @@ func init() {
 
 func newConfigureCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "configure",
-		Short: "Set up credentials interactively",
+		Use:     "configure",
+		GroupID: groupGettingStarted,
+		Short:   "Set up credentials interactively",
 		Long: `Set up credentials by answering a few prompts, then check them with Monte Carlo and write
 them to the profile --profile names, "default" when it is not passed.
 

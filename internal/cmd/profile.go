@@ -19,12 +19,16 @@ func init() {
 
 func newProfileCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "profile",
-		Short: "Manage the profiles in profiles.ini",
-		Long: `Manage the profiles in ~/.mcd/profiles.ini, the credentials file every Monte Carlo tool shares.
+		Use:     "profile",
+		GroupID: groupGettingStarted,
+		Short:   "Set up credentials non-interactively, and manage profiles",
+		Long: `Set up credentials without prompts, for scripts and CI, and manage the profiles in
+~/.mcd/profiles.ini, the credentials file every Monte Carlo tool shares. "` + binaryName + ` configure"
+sets them up interactively instead.
 
 A profile holds either OAuth client credentials with the instance they belong to, or an API
-token. "profile use" picks the profile commands run with when --profile is not passed.`,
+token. "profile set" writes one, "profile use" picks the profile commands run with when
+--profile is not passed, and "profile list" shows them.`,
 	}
 	cmd.AddCommand(newProfileSetCmd(), newProfileUseCmd(), newProfileListCmd())
 	return cmd

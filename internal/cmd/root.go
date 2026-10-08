@@ -34,11 +34,13 @@ func newRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   binaryName,
 		Short: "Monte Carlo from the command line",
-		Long: binaryName + ` talks to the Monte Carlo REST API.
+		Long: `Get started: run "` + binaryName + ` configure" to set up your credentials.
+
+` + binaryName + ` talks to the Monte Carlo REST API.
 
 Credentials come from flags, then the MCD_DEFAULT_* environment variables, then a profile in
-~/.mcd/profiles.ini, the file every Monte Carlo tool shares. Run "` + binaryName + ` profile set"
-to write one.
+~/.mcd/profiles.ini, the file every Monte Carlo tool shares. "` + binaryName + ` configure" writes one
+interactively, and "` + binaryName + ` profile set" writes one from a script.
 
 Credentials resolve as a set: pass a complete mechanism, either an API token pair or an OAuth
 client, or none and let the environment or the profile supply one.
@@ -53,6 +55,11 @@ A secret flag accepts @<path> to read its value from a file, and has a --<name>-
 			return err
 		},
 	}
+
+	cmd.AddGroup(
+		&cobra.Group{ID: groupGettingStarted, Title: "Getting started:"},
+		&cobra.Group{ID: groupResources, Title: "Resources:"},
+	)
 
 	// These names are reserved. The generator keeps the same list and refuses a body or query
 	// flag that collides with one, so adding a flag here means adding it there.
@@ -88,6 +95,26 @@ A secret flag accepts @<path> to read its value from a file, and has a --<name>-
 
 var rootCmd = newRootCmd()
 
+// The root's command groups. Help lists them in this order, then any command in neither.
+const (
+	groupGettingStarted = "getting-started"
+	groupResources      = "resources"
+)
+
+// utilityCommands stay out of the root's groups, under cobra's "Additional Commands".
+var utilityCommands = map[string]bool{"help": true, "completion": true, "version": true}
+
+// groupResourceCommands files every root command not already in a group, and not a utility,
+// under Resources. The generated commands register themselves and carry no group, so this runs
+// once every init has, before the command line is executed.
+func groupResourceCommands(root *cobra.Command) {
+	for _, c := range root.Commands() {
+		if c.GroupID == "" && !utilityCommands[c.Name()] {
+			c.GroupID = groupResources
+		}
+	}
+}
+
 // Execute runs the command and returns the process exit code. Ctrl-C or SIGTERM cancels the
 // command's context, which ends a retry wait or a confirmation, and the exit code is then 130.
 func Execute() int {
@@ -104,6 +131,7 @@ func executeArgs(ctx context.Context, args []string, stdout, stderr io.Writer) i
 	if completionRequest(args) {
 		return executeCompletion(ctx, stdout)
 	}
+	groupResourceCommands(rootCmd)
 	executed, err := rootCmd.ExecuteContextC(ctx)
 	err = commandLineErr(executed, err)
 	if err != nil {
