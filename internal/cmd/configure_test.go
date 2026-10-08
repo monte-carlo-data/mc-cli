@@ -120,10 +120,13 @@ func TestConfigureOffersToReplaceTheActiveProfile(t *testing.T) {
 			if err := setActiveProfile(dir, "staging"); err != nil {
 				t.Fatal(err)
 			}
-			code, _, stderr := runConfigure(t, "2\ni\n"+testAPIToken+"\n"+answer+"\n",
+			code, stdout, stderr := runConfigure(t, "2\ni\n"+testAPIToken+"\n"+answer+"\n",
 				"--config-dir", dir, "--profile", "dev", "--no-validate")
 			if code != exitOK || !strings.Contains(stderr, `Make "dev" the active profile instead of "staging"?`) {
 				t.Fatalf("exit %d; stderr:\n%s", code, stderr)
+			}
+			if announced := strings.Contains(stdout, `Profile "dev" is now the active profile`); announced != (answer == "y") {
+				t.Fatalf("announced = %v for answer %q; stdout:\n%s", announced, answer, stdout)
 			}
 			if active, _ := activeProfile(dir); active != want {
 				t.Fatalf("active = %q, want %q", active, want)
@@ -168,19 +171,34 @@ func TestConfigureSucceedsWhenInputEndsAtTheActiveProfileOffer(t *testing.T) {
 	if code != exitOK || !strings.Contains(stdout, `Wrote profile "dev"`) {
 		t.Fatalf("exit %d; stdout:\n%s\nstderr:\n%s", code, stdout, stderr)
 	}
+	if strings.Contains(stdout, "is now the active profile") {
+		t.Fatalf("announced a switch that did not happen:\n%s", stdout)
+	}
 	if active, _ := activeProfile(dir); active != "staging" {
 		t.Fatalf("active = %q, want staging", active)
 	}
 }
 
 func TestConfigureRejectsCredentialFlags(t *testing.T) {
-	dir := t.TempDir()
-	code, _, stderr := runConfigure(t, "", "--config-dir", dir, "--api-id", "i")
-	if code != exitUsage || !strings.Contains(stderr, "profile set") {
-		t.Fatalf("exit %d; stderr:\n%s", code, stderr)
-	}
-	if _, err := os.Stat(profilesPath(dir)); !os.IsNotExist(err) {
-		t.Fatal("the file was written")
+	for _, flag := range [][]string{
+		{"--client-id", "c"},
+		{"--client-secret", "s"},
+		{"--client-secret-prompt"},
+		{"--instance", "us1"},
+		{"--api-id", "i"},
+		{"--api-token", "t"},
+		{"--api-token-prompt"},
+	} {
+		t.Run(flag[0], func(t *testing.T) {
+			dir := t.TempDir()
+			code, _, stderr := runConfigure(t, "", append([]string{"--config-dir", dir}, flag...)...)
+			if code != exitUsage || !strings.Contains(stderr, "profile set") {
+				t.Fatalf("exit %d; stderr:\n%s", code, stderr)
+			}
+			if _, err := os.Stat(profilesPath(dir)); !os.IsNotExist(err) {
+				t.Fatal("the file was written")
+			}
+		})
 	}
 }
 

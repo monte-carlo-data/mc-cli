@@ -246,8 +246,8 @@ func cell(v any) string {
 // authHint follows a 401 or 403 the gateway answered without a problem document.
 const authHint = "Check the credentials and --endpoint, or the profile they come from."
 
-// apiErr renders an API failure, carrying the exit code its status maps to. Any other error is
-// returned as it is.
+// apiErr renders an API failure, or a token-exchange failure, carrying the exit code its status
+// maps to. Any other error is returned as it is.
 func apiErr(resp *http.Response, err error) error {
 	return apiErrWithHint(resp, err, authHint)
 }

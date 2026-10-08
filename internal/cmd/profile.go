@@ -5,8 +5,6 @@ package cmd
 
 import (
 	"fmt"
-	"net"
-	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -71,10 +69,10 @@ Pass --client-id, --client-secret and --instance for OAuth client credentials, o
 command does not know are left as they are. The first profile written becomes the active one.
 
 The credentials are checked with Monte Carlo first, and nothing is written unless they are
-accepted; --no-validate skips the check. --endpoint changes where they are checked and, unless it
-is the default, is stored in the profile for the commands that use it; passing the default
-removes a stored one. Only these flags are written: the MCD_DEFAULT_* environment variables do
-not apply to this command.
+accepted; --no-validate skips the check. They are checked against --endpoint, else the endpoint
+already stored in the profile, else the default. A non-default --endpoint is stored in the
+profile for the commands that use it; passing the default removes a stored one. Only the flags
+passed are written: the MCD_DEFAULT_* environment variables do not apply to this command.
 
 As JSON, the result is one object: profile, path, active, validated, and user, the user the
 credentials belong to, which is null when they were not checked.`,
@@ -103,7 +101,11 @@ credentials belong to, which is null when they were not checked.`,
 			}
 			var user *sdk.CurrentUserOut
 			if skip, _ := flagBool(cmd, "no-validate"); !skip {
-				if user, err = validateCredentials(cmd, creds); err != nil {
+				at, err := checkEndpoint(dir, name, endpoint)
+				if err != nil {
+					return err
+				}
+				if user, err = validateCredentials(cmd, creds, at); err != nil {
 					return err
 				}
 			}
@@ -229,25 +231,6 @@ func checkAPIToken(v string) error {
 		return fmt.Errorf("is %d characters, but an API token is %d; check it was copied whole", len(v), apiTokenLength)
 	}
 	return nil
-}
-
-// endpointFlag is --endpoint as an API base URL, or empty when it was not passed. A trailing
-// /graphql, which a URL copied from another Monte Carlo tool carries, is dropped.
-func endpointFlag(cmd *cobra.Command) (string, error) {
-	v, err := flagString(cmd, "endpoint")
-	if err != nil {
-		return "", err
-	}
-	v = strings.TrimSuffix(strings.TrimRight(strings.TrimSpace(v), "/"), "/graphql")
-	if v == "" {
-		return "", nil
-	}
-	u, err := url.Parse(v)
-	loopback := err == nil && (u.Hostname() == "localhost" || net.ParseIP(u.Hostname()).IsLoopback())
-	if err != nil || u.Host == "" || (u.Scheme != "https" && !(u.Scheme == "http" && loopback)) {
-		return "", usageError("--endpoint %q is not an https URL", v)
-	}
-	return v, nil
 }
 
 // writeProfile writes c to the profile name, removing the other mechanism's keys, and makes it

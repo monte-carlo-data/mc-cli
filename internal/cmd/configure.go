@@ -32,8 +32,9 @@ and secret. Secrets are read with echo off. Nothing is written unless Monte Carl
 credentials; --no-validate writes them without checking.
 
 The first profile written becomes the active one; when another is active, configure offers to
-switch. --endpoint changes where the credentials are checked and, unless it is the default, is
-stored in the profile for the commands that use it. Output is always text, whatever --output says.
+switch. The credentials are checked against --endpoint, else the endpoint already stored in the
+profile, else the default; a non-default --endpoint is stored in the profile for the commands that
+use it. Output is always text, whatever --output says.
 
 configure needs a terminal. To write a profile from a script, use "` + binaryName + ` profile set".`,
 		Args: cobra.NoArgs,
@@ -77,8 +78,12 @@ configure needs a terminal. To write a profile from a script, use "` + binaryNam
 			}
 			out := cmd.OutOrStdout()
 			if skip, _ := flagBool(cmd, "no-validate"); !skip {
+				at, err := checkEndpoint(dir, name, endpoint)
+				if err != nil {
+					return err
+				}
 				var user *sdk.CurrentUserOut
-				if user, err = validateCredentials(cmd, creds); err != nil {
+				if user, err = validateCredentials(cmd, creds, at); err != nil {
 					return err
 				}
 				printIdentity(out, user)

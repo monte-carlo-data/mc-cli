@@ -20,31 +20,35 @@ import (
 // of its own.
 var validationTimeout = 30 * time.Second
 
-// validationOptions builds the client options that check c. Only c and --endpoint are used, never
-// the environment or an existing profile, so the credentials are checked exactly as they will be
-// written.
-func validationOptions(cmd *cobra.Command, c profileCredentials) (sdk.Options, error) {
-	endpoint, err := endpointFlag(cmd)
+// checkEndpoint is the endpoint to check credentials against: flag, the --endpoint value, else
+// the one stored in the profile name, else the default.
+func checkEndpoint(dir, name, flag string) (string, error) {
+	if flag != "" {
+		return flag, nil
+	}
+	stored, err := storedEndpoint(dir, name)
 	if err != nil {
-		return sdk.Options{}, err
+		return "", err
 	}
-	if endpoint == "" {
-		endpoint = defaultEndpoint
+	if stored != "" {
+		return stored, nil
 	}
+	return defaultEndpoint, nil
+}
+
+// validationOptions builds the client options that check c at endpoint, the one c will be used
+// with. Nothing else is read from the environment or any profile.
+func validationOptions(cmd *cobra.Command, c profileCredentials, endpoint string) sdk.Options {
 	opts := cliOptions(cmd)
 	opts.Endpoint = endpoint
 	opts.ClientID, opts.ClientSecret, opts.Instance = c.ClientID, c.ClientSecret, c.Instance
 	opts.TokenID, opts.TokenSecret = c.APIID, c.APIToken
-	return opts, nil
+	return opts
 }
 
-// validateCredentials asks the API whom c belongs to.
-func validateCredentials(cmd *cobra.Command, c profileCredentials) (*sdk.CurrentUserOut, error) {
-	opts, err := validationOptions(cmd, c)
-	if err != nil {
-		return nil, err
-	}
-	api, err := sdk.NewClient(cmd.Context(), opts)
+// validateCredentials asks the API at endpoint whom c belongs to.
+func validateCredentials(cmd *cobra.Command, c profileCredentials, endpoint string) (*sdk.CurrentUserOut, error) {
+	api, err := sdk.NewClient(cmd.Context(), validationOptions(cmd, c, endpoint))
 	if err != nil {
 		return nil, err
 	}

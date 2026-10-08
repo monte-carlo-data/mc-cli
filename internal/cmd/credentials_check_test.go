@@ -180,6 +180,7 @@ func TestProfileSetWritesNothingWhenValidationFails(t *testing.T) {
 // TestValidationOptionsIgnoreEnvironmentAndProfile checks that neither the environment nor a
 // profile lends validation an endpoint or credentials.
 func TestValidationOptionsIgnoreEnvironmentAndProfile(t *testing.T) {
+	// The endpoint to check is passed in, so the profile's own endpoint must not leak in.
 	home := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(home, ".mcd"), 0o700); err != nil {
 		t.Fatal(err)
@@ -195,22 +196,13 @@ func TestValidationOptionsIgnoreEnvironmentAndProfile(t *testing.T) {
 	t.Setenv("MCD_DEFAULT_API_TOKEN", "env-token")
 
 	cases := []struct{ name, endpoint, want string }{
-		{"default endpoint", "", defaultEndpoint},
-		{"endpoint flag", "https://custom.example", "https://custom.example"},
+		{"default endpoint", defaultEndpoint, defaultEndpoint},
+		{"custom endpoint", "https://custom.example", "https://custom.example"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			cmd := &cobra.Command{Use: "t"}
-			cmd.Flags().String("endpoint", "", "")
-			if tc.endpoint != "" {
-				if err := cmd.Flags().Set("endpoint", tc.endpoint); err != nil {
-					t.Fatal(err)
-				}
-			}
-			opts, err := validationOptions(cmd, profileCredentials{APIID: "i", APIToken: testAPIToken})
-			if err != nil {
-				t.Fatal(err)
-			}
+			opts := validationOptions(&cobra.Command{Use: "t"},
+				profileCredentials{APIID: "i", APIToken: testAPIToken}, tc.endpoint)
 			got, err := opts.Resolve()
 			if err != nil {
 				t.Fatal(err)
@@ -245,6 +237,59 @@ func TestProfileSetTimesOutHangingValidation(t *testing.T) {
 	}
 	if _, err := os.Stat(profilesPath(dir)); !os.IsNotExist(err) {
 		t.Fatal("a timed-out validation wrote the file")
+	}
+}
+
+// Without --endpoint, validation targets the endpoint already stored in that profile.
+func TestProfileSetChecksAgainstTheStoredEndpoint(t *testing.T) {
+	srv, calls := credentialServer(t, http.StatusOK, http.StatusOK)
+	stored := "mcd_api_endpoint = " + srv.URL + "/graphql\n"
+	dir := writeProfiles(t, "[dev]\n"+stored)
+	_, err := execute(t, "profile", "set", "dev", "--config-dir", dir,
+		"--api-id", "i", "--api-token", testAPIToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("the stored endpoint was asked %d times, want 1", calls.Load())
+	}
+	data, err := os.ReadFile(profilesPath(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), stored) {
+		t.Fatalf("stored endpoint lost:\n%s", data)
+	}
+}
+
+func TestCheckEndpointPrefersFlagThenStoredThenDefault(t *testing.T) {
+	dir := writeProfiles(t, "[dev]\nmcd_api_endpoint = https://dev.example/graphql\n"+
+		"[other]\nmcd_api_endpoint = https://other.example/graphql\n[prod]\nmcd_id = x\n"+
+		"[bad]\nmcd_api_endpoint = http://dev.example/graphql\n")
+	cases := []struct{ name, profile, flag, want string }{
+		{"flag wins", "dev", "https://flag.example", "https://flag.example"},
+		{"stored", "dev", "", "https://dev.example"},
+		{"default", "prod", "", defaultEndpoint},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := checkEndpoint(dir, tc.profile, tc.flag)
+			if err != nil || got != tc.want {
+				t.Fatalf("got %q, %v; want %q", got, err, tc.want)
+			}
+		})
+	}
+	if got, err := checkEndpoint(dir, "bad", ""); err == nil {
+		t.Fatalf("a stored non-https endpoint was accepted: %q", got)
+	}
+}
+
+func TestEndpointFlagIsNormalizedForEveryCommand(t *testing.T) {
+	srv, _ := credentialServer(t, http.StatusOK, http.StatusOK)
+	_, err := execute(t, "whoami", "--endpoint", srv.URL+"/graphql", "--api-id", "i",
+		"--api-token", testAPIToken, "--config-dir", t.TempDir())
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 
