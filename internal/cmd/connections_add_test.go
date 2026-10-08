@@ -102,7 +102,7 @@ func (f *fakeConnectionsAPI) serve(w http.ResponseWriter, r *http.Request) {
 	if call == "GET /api/v2/validations/run-1" {
 		passed, errs := "true", "[]"
 		if f.refuse {
-			passed, errs = "false", `[{"friendly_message":"The key was rejected.","resolution":"Check the user's public key."}]`
+			passed, errs = "false", `[{"friendly_message":"The key was rejected.","resolution":"Check the user's public key.","cause":null,"stack_trace":null}]`
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(validationRunJSON("completed", "completed", passed, errs)))
