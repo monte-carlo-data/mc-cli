@@ -65,7 +65,7 @@ func TestConfigureSetsUpAnAPIToken(t *testing.T) {
 		t.Fatal("the secret was echoed")
 	}
 	got, _ := os.ReadFile(profilesPath(dir))
-	if string(got) != "[default]\nmcd_id = i\nmcd_token = "+testAPIToken+"\n" {
+	if string(got) != "[default]\nmcd_id = i\nmcd_token = "+testAPIToken+"\nmcd_api_endpoint = "+srv.URL+"/graphql\n" {
 		t.Fatalf("profiles.ini:\n%s", got)
 	}
 }
@@ -78,7 +78,7 @@ func TestConfigureSetsUpAnOAuthClientInTheNamedProfile(t *testing.T) {
 		t.Fatalf("exit %d; stderr:\n%s", code, stderr)
 	}
 	got, _ := os.ReadFile(profilesPath(dir))
-	if string(got) != "[dev]\nmcd_oauth_client_id = cid\nmcd_oauth_client_secret = sec\nmcd_instance_id = us1\n" {
+	if string(got) != "[dev]\nmcd_oauth_client_id = cid\nmcd_oauth_client_secret = sec\nmcd_instance_id = us1\nmcd_api_endpoint = "+srv.URL+"/graphql\n" {
 		t.Fatalf("profiles.ini:\n%s", got)
 	}
 }

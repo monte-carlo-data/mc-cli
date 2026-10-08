@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -277,5 +278,68 @@ func TestProfileSetReadsAPromptedSecretThroughItsOwnFlag(t *testing.T) {
 	got, _ := os.ReadFile(profilesPath(dir))
 	if !strings.Contains(string(got), "mcd_token = "+testAPIToken+"\n") {
 		t.Fatalf("profiles.ini:\n%s", got)
+	}
+}
+
+func TestProfileSetStoresANonDefaultEndpoint(t *testing.T) {
+	srv, calls := credentialServer(t, http.StatusOK, http.StatusOK)
+	dir := t.TempDir()
+	// A URL copied from another tool carries /graphql; it is checked and stored without doubling.
+	if _, err := execute(t, "profile", "set", "dev", "--config-dir", dir, "--endpoint", srv.URL+"/graphql/",
+		"--api-id", "i", "--api-token", testAPIToken); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(profilesPath(dir))
+	if !strings.Contains(string(got), "mcd_api_endpoint = "+srv.URL+"/graphql\n") {
+		t.Fatalf("profiles.ini:\n%s", got)
+	}
+
+	// Later commands with the profile use the stored endpoint without --endpoint.
+	if _, err := execute(t, "whoami", "--config-dir", dir, "--profile", "dev"); err != nil {
+		t.Fatal(err)
+	}
+	if calls.Load() != 2 {
+		t.Fatalf("%d calls reached the stored endpoint, want 2", calls.Load())
+	}
+}
+
+func TestProfileSetEndpointRules(t *testing.T) {
+	const stored = "[dev]\nmcd_api_endpoint = https://dev.example/graphql\n"
+	cases := []struct {
+		name     string
+		endpoint []string
+		want     string
+	}{
+		{"not passed keeps a stored endpoint", nil, "mcd_api_endpoint = https://dev.example/graphql\n"},
+		{"the default removes it", []string{"--endpoint", defaultEndpoint + "/"}, ""},
+		{"another replaces it", []string{"--endpoint", "https://other.example"}, "mcd_api_endpoint = https://other.example/graphql\n"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := writeProfiles(t, stored)
+			args := append([]string{"profile", "set", "dev", "--config-dir", dir, "--no-validate",
+				"--api-id", "i", "--api-token", testAPIToken}, tc.endpoint...)
+			if _, err := execute(t, args...); err != nil {
+				t.Fatal(err)
+			}
+			got, _ := os.ReadFile(profilesPath(dir))
+			if tc.want == "" && strings.Contains(string(got), "mcd_api_endpoint") || !strings.Contains(string(got), tc.want) {
+				t.Fatalf("profiles.ini:\n%s", got)
+			}
+		})
+	}
+}
+
+func TestProfileSetRejectsAnEndpointThatIsNotHTTPS(t *testing.T) {
+	for _, endpoint := range []string{"http://dev.example", "ftp://dev.example", "dev.example"} {
+		dir := t.TempDir()
+		code, _, stderr := runExit(t, context.Background(), "profile", "set", "dev", "--config-dir", dir,
+			"--no-validate", "--endpoint", endpoint, "--api-id", "i", "--api-token", testAPIToken)
+		if code != exitUsage || !strings.Contains(stderr, "not an https URL") {
+			t.Errorf("%s: exit %d, stderr %q", endpoint, code, stderr)
+		}
+		if _, err := os.Stat(profilesPath(dir)); !os.IsNotExist(err) {
+			t.Errorf("%s: the file was written", endpoint)
+		}
 	}
 }

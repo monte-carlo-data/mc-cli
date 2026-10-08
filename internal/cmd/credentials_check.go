@@ -24,7 +24,7 @@ var validationTimeout = 30 * time.Second
 // the environment or an existing profile, so the credentials are checked exactly as they will be
 // written.
 func validationOptions(cmd *cobra.Command, c profileCredentials) (sdk.Options, error) {
-	endpoint, err := flagString(cmd, "endpoint")
+	endpoint, err := endpointFlag(cmd)
 	if err != nil {
 		return sdk.Options{}, err
 	}
