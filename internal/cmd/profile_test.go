@@ -231,3 +231,51 @@ func TestResolvedProfileNameIsEmptyWithNoSignal(t *testing.T) {
 		t.Fatalf("got %q, %v", got, err)
 	}
 }
+
+// TestProfileSetHelpListsTheCredentialFlagsAsItsOwn checks that help shows the credentials
+// profile set writes among its own flags, not under the global ones that read credentials.
+func TestProfileSetHelpListsTheCredentialFlagsAsItsOwn(t *testing.T) {
+	out, err := execute(t, "profile", "set", "--help")
+	if err != nil {
+		t.Fatal(err)
+	}
+	own, global, ok := strings.Cut(out, "Global Flags:")
+	if !ok || !strings.Contains(own, "Examples:") {
+		t.Fatalf("help:\n%s", out)
+	}
+	for _, flag := range []string{"--client-id", "--client-secret", "--client-secret-prompt", "--instance",
+		"--api-id", "--api-token", "--api-token-prompt", "--no-validate"} {
+		if !strings.Contains(own, flag+" ") {
+			t.Errorf("%s is not among the command's flags", flag)
+		}
+		if strings.Contains(global, flag+" ") {
+			t.Errorf("%s is still listed as a global flag", flag)
+		}
+	}
+}
+
+func TestProfileSetReadsAPromptedSecretThroughItsOwnFlag(t *testing.T) {
+	prevTerminal, prevPassword := isTerminal, readPassword
+	isTerminal = func(*os.File) bool { return true }
+	readPassword = func(*os.File) ([]byte, error) { return []byte(testAPIToken), nil }
+	f, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rootCmd.SetIn(f)
+	t.Cleanup(func() {
+		isTerminal, readPassword = prevTerminal, prevPassword
+		rootCmd.SetIn(nil)
+		f.Close()
+	})
+
+	dir := t.TempDir()
+	if _, err := execute(t, "profile", "set", "dev", "--config-dir", dir, "--no-validate",
+		"--api-id", "i", "--api-token-prompt"); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(profilesPath(dir))
+	if !strings.Contains(string(got), "mcd_token = "+testAPIToken+"\n") {
+		t.Fatalf("profiles.ini:\n%s", got)
+	}
+}

@@ -68,8 +68,15 @@ Pass --client-id, --client-secret and --instance for OAuth client credentials, o
 --api-token for an API token. Writing one kind removes the other from the profile. Keys this
 command does not know are left as they are. The first profile written becomes the active one.
 
-These flags are the values written here. The environment defaults listed under the global flags
+The credentials are checked with Monte Carlo first, and nothing is written unless they are
+accepted; --no-validate skips the check. --endpoint changes where they are checked, but is not
+written to the profile. Only the flags below are written: the MCD_DEFAULT_* environment variables
 do not apply to this command.`,
+		Example: `  # An OAuth client, with the secret read from a hidden prompt
+  ` + binaryName + ` profile set prod --client-id <id> --client-secret-prompt --instance us1
+
+  # An API token, with the secret read from a file
+  ` + binaryName + ` profile set prod --api-id <id> --api-token @token.txt`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
@@ -97,7 +104,17 @@ do not apply to this command.`,
 			return reportProfileWritten(cmd, dir, name, path, madeActive, user)
 		},
 	}
-	cmd.Flags().Bool("no-validate", false, "Write the profile without first checking the credentials with Monte Carlo.")
+	// These shadow the root's credential flags, whose help describes reading credentials, so
+	// that this command's help lists them as the values it writes.
+	f := cmd.Flags()
+	f.String("client-id", "", "OAuth client id to write.")
+	f.String("client-secret", "", "OAuth client secret to write. Visible in the process list; --client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	f.Bool("client-secret-prompt", false, "Read --client-secret from a hidden prompt instead of the command line.")
+	f.String("instance", "", "Instance the OAuth client belongs to, for example us1. Required with an OAuth client.")
+	f.String("api-id", "", "API token id to write.")
+	f.String("api-token", "", "API token secret to write. Visible in the process list; --api-token-prompt asks for it instead, and @<path> reads it from a file.")
+	f.Bool("api-token-prompt", false, "Read --api-token from a hidden prompt instead of the command line.")
+	f.Bool("no-validate", false, "Write the profile without first checking the credentials with Monte Carlo.")
 	return cmd
 }
 
