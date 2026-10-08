@@ -39,16 +39,7 @@ func runConfigureIn(t *testing.T, ctx context.Context, input string, keepOpen bo
 		w.Close()
 	}
 	rootCmd.SetIn(r)
-	// Cobra keeps the context an earlier run gave the subcommand, so hand it this one, and
-	// leave neither it nor the root holding a cancelled one for the tests that follow.
-	configure, _, err := rootCmd.Find([]string{"configure"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	configure.SetContext(ctx)
 	t.Cleanup(func() {
-		configure.SetContext(context.Background())
-		rootCmd.SetContext(context.Background())
 		isTerminal, readPassword = prevTerminal, prevPassword
 		rootCmd.SetIn(nil)
 		r.Close()
