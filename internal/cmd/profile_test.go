@@ -4,6 +4,7 @@
 package cmd
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -77,6 +78,43 @@ func TestProfileSetRefusesMixedOrPartialCredentials(t *testing.T) {
 	}
 	if _, err := os.Stat(profilesPath(dir)); !os.IsNotExist(err) {
 		t.Fatal("a refused set wrote the file")
+	}
+}
+
+// testAPIToken has the length of a real API token secret.
+var testAPIToken = strings.Repeat("t", apiTokenLength)
+
+func TestProfileSetTrimsPastedValues(t *testing.T) {
+	dir := t.TempDir()
+	tokenFile := filepath.Join(t.TempDir(), "token")
+	if err := os.WriteFile(tokenFile, []byte("  "+testAPIToken+" \n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := execute(t, "profile", "set", "dev", "--config-dir", dir,
+		"--api-id", " i\t", "--api-token", "@"+tokenFile); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(profilesPath(dir))
+	want := "[dev]\nmcd_id = i\nmcd_token = " + testAPIToken + "\n"
+	if string(got) != want {
+		t.Fatalf("profiles.ini:\n%s", got)
+	}
+}
+
+func TestProfileSetRejectsMalformedValues(t *testing.T) {
+	dir := t.TempDir()
+	cases := map[string][]string{
+		"not an instance id": {"--client-id", "c", "--client-secret", "s", "--instance", "us1.eu"},
+		"is 5 characters":    {"--api-id", "i", "--api-token", "short"},
+	}
+	for want, flags := range cases {
+		code, _, stderr := runExit(t, context.Background(), append([]string{"profile", "set", "p", "--config-dir", dir}, flags...)...)
+		if code != exitUsage || !strings.Contains(stderr, want) {
+			t.Errorf("%v: exit %d, stderr %q, want %q", flags, code, stderr, want)
+		}
+	}
+	if _, err := os.Stat(profilesPath(dir)); !os.IsNotExist(err) {
+		t.Fatal("a rejected set wrote the file")
 	}
 }
 

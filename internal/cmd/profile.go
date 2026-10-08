@@ -6,6 +6,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -74,95 +75,144 @@ do not apply to this command.`,
 			if err != nil {
 				return err
 			}
-			clientID, err := flagString(cmd, "client-id")
+			creds, err := credentialsFromFlags(cmd)
 			if err != nil {
 				return err
 			}
-			clientSecret, err := flagSecret(cmd, "client-secret")
+			path, madeActive, err := writeProfile(dir, name, creds)
 			if err != nil {
 				return err
 			}
-			instance, err := flagString(cmd, "instance")
-			if err != nil {
-				return err
-			}
-			apiID, err := flagString(cmd, "api-id")
-			if err != nil {
-				return err
-			}
-			apiToken, err := flagSecret(cmd, "api-token")
-			if err != nil {
-				return err
-			}
-			if err := validateProfileValue("--client-id", clientID); err != nil {
-				return err
-			}
-			if err := validateProfileValue("--client-secret", clientSecret); err != nil {
-				return err
-			}
-			if err := validateProfileValue("--instance", instance); err != nil {
-				return err
-			}
-			if err := validateProfileValue("--api-id", apiID); err != nil {
-				return err
-			}
-			if err := validateProfileValue("--api-token", apiToken); err != nil {
-				return err
-			}
-
-			oauth := clientID != "" || clientSecret != ""
-			token := apiID != "" || apiToken != ""
-			switch {
-			case oauth && token:
-				return usageError("pass OAuth client credentials or an API token, not both")
-			case oauth && (clientID == "" || clientSecret == ""):
-				return usageError("--client-id and --client-secret go together")
-			case oauth && instance == "":
-				return usageError("--instance is required with OAuth client credentials")
-			case token && (apiID == "" || apiToken == ""):
-				return usageError("--api-id and --api-token go together")
-			case !oauth && !token:
-				return usageError("pass --client-id, --client-secret and --instance, or --api-id and --api-token")
-			}
-
-			f, err := loadINI(profilesPath(dir))
-			if err != nil {
-				return err
-			}
-			if oauth {
-				f.set(name, keyClientID, clientID)
-				f.set(name, keySecret, clientSecret)
-				f.set(name, keyInstance, instance)
-				f.unset(name, keyID)
-				f.unset(name, keyToken)
-			} else {
-				f.set(name, keyID, apiID)
-				f.set(name, keyToken, apiToken)
-				f.unset(name, keyClientID)
-				f.unset(name, keySecret)
-				if instance != "" {
-					f.set(name, keyInstance, instance)
-				}
-			}
-			if err := f.save(credentialsMode); err != nil {
-				return err
-			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Wrote profile %q to %s\n", name, f.path)
-
-			active, err := activeProfile(dir)
-			if err != nil {
-				return err
-			}
-			if active == "" {
-				if err := setActiveProfile(dir, name); err != nil {
-					return err
-				}
+			fmt.Fprintf(cmd.OutOrStdout(), "Wrote profile %q to %s\n", name, path)
+			if madeActive {
 				fmt.Fprintf(cmd.OutOrStdout(), "Profile %q is now the active profile\n", name)
 			}
 			return nil
 		},
 	}
 	return cmd
+}
+
+// profileCredentials is the one credential mechanism a profile holds: an OAuth client with the
+// instance it belongs to, or an API token, which may carry an instance too.
+type profileCredentials struct {
+	ClientID     string
+	ClientSecret string
+	Instance     string
+	APIID        string
+	APIToken     string
+}
+
+func (c profileCredentials) oauth() bool { return c.ClientID != "" }
+
+// apiTokenLength is the length of every API token secret Monte Carlo issues.
+const apiTokenLength = 56
+
+// instancePattern is the form of an instance id, such as us1.
+var instancePattern = regexp.MustCompile(`^[A-Za-z0-9-]{1,63}$`)
+
+// credentialsFromFlags reads the credential flags into one complete mechanism. Values are
+// trimmed, since a pasted value often carries a stray space or newline.
+func credentialsFromFlags(cmd *cobra.Command) (profileCredentials, error) {
+	var c profileCredentials
+	var err error
+	if c.ClientID, err = flagString(cmd, "client-id"); err != nil {
+		return c, err
+	}
+	if c.ClientSecret, err = flagSecret(cmd, "client-secret"); err != nil {
+		return c, err
+	}
+	if c.Instance, err = flagString(cmd, "instance"); err != nil {
+		return c, err
+	}
+	if c.APIID, err = flagString(cmd, "api-id"); err != nil {
+		return c, err
+	}
+	if c.APIToken, err = flagSecret(cmd, "api-token"); err != nil {
+		return c, err
+	}
+	return c, c.check()
+}
+
+// check trims c and rejects it unless it is exactly one complete, well-formed mechanism.
+func (c *profileCredentials) check() error {
+	for _, v := range []struct {
+		flag  string
+		value *string
+	}{
+		{"--client-id", &c.ClientID},
+		{"--client-secret", &c.ClientSecret},
+		{"--instance", &c.Instance},
+		{"--api-id", &c.APIID},
+		{"--api-token", &c.APIToken},
+	} {
+		*v.value = strings.TrimSpace(*v.value)
+		if err := validateProfileValue(v.flag, *v.value); err != nil {
+			return err
+		}
+	}
+
+	oauth := c.ClientID != "" || c.ClientSecret != ""
+	token := c.APIID != "" || c.APIToken != ""
+	switch {
+	case oauth && token:
+		return usageError("pass OAuth client credentials or an API token, not both")
+	case oauth && (c.ClientID == "" || c.ClientSecret == ""):
+		return usageError("--client-id and --client-secret go together")
+	case oauth && c.Instance == "":
+		return usageError("--instance is required with OAuth client credentials")
+	case token && (c.APIID == "" || c.APIToken == ""):
+		return usageError("--api-id and --api-token go together")
+	case !oauth && !token:
+		return usageError("pass --client-id, --client-secret and --instance, or --api-id and --api-token")
+	}
+	if c.Instance != "" && !instancePattern.MatchString(c.Instance) {
+		return usageError("--instance %q is not an instance id; it is letters, digits and hyphens, for example us1", c.Instance)
+	}
+	if token && len(c.APIToken) != apiTokenLength {
+		return usageError("--api-token is %d characters, but an API token is %d; check it was copied whole", len(c.APIToken), apiTokenLength)
+	}
+	return nil
+}
+
+// writeProfile writes c to the profile name, removing the other mechanism's keys, and makes it
+// the active profile when none is active yet. It returns the file written and whether the
+// profile became active.
+func writeProfile(dir, name string, c profileCredentials) (path string, madeActive bool, err error) {
+	f, err := loadINI(profilesPath(dir))
+	if err != nil {
+		return "", false, err
+	}
+	if c.oauth() {
+		f.set(name, keyClientID, c.ClientID)
+		f.set(name, keySecret, c.ClientSecret)
+		f.set(name, keyInstance, c.Instance)
+		f.unset(name, keyID)
+		f.unset(name, keyToken)
+	} else {
+		f.set(name, keyID, c.APIID)
+		f.set(name, keyToken, c.APIToken)
+		f.unset(name, keyClientID)
+		f.unset(name, keySecret)
+		if c.Instance != "" {
+			f.set(name, keyInstance, c.Instance)
+		}
+	}
+	if err := f.save(credentialsMode); err != nil {
+		return "", false, err
+	}
+
+	active, err := activeProfile(dir)
+	if err != nil {
+		return f.path, false, err
+	}
+	if active != "" {
+		return f.path, false, nil
+	}
+	if err := setActiveProfile(dir, name); err != nil {
+		return f.path, false, err
+	}
+	return f.path, true, nil
 }
 
 func newProfileUseCmd() *cobra.Command {
