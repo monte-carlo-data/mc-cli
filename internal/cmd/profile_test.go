@@ -13,7 +13,7 @@ import (
 
 func TestProfileSetWritesOAuthAndBecomesActive(t *testing.T) {
 	dir := t.TempDir()
-	out, err := execute(t, "profile", "set", "dev", "--config-dir", dir,
+	out, err := execute(t, "profile", "set", "dev", "--config-dir", dir, "--no-validate", "--output", "table",
 		"--client-id", "cid", "--client-secret", "sec", "--instance", "us1")
 	if err != nil {
 		t.Fatal(err)
@@ -36,7 +36,7 @@ func TestProfileSetSwitchesMechanismAndKeepsForeignKeys(t *testing.T) {
 	if err := setActiveProfile(dir, "staging"); err != nil {
 		t.Fatal(err)
 	}
-	out, err := execute(t, "profile", "set", "default", "--config-dir", dir,
+	out, err := execute(t, "profile", "set", "default", "--config-dir", dir, "--no-validate", "--output", "table",
 		"--client-id", "cid", "--client-secret", "sec", "--instance", "eu1")
 	if err != nil {
 		t.Fatal(err)
@@ -90,7 +90,7 @@ func TestProfileSetTrimsPastedValues(t *testing.T) {
 	if err := os.WriteFile(tokenFile, []byte("  "+testAPIToken+" \n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := execute(t, "profile", "set", "dev", "--config-dir", dir,
+	if _, err := execute(t, "profile", "set", "dev", "--config-dir", dir, "--no-validate",
 		"--api-id", " i\t", "--api-token", "@"+tokenFile); err != nil {
 		t.Fatal(err)
 	}

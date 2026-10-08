@@ -51,22 +51,15 @@ func clientOptions(cmd *cobra.Command) (sdk.Options, error) {
 	if err != nil {
 		return sdk.Options{}, err
 	}
-	v, _, _ := resolvedVersion()
-	opts := sdk.Options{
-		Endpoint:     str("endpoint"),
-		ClientID:     str("client-id"),
-		ClientSecret: clientSecret,
-		Instance:     str("instance"),
-		TokenID:      str("api-id"),
-		TokenSecret:  apiToken,
-		Profile:      str("profile"),
-		ConfigDir:    dir,
-		UserAgent:    binaryName + "/" + v,
-		// The gateway drops User-Agent, so these are what identify the CLI to usage telemetry.
-		TelemetryReason:  "cli",
-		TelemetryService: "mc-cli",
-		TelemetryCommand: telemetryCommand(cmd),
-	}
+	opts := cliOptions(cmd)
+	opts.Endpoint = str("endpoint")
+	opts.ClientID = str("client-id")
+	opts.ClientSecret = clientSecret
+	opts.Instance = str("instance")
+	opts.TokenID = str("api-id")
+	opts.TokenSecret = apiToken
+	opts.Profile = str("profile")
+	opts.ConfigDir = dir
 
 	// The active profile set with "profile use" is a CLI-only fallback, layered in only when
 	// nothing else names a profile or already supplies a complete credential mechanism. Once
@@ -96,6 +89,18 @@ func clientOptions(cmd *cobra.Command) (sdk.Options, error) {
 		resolved.Endpoint = defaultEndpoint
 	}
 	return resolved, nil
+}
+
+// cliOptions is the Options every client the CLI builds starts from: how it identifies itself.
+func cliOptions(cmd *cobra.Command) sdk.Options {
+	v, _, _ := resolvedVersion()
+	return sdk.Options{
+		UserAgent: binaryName + "/" + v,
+		// The gateway drops User-Agent, so these are what identify the CLI to usage telemetry.
+		TelemetryReason:  "cli",
+		TelemetryService: "mc-cli",
+		TelemetryCommand: telemetryCommand(cmd),
+	}
 }
 
 // telemetryCommand names the command without the binary, e.g. "connections add snowflake".

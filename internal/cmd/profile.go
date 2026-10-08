@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 
+	sdk "github.com/monte-carlo-data/mc-sdk-go/montecarlo"
 	"github.com/spf13/cobra"
 )
 
@@ -79,17 +80,20 @@ do not apply to this command.`,
 			if err != nil {
 				return err
 			}
+			var user *sdk.CurrentUserOut
+			if skip, _ := flagBool(cmd, "no-validate"); !skip {
+				if user, err = validateCredentials(cmd, creds); err != nil {
+					return err
+				}
+			}
 			path, madeActive, err := writeProfile(dir, name, creds)
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Wrote profile %q to %s\n", name, path)
-			if madeActive {
-				fmt.Fprintf(cmd.OutOrStdout(), "Profile %q is now the active profile\n", name)
-			}
-			return nil
+			return reportProfileWritten(cmd, dir, name, path, madeActive, user)
 		},
 	}
+	cmd.Flags().Bool("no-validate", false, "Write the profile without first checking the credentials with Monte Carlo.")
 	return cmd
 }
 
