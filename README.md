@@ -120,17 +120,29 @@ If both keep the name `montecarlo`, whichever comes first on `PATH` runs. An act
 
 ## Credentials
 
-Write a profile once. Either OAuth client credentials with the instance they belong to:
+Set up your credentials once:
 
 ```bash
-montecarlo profile set default --client-id <id> --client-secret-prompt --instance us1
+montecarlo configure
+```
+
+It asks whether you use an OAuth client or an API token, prompts for the values, with secrets read hidden, and writes them to the `default` profile, or to the one `--profile` names.
+
+In a script or CI, write the profile with `profile set` instead. Either OAuth client credentials with the instance they belong to:
+
+```bash
+montecarlo profile set default --client-id <id> --client-secret @<path> --instance us1
 ```
 
 or an API token:
 
 ```bash
-montecarlo profile set default --api-id <id> --api-token-prompt
+montecarlo profile set default --api-id <id> --api-token @<path>
 ```
+
+`@<path>` reads the secret from a file; `--client-secret-prompt` and `--api-token-prompt` ask for it on a terminal instead.
+
+Both commands check the credentials with Monte Carlo before writing them, and show the user and account they belong to. Nothing is written when they are rejected, which exits 4. `--no-validate` writes them without checking.
 
 Profiles live in `~/.mcd/profiles.ini`, the file the other Monte Carlo tools read too. `profile list` shows them, `profile use <name>` picks the one commands run with, and `--profile <name>` overrides that for one command. Any credential can also be passed as a flag or as an `MCD_DEFAULT_*` environment variable.
 

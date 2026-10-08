@@ -108,6 +108,10 @@ Credentials resolve in this order: flags, then the `MCD_DEFAULT_*` environment v
 
 `profiles.ini` is shared with the other Monte Carlo tools. `profile set` edits it line by line: it writes `mcd_oauth_client_id`, `mcd_oauth_client_secret` and `mcd_instance_id`, or `mcd_id` and `mcd_token`, removes the pair it did not write, and leaves every other line, comment and section as it found it. `--instance` is written in either mode, but only when it is given: switching a profile from OAuth to a token leaves an existing `mcd_instance_id` in place unless `--instance` is passed too. It never writes `mcd_api_endpoint`; the other tools read that key as a GraphQL URL. `--config-dir` moves both files, for tests and for isolated setups.
 
+`profile set` and `configure` share one path: they trim the values, check them locally (an instance id's form, an API token's 56 characters), then call the current-user endpoint with only those credentials and `--endpoint`, never the environment or the profile being replaced, and write nothing unless it succeeds. `--no-validate` skips the call. `profile set` declares the credential flags itself, shadowing the root's persistent ones, so its help lists them as the values it writes.
+
+Root help lists commands in two groups. Hand-written commands set their `GroupID`; the generated ones register without one, so `groupResourceCommands` in `internal/cmd/root.go` files every ungrouped command except `help`, `completion` and `version` under Resources before the command line runs.
+
 The binary name lives in one constant, `binaryName` in `internal/cmd/root.go`, and in the `cmd/montecarlo/` directory name.
 
 ## Branching
