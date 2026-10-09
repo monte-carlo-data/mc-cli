@@ -48,17 +48,20 @@ func newConnectionsCreateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			credentialsId, err := flagString(cmd, "credentials-id")
-			if err != nil {
-				return err
-			}
-			body := sdk.NewConnectionIn(name, credentialsId)
+			body := sdk.NewConnectionIn(name)
 			if changed(cmd, "bi-container-id") {
 				biContainerId, err := flagString(cmd, "bi-container-id")
 				if err != nil {
 					return err
 				}
 				body.SetBiContainerId(biContainerId)
+			}
+			if changed(cmd, "credentials-id") {
+				credentialsId, err := flagString(cmd, "credentials-id")
+				if err != nil {
+					return err
+				}
+				body.SetCredentialsId(credentialsId)
 			}
 			if changed(cmd, "etl-container-id") {
 				etlContainerId, err := flagString(cmd, "etl-container-id")
@@ -91,10 +94,9 @@ func newConnectionsCreateCmd() *cobra.Command {
 	}
 	cmd.Flags().String("name", "", "Display name for the connection. Unique among the connections of its warehouse or BI container. An ETL container holds one connection.")
 	_ = cmd.MarkFlagRequired("name")
-	cmd.Flags().String("credentials-id", "", "The credentials the connection reads with. They also decide the connection's type. Create them first, through one of the credentials endpoints.")
-	_ = cmd.MarkFlagRequired("credentials-id")
 	cmd.Flags().String("bi-container-id", "", "The BI container to add the connection to, for Tableau, Looker or Power BI credentials. Its type has to match what the credentials are for: a looker container takes both looker and looker-git-clone credentials. Send exactly one of this, warehouse_id and etl_container_id.")
-	cmd.Flags().String("etl-container-id", "", "The ETL container to add the connection to, for ETL tool credentials such as Fivetran or Airflow. The container's type has to equal the credentials' type, and the container must not have a connection yet. Send exactly one of this, warehouse_id and bi_container_id.")
+	cmd.Flags().String("credentials-id", "", "The credentials the connection reads with. They also decide the connection's type. Create them first, through one of the credentials endpoints. Required, except on a push-only ETL container: a custom-etl-connector container with no deployment. Its connection takes no credentials, and has the container's type.")
+	cmd.Flags().String("etl-container-id", "", "The ETL container to add the connection to, for ETL tool credentials such as Fivetran or Airflow. The container's type has to equal the credentials' type, and the container must not have a connection yet. A custom-etl-connector container takes a custom ETL connector's credentials, or none when it has no deployment. Send exactly one of this, warehouse_id and bi_container_id.")
 	cmd.Flags().StringSlice("job-types", nil, "The jobs to run on this connection. Omit it to run what the connection type runs by default, which is what the app does. Which values are accepted depends on the connection type. etl on a Snowflake, Power BI or Salesforce Data Cloud connection also creates its ETL container. An empty list is not accepted; omit the field to take the defaults.")
 	cmd.Flags().String("warehouse-id", "", "The warehouse to add the connection to. Its type has to match what the credentials are for. Send exactly one of this, bi_container_id and etl_container_id.")
 	return cmd
@@ -4043,7 +4045,8 @@ func runConnectionsAdd(cmd *cobra.Command, connectionType string, native *connec
 	if changed(cmd, "deployment-id") {
 		etlContainer.SetDeploymentId(deploymentId)
 	}
-	connection := sdk.NewConnectionIn(name, credentialsId)
+	connection := sdk.NewConnectionIn(name)
+	connection.SetCredentialsId(credentialsId)
 	if changed(cmd, "job-types") {
 		jobTypes, err := flagStringSlice(cmd, "job-types")
 		if err != nil {

@@ -70,7 +70,7 @@ func newEtlContainersCreateCmd() *cobra.Command {
 	_ = cmd.MarkFlagRequired("type")
 	cmd.Flags().String("name", "", "Display name for the ETL container. No two containers of the same type can share a name.")
 	_ = cmd.MarkFlagRequired("name")
-	cmd.Flags().String("deployment-id", "", "The deployment the container's connection will run through. Pick one from the deployments list. Only a deployment on Monte Carlo's current collection platform is accepted. Required for every type except airflow, which takes none.")
+	cmd.Flags().String("deployment-id", "", "The deployment the container's connection will run through. Pick one from the deployments list. Only a deployment on Monte Carlo's current collection platform is accepted. airflow takes none. custom-etl-connector takes the deployment of the agent that registered the connector, or none for a push-only connector. Every other type requires one.")
 	return cmd
 }
 
@@ -78,7 +78,7 @@ func newEtlContainersDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <etl_container_id>",
 		Short: "Delete an ETL container",
-		Long:  "Delete an ETL container.\n\nOnly an empty container can be deleted. A connection is managed as its own resource and\nis never deleted with its container, so remove it first. A synthetic container cannot be\ndeleted here. Both refusals return 409.",
+		Long:  "Delete an ETL container.\n\nOnly an empty container can be deleted. A connection is managed as its own resource and\nis never deleted with its container, so remove it first. A synthetic container cannot be\ndeleted here. Both refusals return 409. Deleting a container revokes the integration keys\nscoped to it.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := confirm(cmd, "Delete etl container"+" "+args[0]); err != nil {
