@@ -205,7 +205,7 @@ func newConnectionsValidateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "validate <connection_id>",
 		Short: "Validate a connection",
-		Long:  "Check a connection against the system it reads from.\n\nTests the connection as it stands, with the credentials it already uses. Nothing is\nchanged, and you send no credentials.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.\n\nAn id that does not exist or belongs to another account returns 404. A connection that\nruns on no deployment, as an Airflow one does, returns 409.",
+		Long:  "Check a connection against the system it reads from.\n\nTests the connection as it stands, with the credentials it already uses. Nothing is\nchanged, and you send no credentials.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.\n\nAn id that does not exist or belongs to another account returns 404. A connection that\nruns on no deployment, as an Airflow or push-only custom BI one does, returns 409.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			api, ctx, err := apiClient(cmd)
