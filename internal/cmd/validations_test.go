@@ -52,7 +52,7 @@ func run(status string, rows ...map[string]any) map[string]any {
 }
 
 func problem(message, resolution string) []any {
-	return []any{map[string]any{"friendly_message": message, "resolution": resolution}}
+	return []any{map[string]any{"friendly_message": message, "resolution": resolution, "cause": nil, "stack_trace": nil}}
 }
 
 // polls answers each fetch with the next state, then keeps answering the last.

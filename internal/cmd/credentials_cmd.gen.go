@@ -61,6 +61,7 @@ func newCredentialsCreateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsCreateRedshiftCmd())
 	cmd.AddCommand(newCredentialsCreateSapHanaCmd())
 	cmd.AddCommand(newCredentialsCreateSnowflakeCmd())
+	cmd.AddCommand(newCredentialsCreateSqlServerCmd())
 	cmd.AddCommand(newCredentialsCreateStarburstEnterpriseCmd())
 	cmd.AddCommand(newCredentialsCreateStarburstGalaxyCmd())
 	cmd.AddCommand(newCredentialsCreateTableauCmd())
@@ -1980,6 +1981,113 @@ func newCredentialsCreateSnowflakeCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsCreateSqlServerCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "sql-server",
+		Short: "Create SQL Server credentials",
+		Long:  "Store a SQL Server login for connections to use.\n\nMonte Carlo keeps the password or the keytab and returns everything else. Create the\ncredentials first, then create a connection that references them. Nothing is checked\nagainst SQL Server here.\n\n`auth_mode` decides what else to send: `user` and `password` for `sql`, or `realm`, `kdc`,\n`principal` and one of `keytab_base64` or `password` for `kerberos`. An account holds a\nlimited number of credentials; past that the create is refused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreateSqlServerCredentials(ctx)
+			host, err := flagString(cmd, "host")
+			if err != nil {
+				return err
+			}
+			port, err := flagInt(cmd, "port")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewSqlServerCredentialsIn(host, port)
+			if changed(cmd, "auth-mode") {
+				authModeValue, err := flagString(cmd, "auth-mode")
+				if err != nil {
+					return err
+				}
+				authMode, err := sdk.NewSqlServerAuthModeFromValue(authModeValue)
+				if err != nil {
+					return usageError("%w", err)
+				}
+				body.SetAuthMode(*authMode)
+			}
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "kdc") {
+				kdc, err := flagString(cmd, "kdc")
+				if err != nil {
+					return err
+				}
+				body.SetKdc(kdc)
+			}
+			if changed(cmd, "keytab-base64", "keytab-base64-prompt") {
+				keytabBase64, err := flagSecret(cmd, "keytab-base64")
+				if err != nil {
+					return err
+				}
+				body.SetKeytabBase64(keytabBase64)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "principal") {
+				principal, err := flagString(cmd, "principal")
+				if err != nil {
+					return err
+				}
+				body.SetPrincipal(principal)
+			}
+			if changed(cmd, "realm") {
+				realm, err := flagString(cmd, "realm")
+				if err != nil {
+					return err
+				}
+				body.SetRealm(realm)
+			}
+			if changed(cmd, "user") {
+				user, err := flagString(cmd, "user")
+				if err != nil {
+					return err
+				}
+				body.SetUser(user)
+			}
+			req = req.SqlServerCredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "auth_mode", "user", "realm", "kdc", "principal")
+		},
+	}
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. For kerberos, the fully qualified name the server's service principal is registered under.")
+	_ = cmd.MarkFlagRequired("host")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	_ = cmd.MarkFlagRequired("port")
+	cmd.Flags().String("auth-mode", "", "How Monte Carlo signs in. sql takes user and password. kerberos takes realm, kdc, principal, and one of keytab_base64 or password.")
+	_ = cmd.RegisterFlagCompletionFunc("auth-mode", enumCompletion(sdk.AllowedSqlServerAuthModeEnumValues))
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("kdc", "", "Hostname of the key distribution center, optionally with :port, for kerberos.")
+	cmd.Flags().String("keytab-base64", "", "Base64-encoded keytab for principal, for kerberos. Send this or password. Stored by Monte Carlo and never returned. Visible in the process list; --keytab-base64-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("keytab-base64-prompt", false, "Read --keytab-base64 from a hidden prompt instead of the command line.")
+	cmd.Flags().String("password", "", "Password of user for sql, or of the Active Directory account behind principal for kerberos. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("principal", "", "Active Directory principal Monte Carlo signs in as, for kerberos.")
+	cmd.Flags().String("realm", "", "Kerberos realm, normally the Active Directory domain in capitals, for kerberos.")
+	cmd.Flags().String("user", "", "SQL login Monte Carlo signs in as, for sql.")
+	return cmd
+}
+
 func newCredentialsCreateStarburstEnterpriseCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "starburst-enterprise",
@@ -2369,6 +2477,7 @@ func newCredentialsDeleteCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsDeleteRedshiftCmd())
 	cmd.AddCommand(newCredentialsDeleteSapHanaCmd())
 	cmd.AddCommand(newCredentialsDeleteSnowflakeCmd())
+	cmd.AddCommand(newCredentialsDeleteSqlServerCmd())
 	cmd.AddCommand(newCredentialsDeleteStarburstEnterpriseCmd())
 	cmd.AddCommand(newCredentialsDeleteStarburstGalaxyCmd())
 	cmd.AddCommand(newCredentialsDeleteTableauCmd())
@@ -3048,6 +3157,30 @@ func newCredentialsDeleteSnowflakeCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsDeleteSqlServerCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "sql-server <credentials_id>",
+		Short: "Delete SQL Server credentials",
+		Long:  "Delete SQL Server credentials.\n\nRefused while a connection still uses them. Delete the connection first. Monte Carlo stops\nusing the stored password or keytab. Change the password in SQL Server or Active Directory\nif it must be retired.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete sql-server credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeleteSqlServerCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
 func newCredentialsDeleteStarburstEnterpriseCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "starburst-enterprise <credentials_id>",
@@ -3177,6 +3310,7 @@ func newCredentialsGetCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsGetRedshiftCmd())
 	cmd.AddCommand(newCredentialsGetSapHanaCmd())
 	cmd.AddCommand(newCredentialsGetSnowflakeCmd())
+	cmd.AddCommand(newCredentialsGetSqlServerCmd())
 	cmd.AddCommand(newCredentialsGetStarburstEnterpriseCmd())
 	cmd.AddCommand(newCredentialsGetStarburstGalaxyCmd())
 	cmd.AddCommand(newCredentialsGetTableauCmd())
@@ -3800,6 +3934,28 @@ func newCredentialsGetSnowflakeCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsGetSqlServerCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "sql-server <credentials_id>",
+		Short: "Get SQL Server credentials",
+		Long:  "Get one set of SQL Server credentials, without the password or the keytab.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetSqlServerCredentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "auth_mode", "user", "realm", "kdc", "principal")
+		},
+	}
+	return cmd
+}
+
 func newCredentialsGetStarburstEnterpriseCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "starburst-enterprise <credentials_id>",
@@ -3976,6 +4132,7 @@ func newCredentialsUpdateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsUpdateRedshiftCmd())
 	cmd.AddCommand(newCredentialsUpdateSapHanaCmd())
 	cmd.AddCommand(newCredentialsUpdateSnowflakeCmd())
+	cmd.AddCommand(newCredentialsUpdateSqlServerCmd())
 	cmd.AddCommand(newCredentialsUpdateStarburstEnterpriseCmd())
 	cmd.AddCommand(newCredentialsUpdateStarburstGalaxyCmd())
 	cmd.AddCommand(newCredentialsUpdateTableauCmd())
@@ -5993,6 +6150,117 @@ func newCredentialsUpdateSnowflakeCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsUpdateSqlServerCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "sql-server <credentials_id>",
+		Short: "Update SQL Server credentials",
+		Long:  "Change SQL Server credentials in place.\n\nEvery connection using the credentials picks up the change. Send only the fields to change.\nA new `auth_mode` drops the fields and the secret of the old one, so send the new mode's\nfields with it. Sending an empty body returns the credentials as they are.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdateSqlServerCredentials(ctx, args[0])
+			body := sdk.NewSqlServerCredentialsPatch()
+			if changed(cmd, "auth-mode") {
+				authModeValue, err := flagString(cmd, "auth-mode")
+				if err != nil {
+					return err
+				}
+				authMode, err := sdk.NewSqlServerAuthModeFromValue(authModeValue)
+				if err != nil {
+					return usageError("%w", err)
+				}
+				body.SetAuthMode(*authMode)
+			}
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "kdc") {
+				kdc, err := flagString(cmd, "kdc")
+				if err != nil {
+					return err
+				}
+				body.SetKdc(kdc)
+			}
+			if changed(cmd, "keytab-base64", "keytab-base64-prompt") {
+				keytabBase64, err := flagSecret(cmd, "keytab-base64")
+				if err != nil {
+					return err
+				}
+				body.SetKeytabBase64(keytabBase64)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "principal") {
+				principal, err := flagString(cmd, "principal")
+				if err != nil {
+					return err
+				}
+				body.SetPrincipal(principal)
+			}
+			if changed(cmd, "realm") {
+				realm, err := flagString(cmd, "realm")
+				if err != nil {
+					return err
+				}
+				body.SetRealm(realm)
+			}
+			if changed(cmd, "user") {
+				user, err := flagString(cmd, "user")
+				if err != nil {
+					return err
+				}
+				body.SetUser(user)
+			}
+			req = req.SqlServerCredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "auth_mode", "user", "realm", "kdc", "principal")
+		},
+	}
+	cmd.Flags().String("auth-mode", "", "How Monte Carlo signs in. sql takes user and password. kerberos takes realm, kdc, principal, and one of keytab_base64 or password.")
+	_ = cmd.RegisterFlagCompletionFunc("auth-mode", enumCompletion(sdk.AllowedSqlServerAuthModeEnumValues))
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. For kerberos, the fully qualified name the server's service principal is registered under.")
+	cmd.Flags().String("kdc", "", "Hostname of the key distribution center, optionally with :port, for kerberos.")
+	cmd.Flags().String("keytab-base64", "", "Base64-encoded keytab for principal, for kerberos. Send this or password. Stored by Monte Carlo and never returned. Visible in the process list; --keytab-base64-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("keytab-base64-prompt", false, "Read --keytab-base64 from a hidden prompt instead of the command line.")
+	cmd.Flags().String("password", "", "Password of user for sql, or of the Active Directory account behind principal for kerberos. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	cmd.Flags().String("principal", "", "Active Directory principal Monte Carlo signs in as, for kerberos.")
+	cmd.Flags().String("realm", "", "Kerberos realm, normally the Active Directory domain in capitals, for kerberos.")
+	cmd.Flags().String("user", "", "SQL login Monte Carlo signs in as, for sql.")
+	return cmd
+}
+
 func newCredentialsUpdateStarburstEnterpriseCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "starburst-enterprise <credentials_id>",
@@ -6385,6 +6653,7 @@ func newCredentialsValidateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsValidateRedshiftCmd())
 	cmd.AddCommand(newCredentialsValidateSapHanaCmd())
 	cmd.AddCommand(newCredentialsValidateSnowflakeCmd())
+	cmd.AddCommand(newCredentialsValidateSqlServerCmd())
 	cmd.AddCommand(newCredentialsValidateStarburstEnterpriseCmd())
 	cmd.AddCommand(newCredentialsValidateStarburstGalaxyCmd())
 	cmd.AddCommand(newCredentialsValidateTableauCmd())
@@ -9269,6 +9538,150 @@ func newCredentialsValidateSnowflakeCmd() *cobra.Command {
 	cmd.Flags().String("private-key-passphrase", "", "Passphrase the private key is encrypted with. Omit it for an unencrypted key. Never returned. Visible in the process list; --private-key-passphrase-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("private-key-passphrase-prompt", false, "Read --private-key-passphrase from a hidden prompt instead of the command line.")
 	cmd.Flags().String("warehouse", "", "Snowflake virtual warehouse to run queries in. Omit it to use the user's default.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateSqlServerCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "sql-server",
+		Short: "Validate SQL Server credentials",
+		Long:  "Check a candidate SQL Server login against SQL Server.\n\nNo credentials are created. Send the values you would create the credentials with, and a\ndeployment to run them from, and the checks run against your SQL Server database. Kerberos\nneeds a deployment whose agent can reach the key distribution center.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateSqlServerCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			host, err := flagString(cmd, "host")
+			if err != nil {
+				return err
+			}
+			port, err := flagInt(cmd, "port")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewSqlServerCredentialsValidateIn(deploymentId, host, port)
+			if changed(cmd, "auth-mode") {
+				authModeValue, err := flagString(cmd, "auth-mode")
+				if err != nil {
+					return err
+				}
+				authMode, err := sdk.NewSqlServerAuthModeFromValue(authModeValue)
+				if err != nil {
+					return usageError("%w", err)
+				}
+				body.SetAuthMode(*authMode)
+			}
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "kdc") {
+				kdc, err := flagString(cmd, "kdc")
+				if err != nil {
+					return err
+				}
+				body.SetKdc(kdc)
+			}
+			if changed(cmd, "keytab-base64", "keytab-base64-prompt") {
+				keytabBase64, err := flagSecret(cmd, "keytab-base64")
+				if err != nil {
+					return err
+				}
+				body.SetKeytabBase64(keytabBase64)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "principal") {
+				principal, err := flagString(cmd, "principal")
+				if err != nil {
+					return err
+				}
+				body.SetPrincipal(principal)
+			}
+			if changed(cmd, "realm") {
+				realm, err := flagString(cmd, "realm")
+				if err != nil {
+					return err
+				}
+				body.SetRealm(realm)
+			}
+			if changed(cmd, "user") {
+				user, err := flagString(cmd, "user")
+				if err != nil {
+					return err
+				}
+				body.SetUser(user)
+			}
+			req = req.SqlServerCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. For kerberos, the fully qualified name the server's service principal is registered under.")
+	_ = cmd.MarkFlagRequired("host")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	_ = cmd.MarkFlagRequired("port")
+	cmd.Flags().String("auth-mode", "", "How Monte Carlo signs in. sql takes user and password. kerberos takes realm, kdc, principal, and one of keytab_base64 or password.")
+	_ = cmd.RegisterFlagCompletionFunc("auth-mode", enumCompletion(sdk.AllowedSqlServerAuthModeEnumValues))
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("kdc", "", "Hostname of the key distribution center, optionally with :port, for kerberos.")
+	cmd.Flags().String("keytab-base64", "", "Base64-encoded keytab for principal, for kerberos. Send this or password. Used for this check and not kept. Visible in the process list; --keytab-base64-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("keytab-base64-prompt", false, "Read --keytab-base64 from a hidden prompt instead of the command line.")
+	cmd.Flags().String("password", "", "Password of user for sql, or of the Active Directory account behind principal for kerberos. Used for this check and not kept. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("principal", "", "Active Directory principal Monte Carlo signs in as, for kerberos.")
+	cmd.Flags().String("realm", "", "Kerberos realm, normally the Active Directory domain in capitals, for kerberos.")
+	cmd.Flags().String("user", "", "SQL login Monte Carlo signs in as, for sql.")
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }
