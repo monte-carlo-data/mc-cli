@@ -259,7 +259,7 @@ func writeProfile(dir, name string, c profileCredentials, endpoint string) (path
 	}
 	switch endpoint {
 	case "":
-	case defaultEndpoint:
+	case sdk.DefaultEndpoint:
 		f.unset(name, keyEndpoint)
 	default:
 		f.set(name, keyEndpoint, endpoint+"/graphql")

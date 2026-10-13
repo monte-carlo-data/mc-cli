@@ -33,7 +33,7 @@ func checkEndpoint(dir, name, flag string) (string, error) {
 	if stored != "" {
 		return stored, nil
 	}
-	return defaultEndpoint, nil
+	return sdk.DefaultEndpoint, nil
 }
 
 // validationOptions builds the client options that check c at endpoint, the one c will be used

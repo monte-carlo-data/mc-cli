@@ -10,6 +10,8 @@ import (
 	"runtime/debug"
 	"strings"
 	"testing"
+
+	sdk "github.com/monte-carlo-data/mc-sdk-go/montecarlo"
 )
 
 const precedenceProfiles = `[default]
@@ -83,7 +85,7 @@ func TestEndpointComesFromTheProfileElseTheDefault(t *testing.T) {
 	if _, endpoint := resolvedFor(t, dir); endpoint != "https://dev.example.com" {
 		t.Fatalf("profile endpoint: %s", endpoint)
 	}
-	if _, endpoint := resolvedFor(t, dir, "--profile", "dev"); endpoint != defaultEndpoint {
+	if _, endpoint := resolvedFor(t, dir, "--profile", "dev"); endpoint != sdk.DefaultEndpoint {
 		t.Fatalf("default endpoint: %s", endpoint)
 	}
 	if _, endpoint := resolvedFor(t, dir, "--endpoint", "https://x.example.com"); endpoint != "https://x.example.com" {

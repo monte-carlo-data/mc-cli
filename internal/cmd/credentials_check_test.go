@@ -196,7 +196,7 @@ func TestValidationOptionsIgnoreEnvironmentAndProfile(t *testing.T) {
 	t.Setenv("MCD_DEFAULT_API_TOKEN", "env-token")
 
 	cases := []struct{ name, endpoint, want string }{
-		{"default endpoint", defaultEndpoint, defaultEndpoint},
+		{"default endpoint", sdk.DefaultEndpoint, sdk.DefaultEndpoint},
 		{"custom endpoint", "https://custom.example", "https://custom.example"},
 	}
 	for _, tc := range cases {
@@ -269,7 +269,7 @@ func TestCheckEndpointPrefersFlagThenStoredThenDefault(t *testing.T) {
 	cases := []struct{ name, profile, flag, want string }{
 		{"flag wins", "dev", "https://flag.example", "https://flag.example"},
 		{"stored", "dev", "", "https://dev.example"},
-		{"default", "prod", "", defaultEndpoint},
+		{"default", "prod", "", sdk.DefaultEndpoint},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
