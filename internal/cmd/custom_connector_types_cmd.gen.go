@@ -26,7 +26,7 @@ func newCustomConnectorTypesGetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "get <custom_connector_type_id>",
 		Short: "Get a custom connector type",
-		Long:  "Get one custom connector type.\n\nAn id that does not exist or belongs to another account returns 404.",
+		Long:  "Get one custom connector type.\n\nAn id that does not exist, belongs to another account, or whose collection agent was\nremoved returns 404.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			api, ctx, err := apiClient(cmd)
@@ -48,7 +48,7 @@ func newCustomConnectorTypesListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List custom connector types",
-		Long:  "List the custom connector types your collection agents registered, oldest first.\n\nA type whose collection agent was removed outright is not listed.",
+		Long:  "List the custom connector types your collection agents registered, oldest first.\n\nA type whose collection agent was removed is not listed.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			api, ctx, err := apiClient(cmd)
