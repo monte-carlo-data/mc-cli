@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	sdk "github.com/monte-carlo-data/mc-sdk-go/montecarlo"
 )
 
 func TestProfileSetWritesOAuthAndBecomesActive(t *testing.T) {
@@ -311,7 +313,7 @@ func TestProfileSetEndpointRules(t *testing.T) {
 		want     string
 	}{
 		{"not passed keeps a stored endpoint", nil, "mcd_api_endpoint = https://dev.example/graphql\n"},
-		{"the default removes it", []string{"--endpoint", defaultEndpoint + "/"}, ""},
+		{"the default removes it", []string{"--endpoint", sdk.DefaultEndpoint + "/"}, ""},
 		{"another replaces it", []string{"--endpoint", "https://other.example"}, "mcd_api_endpoint = https://other.example/graphql\n"},
 	}
 	for _, tc := range cases {

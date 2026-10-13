@@ -92,9 +92,6 @@ func clientOptions(cmd *cobra.Command) (sdk.Options, error) {
 		}
 		return sdk.Options{}, err
 	}
-	if resolved.Endpoint == "" {
-		resolved.Endpoint = defaultEndpoint
-	}
 	return resolved, nil
 }
 

@@ -15,14 +15,12 @@ import (
 	"strings"
 	"syscall"
 
+	sdk "github.com/monte-carlo-data/mc-sdk-go/montecarlo"
 	"github.com/spf13/cobra"
 )
 
 // binaryName is the command's name in help text. The main package lives in cmd/<binaryName>/.
 const binaryName = "montecarlo"
-
-// defaultEndpoint is the API base URL when neither a flag nor the profile names one.
-const defaultEndpoint = "https://api.getmontecarlo.com"
 
 // newRootCmd builds the root command and registers its persistent flags. It exists so rootCmd
 // can be a var initializer: var initialization runs before any init(), which guarantees the
@@ -67,7 +65,7 @@ A secret flag accepts @<path> to read its value from a file, and has a --<name>-
 	f.String("profile", "", `Profile in profiles.ini. Defaults to MCD_DEFAULT_PROFILE, then the profile chosen with "profile use", then "default".`)
 	f.StringP("output", "o", "", "Output format: table, wide or json. Defaults to table on a terminal and json otherwise; wide is the table with every field.")
 	f.String("config-dir", "", "Directory holding profiles.ini and cli.ini. Defaults to ~/.mcd.")
-	f.String("endpoint", "", "API base URL. Defaults to the profile's, then "+defaultEndpoint+".")
+	f.String("endpoint", "", "API base URL. Defaults to the profile's, then "+sdk.DefaultEndpoint+".")
 	f.String("client-id", "", "OAuth client id. Defaults to MCD_DEFAULT_OAUTH_CLIENT_ID, then the profile's.")
 	f.String("client-secret", "", "OAuth client secret. Defaults to MCD_DEFAULT_OAUTH_CLIENT_SECRET, then the profile's. Visible in the process list; --client-secret-prompt asks for it instead, and @<path> reads it from a file.")
 	f.Bool("client-secret-prompt", false, "Read --client-secret from a hidden prompt instead of the command line.")
