@@ -277,7 +277,7 @@ func newConnectionsAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add <connection-type>",
 		Short: "Add a connection, creating its warehouse, BI container or ETL container and credentials",
-		Long:  "Adds a connection in one step. It validates the credentials first and, once every validation passes, asks before creating a warehouse unless --warehouse-id names one, or for a BI connection type a BI container unless --bi-container-id names one, or for an ETL connection type an ETL container unless --etl-container-id names one, then the credentials, then the connection. --validate-only stops after validating; --skip-validations creates without validating or asking. If a step fails, or the command is interrupted, what it created is deleted again, and anything it could not delete is listed with the command that deletes it.\n\nThe argument is the connection type. This command takes self-hosted credentials, one set of --self-hosted-* flags; the subcommands take each connection type's own credentials.",
+		Long:  "Adds a connection in one step. It validates the credentials first and, once every validation passes, asks before creating a warehouse unless --warehouse-id names one, or for a BI connection type a BI container unless --bi-container-id names one, or for an ETL connection type an ETL container unless --etl-container-id names one, then the credentials, then the connection. --validate-only stops after validating; --skip-validations creates without validating or asking. If a step fails, or the command is interrupted, what it created is deleted again, and anything it could not delete is listed with the command that deletes it.\n\nThe argument is the connection type. This command takes self-hosted credentials, one set of --self-hosted-* flags; the subcommands take each connection type's own credentials.\n\nA type registered per account goes by its prefix: custom-bi-connector-<id> on a custom-bi-connector BI container, custom-etl-connector-<id> on a custom-etl-connector ETL container, custom-connector-<id> on a custom-integration warehouse and custom-integration-<id> on a custom-integration warehouse. The push-only custom-bi-connector and custom-etl-connector take no credentials, so they are refused: create the container, then the connection.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, args[0], nil)
@@ -3899,6 +3899,13 @@ func buildConnectionsAddSelfHostedFile(cmd *cobra.Command, api *sdk.APIClient, c
 // then creates the warehouse unless one is given, the credentials and the connection, and a
 // failed step deletes what the run created.
 func runConnectionsAdd(cmd *cobra.Command, connectionType string, native *connectionsAddNative) error {
+	// A push-only connection takes no credentials, which this command always creates.
+	switch connectionType {
+	case "custom-bi-connector":
+		return usageError("a %s connection is push-only and takes no credentials, so this command cannot add it. Create a BI container with no --deployment-id through `%s bi-containers create`, then the connection through `%s connections create`", connectionType, binaryName, binaryName)
+	case "custom-etl-connector":
+		return usageError("a %s connection is push-only and takes no credentials, so this command cannot add it. Create an ETL container with no --deployment-id through `%s etl-containers create`, then the connection through `%s connections create`", connectionType, binaryName, binaryName)
+	}
 	groups := []flagGroup{
 		{"self-hosted-aws", []string{"self-hosted-aws-secret", "self-hosted-aws-assumable-role", "self-hosted-aws-region", "self-hosted-aws-external-id"}},
 		{"self-hosted-gcp", []string{"self-hosted-gcp-secret"}},
@@ -3936,7 +3943,11 @@ func runConnectionsAdd(cmd *cobra.Command, connectionType string, native *connec
 		"power-bi":         "power-bi",
 		"tableau":          "tableau",
 	}
-	// The ETL container type each connection type goes on; any other type goes on a warehouse.
+	// The BI container type a connection type registered per account goes on, by its prefix.
+	biContainerTypePrefixes := map[string]string{
+		"custom-bi-connector-": "custom-bi-connector",
+	}
+	// The ETL container type each connection type goes on; any other type goes on a warehouse unless a prefix routes it.
 	etlContainerTypes := map[string]string{
 		"airflow":            "airflow",
 		"azure-data-factory": "azure-data-factory",
@@ -3945,13 +3956,34 @@ func runConnectionsAdd(cmd *cobra.Command, connectionType string, native *connec
 		"informatica-v2":     "informatica-v2",
 		"mulesoft":           "mulesoft",
 	}
+	// The ETL container type a connection type registered per account goes on, by its prefix.
+	etlContainerTypePrefixes := map[string]string{
+		"custom-etl-connector-": "custom-etl-connector",
+	}
 	// The connection types whose ETL container runs through no deployment.
 	etlWithoutDeployment := map[string]bool{
 		"airflow": true,
 	}
+	// The warehouse type a connection type registered per account creates its warehouse with, by
+	// its prefix. Any other type creates it from its connection type.
+	warehouseTypePrefixes := map[string]string{
+		"custom-connector-":   "custom-integration",
+		"custom-integration-": "custom-integration",
+	}
+	var warehouseType *sdk.WarehouseType
 	biType, onBi := biContainerTypes[connectionType]
+	for prefix, value := range biContainerTypePrefixes {
+		if !onBi && strings.HasPrefix(connectionType, prefix) {
+			biType, onBi = value, true
+		}
+	}
 	var biContainerType sdk.NewBiContainerType
 	etlType, onEtl := etlContainerTypes[connectionType]
+	for prefix, value := range etlContainerTypePrefixes {
+		if !onEtl && strings.HasPrefix(connectionType, prefix) {
+			etlType, onEtl = value, true
+		}
+	}
 	var etlContainerType sdk.NewEtlContainerType
 	if onBi {
 		if changed(cmd, "warehouse-id", "etl-container-id") {
@@ -3984,6 +4016,14 @@ func runConnectionsAdd(cmd *cobra.Command, connectionType string, native *connec
 	} else {
 		if changed(cmd, "bi-container-id", "etl-container-id") {
 			return usageError("a %s connection goes on a warehouse, so it takes no --bi-container-id or --etl-container-id", connectionType)
+		}
+		for prefix, value := range warehouseTypePrefixes {
+			if strings.HasPrefix(connectionType, prefix) {
+				warehouseType, err = sdk.NewWarehouseTypeFromValue(value)
+				if err != nil {
+					return err
+				}
+			}
 		}
 		if changed(cmd, "warehouse-id") == changed(cmd, "deployment-id") {
 			return usageError("pass --deployment-id to create a warehouse for the connection, or --warehouse-id to add it to an existing one")
@@ -4039,7 +4079,11 @@ func runConnectionsAdd(cmd *cobra.Command, connectionType string, native *connec
 	}
 	var credentialsId string
 	warehouse := sdk.NewWarehouseIn(name, deploymentId)
-	warehouse.SetConnectionType(connectionType)
+	if warehouseType != nil {
+		warehouse.SetType(*warehouseType)
+	} else {
+		warehouse.SetConnectionType(connectionType)
+	}
 	biContainer := sdk.NewBiContainerIn(biContainerType, name)
 	if changed(cmd, "deployment-id") {
 		biContainer.SetDeploymentId(deploymentId)
