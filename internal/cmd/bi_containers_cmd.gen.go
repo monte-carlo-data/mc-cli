@@ -29,7 +29,7 @@ func newBiContainersCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create a BI container",
-		Long:  "Create an empty BI container.\n\nThe container holds no connections until you add some. Its type is fixed at creation and\ndecides which connections it accepts. A `looker` container takes both the Looker API\nconnection and the LookML git connection. The deployment has to be one the deployments\nlist returns; any other id returns 404. A deployment that does not support the BI tool,\nor needs an upgrade first, returns 409.",
+		Long:  "Create an empty BI container.\n\nThe container holds no connections until you add some. Its type is fixed at creation and\ndecides which connections it accepts. A `looker` container takes both the Looker API\nconnection and the LookML git connection. The deployment has to be one the deployments\nlist returns; any other id returns 404. A deployment that does not support the BI tool,\nor needs an upgrade first, returns 409. A `custom-bi-connector` container goes on the\ndeployment of the agent that registered the connector, or on none for a push-only\nconnector. Every other type requires a deployment.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			api, ctx, err := apiClient(cmd)
@@ -49,11 +49,14 @@ func newBiContainersCreateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			deploymentId, err := flagString(cmd, "deployment-id")
-			if err != nil {
-				return err
+			body := sdk.NewBiContainerIn(*type_, name)
+			if changed(cmd, "deployment-id") {
+				deploymentId, err := flagString(cmd, "deployment-id")
+				if err != nil {
+					return err
+				}
+				body.SetDeploymentId(deploymentId)
 			}
-			body := sdk.NewBiContainerIn(*type_, name, deploymentId)
 			req = req.BiContainerIn(*body)
 			out, resp, err := retryOnTransient(cmd, req.Execute)
 			if err != nil {
@@ -67,8 +70,7 @@ func newBiContainersCreateCmd() *cobra.Command {
 	_ = cmd.MarkFlagRequired("type")
 	cmd.Flags().String("name", "", "Display name for the BI container.")
 	_ = cmd.MarkFlagRequired("name")
-	cmd.Flags().String("deployment-id", "", "The deployment the container's connections will run through. Pick one from the deployments list. Only a deployment on Monte Carlo's current collection platform is accepted.")
-	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("deployment-id", "", "The deployment the container's connections will run through. Pick one from the deployments list. Only a deployment on Monte Carlo's current collection platform is accepted. custom-bi-connector takes the deployment of the agent that registered the connector, or none for a push-only connector. Every other type requires one.")
 	return cmd
 }
 
