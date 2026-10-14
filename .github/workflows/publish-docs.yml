@@ -1,8 +1,8 @@
 name: Publish docs
 
 # Builds the command reference on every pull request. A push to dev publishes it to the dev
-# clidocs site as a preview. Prod publishes after CI succeeds on main, from the released commit
-# with its tag as the version.
+# clidocs site as a preview. Prod publishes after CI succeeds on main: the latest release, with
+# its tag as the version.
 #
 # The role, bucket and distribution are secrets so the public run logs mask them: repository
 # secrets for dev, and the release environment's for prod.
@@ -17,10 +17,6 @@ on:
 
 permissions:
   contents: read
-
-concurrency:
-  group: publish-docs-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: false
 
 jobs:
   build:
@@ -54,6 +50,9 @@ jobs:
     needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
+    concurrency:
+      group: publish-docs-dev
+      cancel-in-progress: false
     permissions:
       contents: read
       id-token: write
@@ -75,7 +74,9 @@ jobs:
           distribution-id: ${{ secrets.DOCS_DEV_DISTRIBUTION_ID }}
 
   # The prod role trusts only the release environment. workflow_run's branches filter matches
-  # the head branch's name alone, so a fork's branch named main is ruled out here.
+  # the head branch's name alone, so a fork's branch named main is ruled out here. Every
+  # successful CI run on main publishes the latest release, so a run for an older merge, or a
+  # cancelled pending one, can't leave the site behind.
   publish-prod:
     name: Publish to prod
     if: >-
@@ -85,51 +86,44 @@ jobs:
       github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
     environment: release
+    concurrency:
+      group: publish-docs-prod
+      cancel-in-progress: false
     permissions:
       contents: read
       id-token: write
     steps:
-      # Publishes only the latest release, so a slow run for an older merge never replaces newer
-      # docs. A commit CI released nothing for has no tag.
+      # Always the latest release, whichever run this is, so the site converges.
       - name: Find the release
         id: release
         env:
-          SHA: ${{ github.event.workflow_run.head_sha }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          tag=$(git ls-remote --tags --refs "https://github.com/$GITHUB_REPOSITORY" 'v*' |
-            awk -v sha="$SHA" '$1 == sha { sub("refs/tags/", "", $2); print $2 }' |
-            grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1 || true)
-          if [ -z "$tag" ]; then
-            echo "::notice::$SHA has no release tag; nothing to publish."
-            exit 0
-          fi
-          latest=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)
-          if [ "$tag" != "$latest" ]; then
-            echo "::notice::$tag is not the latest release, $latest; nothing to publish."
-            exit 0
+          tag=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)
+          if ! [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Latest release tag '$tag' is not a version tag."
+            exit 1
           fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
-        if: steps.release.outputs.tag != ''
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ steps.release.outputs.tag }}
           persist-credentials: false
 
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
-        if: steps.release.outputs.tag != ''
         with:
           go-version-file: go.mod
+          # No build cache: the prod role is in reach, so nothing restored from a cache another
+          # workflow could have written.
+          cache: false
 
       - name: Build
-        if: steps.release.outputs.tag != ''
         env:
           TAG: ${{ steps.release.outputs.tag }}
         run: go run ./tools/gendocs -o site -version "$TAG"
 
       - uses: ./.github/actions/publish-docs
-        if: steps.release.outputs.tag != ''
         with:
           site: site
           role-to-assume: ${{ secrets.DOCS_PROD_ROLE_ARN }}

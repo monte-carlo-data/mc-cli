@@ -11,8 +11,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// TestDocsRootMatchesHelp checks that every available command's usage, read from DocsRoot
-// before any command line runs it, is what --help prints for that command.
+// TestDocsRootMatchesHelp checks that every available command's usage, as DocsRoot returns it,
+// is what --help prints for that command. Other tests may have executed the shared tree first,
+// so tools/gendocs checks DocsRoot on a fresh one.
 func TestDocsRootMatchesHelp(t *testing.T) {
 	root := DocsRoot()
 	for _, c := range availableCommands(root) {

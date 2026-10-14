@@ -33,7 +33,7 @@
 {{- if .Crumbs}}<nav>{{range .Crumbs}}<a href="{{.File}}">{{.Name}}</a> › {{end}}</nav>{{end}}
 <h1 class="command">{{.Path}}</h1>
 <p class="version">Version: {{.Version}}</p>
-{{range .Paragraphs}}<p>{{.}}</p>
+{{range .Blocks}}{{if eq .Kind "pre"}}<pre>{{.Text}}</pre>{{else if eq .Kind "h3"}}<h3>{{.Text}}</h3>{{else}}<p>{{.Text}}</p>{{end}}
 {{end -}}
 <h2>Usage</h2>
 <pre>{{range .Usage}}{{.}}

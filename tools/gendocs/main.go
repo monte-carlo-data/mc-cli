@@ -59,16 +59,23 @@ func main() {
 
 type link struct{ Name, Short, File string }
 
+// gettingStartedGroup is internal/cmd's groupGettingStarted.
+const gettingStartedGroup = "getting-started"
+
 type group struct {
+	ID       string
 	Title    string
 	Commands []link
 }
+
+// block is a paragraph of a command's description: Kind is "p", "pre" or "h3".
+type block struct{ Kind, Text string }
 
 type page struct {
 	Version     string
 	Path        string
 	Crumbs      []link // the ancestors, root first
-	Paragraphs  []string
+	Blocks      []block
 	Usage       []string
 	Aliases     string
 	Example     string
@@ -137,7 +144,7 @@ func run(root *cobra.Command, dir, version string) error {
 		in.Commands = append(in.Commands, link{Name: c.CommandPath(), Short: c.Short, File: fileName(c)})
 	}
 	for _, g := range subcommandGroups(root) {
-		if g.Title == "Getting started" {
+		if g.ID == gettingStartedGroup {
 			in.GettingStarted = g.Commands
 		}
 	}
@@ -152,15 +159,21 @@ func write(tmpl *template.Template, name, path string, data any) error {
 	return os.WriteFile(path, b.Bytes(), 0o644)
 }
 
-// commands is the tree, root first, without what cobra's own doc generators skip.
+// commands is the tree, root first, with the commands help lists.
 func commands(c *cobra.Command) []*cobra.Command {
 	out := []*cobra.Command{c}
 	for _, sub := range c.Commands() {
-		if sub.IsAvailableCommand() && !sub.IsAdditionalHelpTopicCommand() {
+		if listed(sub) {
 			out = append(out, commands(sub)...)
 		}
 	}
 	return out
+}
+
+// listed reports whether help lists c. Cobra counts its help command as unavailable, and its
+// usage template adds it back.
+func listed(c *cobra.Command) bool {
+	return (c.IsAvailableCommand() || c.Name() == "help") && !c.IsAdditionalHelpTopicCommand()
 }
 
 func fileName(c *cobra.Command) string {
@@ -189,8 +202,8 @@ func commandPage(c *cobra.Command, version string) page {
 		text = c.Short
 	}
 	for _, para := range strings.Split(text, "\n\n") {
-		if para = strings.TrimSpace(para); para != "" {
-			p.Paragraphs = append(p.Paragraphs, para)
+		if b, ok := toBlock(para); ok {
+			p.Blocks = append(p.Blocks, b)
 		}
 	}
 	if c.Runnable() {
@@ -205,6 +218,31 @@ func commandPage(c *cobra.Command, version string) page {
 	return p
 }
 
+// toBlock classifies a paragraph of help text: indented lines are code, a "#### " line is a
+// heading, anything else is prose. It reports false for an empty paragraph.
+func toBlock(para string) (block, bool) {
+	if strings.TrimSpace(para) == "" {
+		return block{}, false
+	}
+	lines := strings.Split(strings.Trim(para, "\n"), "\n")
+	indented := true
+	for _, l := range lines {
+		if l != "" && !strings.HasPrefix(l, "\t") && !strings.HasPrefix(l, " ") {
+			indented = false
+		}
+	}
+	if indented {
+		for i, l := range lines {
+			lines[i] = strings.TrimLeft(l, " \t")
+		}
+		return block{Kind: "pre", Text: strings.Join(lines, "\n")}, true
+	}
+	if rest, ok := strings.CutPrefix(strings.TrimSpace(para), "#### "); ok && len(lines) == 1 {
+		return block{Kind: "h3", Text: strings.TrimSuffix(rest, ":")}, true
+	}
+	return block{Kind: "p", Text: strings.TrimSpace(para)}, true
+}
+
 // subcommandGroups lists c's subcommands as its help does: by group, in the order the groups
 // were added, then those in none.
 func subcommandGroups(c *cobra.Command) []group {
@@ -213,10 +251,10 @@ func subcommandGroups(c *cobra.Command) []group {
 	byID := map[string]int{}
 	for _, g := range c.Groups() {
 		byID[g.ID] = len(groups)
-		groups = append(groups, group{Title: strings.TrimSuffix(g.Title, ":")})
+		groups = append(groups, group{ID: g.ID, Title: strings.TrimSuffix(g.Title, ":")})
 	}
 	for _, sub := range c.Commands() {
-		if !sub.IsAvailableCommand() || sub.IsAdditionalHelpTopicCommand() {
+		if !listed(sub) {
 			continue
 		}
 		if i, ok := byID[sub.GroupID]; ok {
