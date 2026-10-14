@@ -1,0 +1,82 @@
+{{define "head" -}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.}} · montecarlo CLI reference</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><a href="index.html">montecarlo CLI reference</a></header>
+<main>
+{{end}}
+
+{{define "foot" -}}
+</main>
+</body>
+</html>
+{{end}}
+
+{{define "links" -}}
+<table class="commands">
+{{- range .}}
+<tr><td><a href="{{.File}}">{{.Name}}</a></td><td>{{.Short}}</td></tr>
+{{- end}}
+</table>
+{{end}}
+
+{{define "command" -}}
+{{template "head" .Path}}
+{{- if .Crumbs}}<nav>{{range .Crumbs}}<a href="{{.File}}">{{.Name}}</a> › {{end}}</nav>{{end}}
+<h1>{{.Path}}</h1>
+<p class="version">Version: {{.Version}}</p>
+{{range .Paragraphs}}<p>{{.}}</p>
+{{end -}}
+<h2>Usage</h2>
+<pre>{{range .Usage}}{{.}}
+{{end}}</pre>
+{{- if .Aliases}}
+<h2>Aliases</h2>
+<pre>{{.Aliases}}</pre>
+{{- end}}
+{{- if .Example}}
+<h2>Examples</h2>
+<pre>{{.Example}}</pre>
+{{- end}}
+{{- range .Groups}}
+<h2>{{.Title}}</h2>
+{{template "links" .Commands}}
+{{- end}}
+{{- if .Flags}}
+<h2>Flags</h2>
+<pre>{{.Flags}}</pre>
+{{- end}}
+{{- if .GlobalFlags}}
+<h2>Global flags</h2>
+<pre>{{.GlobalFlags}}</pre>
+{{- end}}
+{{template "foot"}}
+{{- end}}
+
+{{define "intro" -}}
+{{template "head" "Introduction"}}
+<h1>montecarlo CLI reference</h1>
+<p class="version">Version: {{.Version}}</p>
+<p>montecarlo is the command-line interface for the Monte Carlo REST API. This reference has a page for every command.</p>
+<h2>Install</h2>
+<p>On macOS and Linux:</p>
+<pre>{{index .Install 0}}</pre>
+<p>On Windows, in PowerShell:</p>
+<pre>{{index .Install 1}}</pre>
+<p>In CI or a script, pin the version:</p>
+<pre>{{.Pinned}}</pre>
+<p>The README in the monte-carlo-data/mc-cli repository on GitHub shows how to verify the installers, and the other ways to install.</p>
+<h2>Getting started</h2>
+<p>Set up your credentials with <a href="montecarlo_configure.html">montecarlo configure</a>, then check them with <a href="montecarlo_whoami.html">montecarlo whoami</a>.</p>
+{{template "links" .GettingStarted}}
+<h2>Commands</h2>
+<p><a href="{{.Root.File}}">montecarlo</a> lists the commands and the global flags every command takes.</p>
+{{template "links" .Commands}}
+{{template "foot"}}
+{{- end}}
