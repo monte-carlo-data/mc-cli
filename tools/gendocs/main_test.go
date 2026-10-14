@@ -23,13 +23,14 @@ func generate(t *testing.T, version string) string {
 	return dir
 }
 
+// read returns a file with LF line endings, which a Windows checkout replaces with CRLF.
 func read(t *testing.T, path string) string {
 	t.Helper()
 	b, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return string(b)
+	return strings.ReplaceAll(string(b), "\r\n", "\n")
 }
 
 // attrURL matches a URL attribute and the tag it is on.
