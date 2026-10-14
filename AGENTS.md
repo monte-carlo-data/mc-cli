@@ -123,7 +123,7 @@ The binary name lives in one constant, `binaryName` in `internal/cmd/root.go`, a
 
 The pages are plain HTML with one stylesheet: the site's CSP allows no script, inline style or anything loaded from elsewhere, and its host serves no directory index, so every link names a file. Tests in `tools/gendocs` check both, and that the commands a guide quotes exist. `/v2/` works because the publish also writes the intro at key `v2/`.
 
-`publish-docs.yml` builds the site on every pull request. A push to `dev` publishes a preview to https://clidocs.dev.getmontecarlo.com/v2/index.html. After CI succeeds on `main`, it publishes the latest release, with its tag as the version. It triggers on CI by its name, `CI`, so renaming that workflow stops it. The roles, buckets and distributions are Actions secrets: `DOCS_DEV_*` in the repository, `DOCS_PROD_*` in the `release` environment, the only one the prod role trusts.
+`publish-docs.yml` builds the site on every pull request. A push to `dev` publishes a preview to https://clidocs.dev.getmontecarlo.com/v2/index.html. After CI succeeds on `main`, it publishes the latest release, with its tag as the version. It triggers on CI by its name, `CI`, so renaming that workflow stops it. Both publishing roles also trust only this file on its branch, `.github/workflows/publish-docs.yml` on `dev` or `main`, so renaming it, or moving its publish jobs into a reusable workflow, stops publishing. The roles, buckets and distributions are Actions secrets: `DOCS_DEV_*` in the repository, `DOCS_PROD_*` in the `release` environment, the only one the prod role trusts.
 
 ## Branching
 
