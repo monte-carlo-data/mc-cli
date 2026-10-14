@@ -3,10 +3,10 @@
 
 // Command gendocs writes the montecarlo command reference as a flat static site: an intro at
 // index.html, the hand-written guides in guides/, one page per command named after its path
-// (montecarlo_connections_list.html), and style.css. The command pages carry what --help prints.
-// No page has scripts, inline styles or anything loaded from elsewhere, so they load under a CSP
-// of default-src 'none' with only same-origin styles. Every link within the site names a file,
-// since its host serves no directory index.
+// (montecarlo_connections_list.html), style.css and the icons. The command pages carry what
+// --help prints. No page has scripts, inline styles or anything loaded from elsewhere, so they
+// load under a CSP of default-src 'none' with only same-origin styles and images. Every link
+// within the site names a file, since its host serves no directory index.
 package main
 
 import (
@@ -25,7 +25,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-//go:embed page.html.tmpl style.css guides
+//go:embed page.html.tmpl style.css favicon.png apple-touch-icon.png guides
 var assets embed.FS
 
 // The install commands, as README.md gives them; a test keeps the two in step. The pinned one
@@ -41,6 +41,9 @@ var guides = []link{
 	{Name: "Set up credentials with an OAuth client", File: "credentials-oauth.html"},
 	{Name: "Set up credentials with an API token", File: "credentials-api-token.html"},
 }
+
+// staticFiles are copied as they are. The icons are montecarlo.ai's, as the API reference uses.
+var staticFiles = []string{"style.css", "favicon.png", "apple-touch-icon.png"}
 
 var releaseTag = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
 
@@ -100,12 +103,14 @@ func run(root *cobra.Command, dir, version string) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	css, err := assets.ReadFile("style.css")
-	if err != nil {
-		return err
-	}
-	if err := os.WriteFile(filepath.Join(dir, "style.css"), css, 0o644); err != nil {
-		return err
+	for _, name := range staticFiles {
+		b, err := assets.ReadFile(name)
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), b, 0o644); err != nil {
+			return err
+		}
 	}
 
 	cmds := commands(root)

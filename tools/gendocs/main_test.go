@@ -45,7 +45,10 @@ func external(tag, url string) bool {
 // the stylesheet, and that every link names one of its files.
 func TestEveryCommandHasOnePage(t *testing.T) {
 	dir := generate(t, "v1.2.3")
-	want := map[string]bool{"index.html": true, "style.css": true}
+	want := map[string]bool{"index.html": true}
+	for _, name := range staticFiles {
+		want[name] = true
+	}
 	for _, g := range guides {
 		want[g.File] = true
 	}
