@@ -8,8 +8,24 @@
   --link: #0969da;
 }
 
+/* An explicit choice from theme.js wins over the OS preference. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --fg: #e6edf3;
+  --muted: #9198a1;
+  --bg: #0d1117;
+  --code-bg: #151b23;
+  --border: #3d444d;
+  --link: #4493f8;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --fg: #e6edf3;
     --muted: #9198a1;
     --bg: #0d1117;
@@ -27,9 +43,31 @@ body {
 }
 
 header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
   padding: 0.75rem 1.5rem;
   border-bottom: 1px solid var(--border);
   font-weight: 600;
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 2rem;
+  width: 2rem;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.theme-toggle:hover {
+  color: var(--fg);
 }
 
 main {

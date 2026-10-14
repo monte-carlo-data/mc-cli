@@ -242,14 +242,26 @@ func TestDocsRootOnFreshTree(t *testing.T) {
 	}
 }
 
-// TestPagesLoadUnderCSP checks for what a CSP of default-src 'none' with same-origin styles
-// would block, and for links to a directory, which the host answers with 403.
+// themeScript is the one script a page may load: in <head>, blocking, with no inline body.
+const themeScript = `<script src="theme.js"></script>`
+
+var inlineHandler = regexp.MustCompile(`(?i)\son[a-z]+\s*=`)
+
+// TestPagesLoadUnderCSP checks for what a CSP of default-src 'none' with same-origin styles and
+// scripts would block, and for links to a directory, which the host answers with 403.
 func TestPagesLoadUnderCSP(t *testing.T) {
 	dir := generate(t, "v1.2.3")
 	files, _ := filepath.Glob(filepath.Join(dir, "*.html"))
 	for _, f := range files {
 		page := read(t, f)
-		for _, bad := range []string{"<script", "style=", "<style", "<img", "<iframe", "<object"} {
+		head, _, _ := strings.Cut(page, "</head>")
+		if strings.Count(page, "<script") != 1 || !strings.Contains(head, themeScript) {
+			t.Errorf("%s: want exactly one script, %s in <head>", filepath.Base(f), themeScript)
+		}
+		if inlineHandler.MatchString(page) {
+			t.Errorf("%s has an inline event handler", filepath.Base(f))
+		}
+		for _, bad := range []string{"style=", "<style", "<img", "<iframe", "<object"} {
 			if strings.Contains(page, bad) {
 				t.Errorf("%s contains %s", filepath.Base(f), bad)
 			}
@@ -261,6 +273,18 @@ func TestPagesLoadUnderCSP(t *testing.T) {
 			if strings.Contains(m[2], ":") || strings.HasSuffix(m[2], "/") || m[2] == "" {
 				t.Errorf("%s: <%s> URL %q is not a file of the site", filepath.Base(f), m[1], m[2])
 			}
+		}
+	}
+}
+
+// TestStylesheetHonoursThemeChoice checks a stored choice beats the OS preference in both
+// directions.
+func TestStylesheetHonoursThemeChoice(t *testing.T) {
+	css := read(t, filepath.Join(generate(t, "v1.2.3"), "style.css"))
+	for _, want := range []string{`:root[data-theme="dark"]`, `@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"])`} {
+		if !strings.Contains(css, want) {
+			t.Errorf("style.css lacks %s", want)
 		}
 	}
 }
