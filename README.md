@@ -2,6 +2,8 @@
 
 The command-line interface for the Monte Carlo REST API.
 
+The [command reference](https://clidocs.getmontecarlo.com/v2/index.html) has a page for every command, and guides to setting up credentials.
+
 ## Install
 
 ### macOS and Linux

@@ -344,7 +344,7 @@ jobs:
 
   # Publishes only from a push to main, never on a tag push, which would run whichever commit was
   # tagged; the tag is always this run's commit. The `release` environment accepts only main; it
-  # holds no secret, and records each release as a deployment.
+  # holds only the reference docs' secrets, and records each release as a deployment.
   release:
     name: Build and publish the release
     needs: tag
