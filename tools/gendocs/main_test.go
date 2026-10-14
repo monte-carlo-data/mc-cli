@@ -32,13 +32,22 @@ func read(t *testing.T, path string) string {
 	return string(b)
 }
 
-var attrURL = regexp.MustCompile(`(?:href|src)="([^"]*)"`)
+// attrURL matches a URL attribute and the tag it is on.
+var attrURL = regexp.MustCompile(`<(\w+)[^>]*?\s(?:href|src)="([^"]*)"`)
+
+// external reports whether a URL leaves the site, which only a link to follow may do.
+func external(tag, url string) bool {
+	return tag == "a" && strings.HasPrefix(url, "https://")
+}
 
 // TestEveryCommandHasOnePage checks the site holds exactly a page per command, the intro and
 // the stylesheet, and that every link names one of its files.
 func TestEveryCommandHasOnePage(t *testing.T) {
 	dir := generate(t, "v1.2.3")
 	want := map[string]bool{"index.html": true, "style.css": true}
+	for _, g := range guides {
+		want[g.File] = true
+	}
 	for _, c := range commands(cmd.DocsRoot()) {
 		if want[fileName(c)] {
 			t.Errorf("%s: two commands share %s", c.CommandPath(), fileName(c))
@@ -63,8 +72,11 @@ func TestEveryCommandHasOnePage(t *testing.T) {
 			continue
 		}
 		for _, m := range attrURL.FindAllStringSubmatch(read(t, filepath.Join(dir, e.Name())), -1) {
-			if _, err := os.Stat(filepath.Join(dir, m[1])); err != nil {
-				t.Errorf("%s: broken link %q", e.Name(), m[1])
+			if external(m[1], m[2]) {
+				continue
+			}
+			if _, err := os.Stat(filepath.Join(dir, m[2])); err != nil {
+				t.Errorf("%s: broken link %q", e.Name(), m[2])
 			}
 		}
 	}
@@ -98,7 +110,8 @@ func TestPlaceholdersAreText(t *testing.T) {
 }
 
 // TestPagesLoadUnderCSP checks for what a CSP of default-src 'none' with same-origin styles
-// would block, and for links to a directory, which the host answers with 403.
+// would block, and for links to a directory, which the host answers with 403. Only a link to
+// follow may leave the site.
 func TestPagesLoadUnderCSP(t *testing.T) {
 	dir := generate(t, "v1.2.3")
 	files, _ := filepath.Glob(filepath.Join(dir, "*.html"))
@@ -110,8 +123,11 @@ func TestPagesLoadUnderCSP(t *testing.T) {
 			}
 		}
 		for _, m := range attrURL.FindAllStringSubmatch(page, -1) {
-			if strings.Contains(m[1], ":") || strings.HasSuffix(m[1], "/") || m[1] == "" {
-				t.Errorf("%s: link %q is not a file of the site", filepath.Base(f), m[1])
+			if external(m[1], m[2]) {
+				continue
+			}
+			if strings.Contains(m[2], ":") || strings.HasSuffix(m[2], "/") || m[2] == "" {
+				t.Errorf("%s: <%s> URL %q is not a file of the site", filepath.Base(f), m[1], m[2])
 			}
 		}
 	}
@@ -157,5 +173,50 @@ func TestInstallCommandsMatchReadme(t *testing.T) {
 func TestVersionIsRequired(t *testing.T) {
 	if err := run(cmd.DocsRoot(), t.TempDir(), ""); err == nil {
 		t.Error("no error without -version")
+	}
+}
+
+var preBlock = regexp.MustCompile(`(?s)<pre>(.*?)</pre>`)
+
+// TestGuidesQuoteRealCommands checks every command line a guide quotes names a command and
+// flags it has, and every environment variable it names is one the root's flags read.
+func TestGuidesQuoteRealCommands(t *testing.T) {
+	root := cmd.DocsRoot()
+	envName := regexp.MustCompile(`MCD_DEFAULT_[A-Z_]+`)
+	readByFlags := map[string]bool{}
+	for _, name := range envName.FindAllString(root.PersistentFlags().FlagUsages(), -1) {
+		readByFlags[name] = true
+	}
+	for _, g := range guides {
+		body := read(t, filepath.Join("guides", g.File))
+		lines := 0
+		for _, block := range preBlock.FindAllStringSubmatch(body, -1) {
+			for _, line := range strings.Split(html.UnescapeString(block[1]), "\n") {
+				args := strings.Fields(line)
+				if len(args) == 0 || args[0] != root.Name() {
+					continue
+				}
+				lines++
+				c, _, err := root.Find(args[1:])
+				if err != nil || (c == root && len(args) > 1) {
+					t.Errorf("%s: %q names no command", g.File, line)
+					continue
+				}
+				for _, a := range args[1:] {
+					name, _, _ := strings.Cut(strings.TrimPrefix(a, "--"), "=")
+					if strings.HasPrefix(a, "--") && c.Flag(name) == nil {
+						t.Errorf("%s: %s has no flag --%s", g.File, c.CommandPath(), name)
+					}
+				}
+			}
+		}
+		if lines == 0 {
+			t.Errorf("%s quotes no command line", g.File)
+		}
+		for _, name := range envName.FindAllString(body, -1) {
+			if !readByFlags[name] {
+				t.Errorf("%s: no flag reads %s", g.File, name)
+			}
+		}
 	}
 }

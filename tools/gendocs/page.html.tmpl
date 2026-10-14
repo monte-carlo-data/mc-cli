@@ -29,7 +29,7 @@
 {{define "command" -}}
 {{template "head" .Path}}
 {{- if .Crumbs}}<nav>{{range .Crumbs}}<a href="{{.File}}">{{.Name}}</a> › {{end}}</nav>{{end}}
-<h1>{{.Path}}</h1>
+<h1 class="command">{{.Path}}</h1>
 <p class="version">Version: {{.Version}}</p>
 {{range .Paragraphs}}<p>{{.}}</p>
 {{end -}}
@@ -59,6 +59,14 @@
 {{template "foot"}}
 {{- end}}
 
+{{define "guide" -}}
+{{template "head" .Title}}
+<h1>{{.Title}}</h1>
+<p class="version">Version: {{.Version}}</p>
+{{.Body}}
+{{- template "foot"}}
+{{- end}}
+
 {{define "intro" -}}
 {{template "head" "Introduction"}}
 <h1>montecarlo CLI reference</h1>
@@ -71,9 +79,14 @@
 <pre>{{index .Install 1}}</pre>
 <p>In CI or a script, pin the version:</p>
 <pre>{{.Pinned}}</pre>
-<p>The README in the monte-carlo-data/mc-cli repository on GitHub shows how to verify the installers, and the other ways to install.</p>
+<p>The <a href="https://github.com/monte-carlo-data/mc-cli#install">README</a> shows how to verify the installers, and the other ways to install.</p>
 <h2>Getting started</h2>
-<p>Set up your credentials with <a href="montecarlo_configure.html">montecarlo configure</a>, then check them with <a href="montecarlo_whoami.html">montecarlo whoami</a>.</p>
+<p>Set up your credentials with <a href="montecarlo_configure.html">montecarlo configure</a>, then check them with <a href="montecarlo_whoami.html">montecarlo whoami</a>. The guides cover each kind of credential, and setting them up in a script or CI:</p>
+<ul>
+{{- range .Guides}}
+<li><a href="{{.File}}">{{.Name}}</a></li>
+{{- end}}
+</ul>
 {{template "links" .GettingStarted}}
 <h2>Commands</h2>
 <p><a href="{{.Root.File}}">montecarlo</a> lists the commands and the global flags every command takes.</p>

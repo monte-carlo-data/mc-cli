@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Command gendocs writes the montecarlo command reference as a flat static site: an intro at
-// index.html, one page per command named after its path (montecarlo_connections_list.html), and
-// style.css. The pages carry what --help prints. They have no scripts, inline styles or external
-// URLs, so they load under a CSP of default-src 'none' with only same-origin styles, and every
-// link names a file, since the site's host serves no directory index.
+// index.html, the hand-written guides in guides/, one page per command named after its path
+// (montecarlo_connections_list.html), and style.css. The command pages carry what --help prints.
+// No page has scripts, inline styles or anything loaded from elsewhere, so they load under a CSP
+// of default-src 'none' with only same-origin styles. Every link within the site names a file,
+// since its host serves no directory index.
 package main
 
 import (
@@ -24,7 +25,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-//go:embed page.html.tmpl style.css
+//go:embed page.html.tmpl style.css guides
 var assets embed.FS
 
 // The install commands, as README.md gives them; a test keeps the two in step. The pinned one
@@ -34,6 +35,12 @@ const (
 	installPs1    = "irm https://github.com/monte-carlo-data/mc-cli/releases/latest/download/install.ps1 | iex"
 	installPinned = "curl -fsSL https://github.com/monte-carlo-data/mc-cli/releases/download/vX.Y.Z/install.sh | MONTECARLO_VERSION=vX.Y.Z sh"
 )
+
+// guides are written as they are, inside the shared layout, from guides/<File>.
+var guides = []link{
+	{Name: "Set up credentials with an OAuth client", File: "credentials-oauth.html"},
+	{Name: "Set up credentials with an API token", File: "credentials-api-token.html"},
+}
 
 var releaseTag = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
 
@@ -67,9 +74,15 @@ type page struct {
 	GlobalFlags string
 }
 
+type guidePage struct {
+	Version, Title string
+	Body           template.HTML
+}
+
 type intro struct {
 	Version        string
 	Root           link
+	Guides         []link
 	GettingStarted []link
 	Commands       []link
 	Install        []string
@@ -101,7 +114,17 @@ func run(root *cobra.Command, dir, version string) error {
 			return err
 		}
 	}
-	in := intro{Version: version, Root: linkTo(root), Install: []string{installSh, installPs1}, Pinned: installPinned}
+	for _, g := range guides {
+		body, err := assets.ReadFile("guides/" + g.File)
+		if err != nil {
+			return err
+		}
+		p := guidePage{Version: version, Title: g.Name, Body: template.HTML(body)}
+		if err := write(tmpl, "guide", filepath.Join(dir, g.File), p); err != nil {
+			return err
+		}
+	}
+	in := intro{Version: version, Root: linkTo(root), Guides: guides, Install: []string{installSh, installPs1}, Pinned: installPinned}
 	if releaseTag.MatchString(version) {
 		in.Pinned = strings.ReplaceAll(installPinned, "vX.Y.Z", version)
 	}
