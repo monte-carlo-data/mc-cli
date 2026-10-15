@@ -13,6 +13,7 @@ import (
 
 	"github.com/monte-carlo-data/mc-cli/internal/cmd"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 func generate(t *testing.T, version string) string {
@@ -50,7 +51,7 @@ func TestEveryCommandHasOnePage(t *testing.T) {
 	for _, name := range staticFiles {
 		want[name] = true
 	}
-	for _, g := range guides {
+	for _, g := range guides() {
 		want[g.File] = true
 	}
 	for _, c := range commands(cmd.DocsRoot()) {
@@ -213,6 +214,35 @@ func TestIntroListsGettingStarted(t *testing.T) {
 	}
 }
 
+// TestIntroListsGuides checks each list of guides is under its own section and not the other.
+func TestIntroListsGuides(t *testing.T) {
+	intro := read(t, filepath.Join(generate(t, "v1.2.3"), "index.html"))
+	section := func(title string) string {
+		_, rest, ok := strings.Cut(intro, "<h2>"+title+"</h2>")
+		if !ok {
+			return ""
+		}
+		s, _, _ := strings.Cut(rest, "<h2>")
+		return s
+	}
+	for _, g := range credentialGuides {
+		if !strings.Contains(section("Getting started"), `href="`+g.File+`"`) {
+			t.Errorf("Getting started does not list %s", g.File)
+		}
+		if strings.Contains(section("Guides"), `href="`+g.File+`"`) {
+			t.Errorf("Guides lists %s", g.File)
+		}
+	}
+	for _, g := range taskGuides {
+		if !strings.Contains(section("Guides"), `href="`+g.File+`"`) {
+			t.Errorf("Guides does not list %s", g.File)
+		}
+		if strings.Contains(section("Getting started"), `href="`+g.File+`"`) {
+			t.Errorf("Getting started lists %s", g.File)
+		}
+	}
+}
+
 // TestDocsRootOnFreshTree checks the site has the utility pages, the root's groups are found by
 // ID, and only the utilities are left outside them. Nothing here executes the tree, so this
 // checks what DocsRoot does alone.
@@ -242,8 +272,12 @@ func TestDocsRootOnFreshTree(t *testing.T) {
 	}
 }
 
-// themeScript is the one script a page may load: in <head>, blocking, with no inline body.
-const themeScript = `<script src="theme.js"></script>`
+// The scripts a page may load, with no inline body: themeScript in <head> on every page, so the
+// theme is set before the page paints, and copyScript after the body of a guide or the intro.
+const (
+	themeScript = `<script src="theme.js"></script>`
+	copyScript  = `<script src="copy.js"></script>`
+)
 
 var inlineHandler = regexp.MustCompile(`(?i)\son[a-z]+\s*=`)
 
@@ -251,12 +285,27 @@ var inlineHandler = regexp.MustCompile(`(?i)\son[a-z]+\s*=`)
 // scripts would block, and for links to a directory, which the host answers with 403.
 func TestPagesLoadUnderCSP(t *testing.T) {
 	dir := generate(t, "v1.2.3")
+	copies := map[string]bool{"index.html": true}
+	for _, g := range guides() {
+		copies[g.File] = true
+	}
 	files, _ := filepath.Glob(filepath.Join(dir, "*.html"))
 	for _, f := range files {
 		page := read(t, f)
-		head, _, _ := strings.Cut(page, "</head>")
-		if strings.Count(page, "<script") != 1 || !strings.Contains(head, themeScript) {
-			t.Errorf("%s: want exactly one script, %s in <head>", filepath.Base(f), themeScript)
+		head, body, _ := strings.Cut(page, "</head>")
+		scripts := 1
+		if copies[filepath.Base(f)] {
+			scripts = 2
+			if !strings.Contains(body, copyScript) {
+				t.Errorf("%s lacks %s", filepath.Base(f), copyScript)
+			}
+			// copy.js acts only on a <pre> inside a .runnable wrapper.
+			if _, after, ok := strings.Cut(body, `<div class="runnable">`); !ok || !strings.Contains(after, "<pre>") {
+				t.Errorf("%s has no command block for copy.js", filepath.Base(f))
+			}
+		}
+		if strings.Count(page, "<script") != scripts || !strings.Contains(head, themeScript) {
+			t.Errorf("%s: want %d scripts, %s in <head>", filepath.Base(f), scripts, themeScript)
 		}
 		if inlineHandler.MatchString(page) {
 			t.Errorf("%s has an inline event handler", filepath.Base(f))
@@ -285,6 +334,24 @@ func TestStylesheetHonoursThemeChoice(t *testing.T) {
   :root:not([data-theme="light"])`} {
 		if !strings.Contains(css, want) {
 			t.Errorf("style.css lacks %s", want)
+		}
+	}
+}
+
+var anchor = regexp.MustCompile(`<a\s[^>]*>`)
+
+// TestExternalLinksOpenInNewTab checks every link off the site opens in a new tab, which the
+// stylesheet marks, and every link within it stays in the same tab.
+func TestExternalLinksOpenInNewTab(t *testing.T) {
+	dir := generate(t, "v1.2.3")
+	files, _ := filepath.Glob(filepath.Join(dir, "*.html"))
+	for _, f := range files {
+		for _, a := range anchor.FindAllString(read(t, f), -1) {
+			offSite := strings.Contains(a, `href="https://`)
+			newTab := strings.Contains(a, `target="_blank"`) && strings.Contains(a, `rel="noopener"`)
+			if offSite != newTab {
+				t.Errorf("%s: %s", filepath.Base(f), a)
+			}
 		}
 	}
 }
@@ -334,25 +401,53 @@ func TestVersionIsRequired(t *testing.T) {
 
 var preBlock = regexp.MustCompile(`(?s)<pre>(.*?)</pre>`)
 
+// allFlags returns the name of every flag of c and its descendants.
+func allFlags(c *cobra.Command) map[string]bool {
+	names := map[string]bool{}
+	add := func(f *pflag.Flag) { names[f.Name] = true }
+	c.Flags().VisitAll(add)
+	c.PersistentFlags().VisitAll(add)
+	for _, sub := range c.Commands() {
+		for name := range allFlags(sub) {
+			names[name] = true
+		}
+	}
+	return names
+}
+
+// proseFlag matches a flag named in text; one ending in "-" is a wildcard such as --self-hosted-*.
+var proseFlag = regexp.MustCompile(`--[a-z0-9][a-z0-9-]*`)
+
 // TestGuidesQuoteRealCommands checks every command line a guide quotes names a command and
-// flags it has, and every environment variable it names is one the root's flags read.
+// flags it has, every flag named in its text exists, and every environment variable it names
+// is one the root's flags read.
 func TestGuidesQuoteRealCommands(t *testing.T) {
 	root := cmd.DocsRoot()
+	known := allFlags(root)
 	envName := regexp.MustCompile(`MCD_DEFAULT_[A-Z_]+`)
 	readByFlags := map[string]bool{}
 	for _, name := range envName.FindAllString(root.PersistentFlags().FlagUsages(), -1) {
 		readByFlags[name] = true
 	}
-	for _, g := range guides {
+	for _, g := range guides() {
 		body := read(t, filepath.Join("guides", g.File))
 		lines := 0
 		for _, block := range preBlock.FindAllStringSubmatch(body, -1) {
+			inBlock := 0
 			for _, line := range strings.Split(html.UnescapeString(block[1]), "\n") {
 				args := strings.Fields(line)
 				if len(args) == 0 || args[0] != root.Name() {
 					continue
 				}
 				lines++
+				// One command per block, so a reader copies one command at a time.
+				if inBlock++; inBlock == 2 {
+					t.Errorf("%s: a block holds more than one command, from %q", g.File, line)
+				}
+				// A continuation line isn't checked, so every command stays on one line.
+				if args[len(args)-1] == `\` {
+					t.Errorf("%s: %q continues on the next line", g.File, line)
+				}
 				c, _, err := root.Find(args[1:])
 				if err != nil || (c == root && len(args) > 1) {
 					t.Errorf("%s: %q names no command", g.File, line)
@@ -368,6 +463,11 @@ func TestGuidesQuoteRealCommands(t *testing.T) {
 		}
 		if lines == 0 {
 			t.Errorf("%s quotes no command line", g.File)
+		}
+		for _, m := range proseFlag.FindAllString(preBlock.ReplaceAllString(body, ""), -1) {
+			if !strings.HasSuffix(m, "-") && !known[strings.TrimPrefix(m, "--")] {
+				t.Errorf("%s: no command has a flag %s", g.File, m)
+			}
 		}
 		for _, name := range envName.FindAllString(body, -1) {
 			if !readByFlags[name] {

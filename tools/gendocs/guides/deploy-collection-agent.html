@@ -1,0 +1,48 @@
+<p>A deployment is where Monte Carlo's queries against your data run. Monte Carlo hosts one for your account. To keep that traffic in your own cloud, create a deployment and register one of these on it:</p>
+<ul>
+<li>A <strong>collection agent</strong>: a service in your cloud that runs Monte Carlo's queries and sends back the results. It runs on AWS, Azure or GCP, or anywhere as a generic agent.</li>
+<li>A <strong>data store</strong>: a bucket or container in your cloud where Monte Carlo keeps what it collects, while it connects to your warehouse directly. It can be an S3 bucket, an Azure blob container or a Cloud Storage bucket.</li>
+</ul>
+<p>Each takes three steps: create the deployment, build the agent or data store in your cloud, and register it. The CLI does the first and the last. <a href="https://docs.getmontecarlo.com/docs/deployment-and-connecting" target="_blank" rel="noopener">Deployments</a> in the Monte Carlo docs compares the options.</p>
+
+<h2>Create the deployment</h2>
+<p><code>--type</code> is <code>COLLECTION_AGENT</code> or <code>COLLECTION_DATA_STORE</code>, and <code>--runtime-platform</code> is <code>AWS</code>, <code>AZURE</code>, <code>GCP</code>, or <code>GENERIC</code> for an agent you run anywhere:</p>
+<pre>montecarlo deployments create --type COLLECTION_AGENT --runtime-platform AWS --name &lt;name&gt;</pre>
+<p>On AWS, the output includes <code>aws_external_id</code>. The role Monte Carlo assumes has to trust it, so build the agent after this step. Read it again at any time with:</p>
+<pre>montecarlo deployments get &lt;deployment_id&gt;</pre>
+
+<h2>Register a collection agent</h2>
+<p>Registering checks the agent before enabling it. If the check fails, nothing is registered; fix the cause and run the command again.</p>
+
+<h3>AWS</h3>
+<p>Build the agent with the <a href="https://registry.terraform.io/modules/monte-carlo-data/mcd-agent/aws" target="_blank" rel="noopener">mcd-agent AWS module</a>, passing it the external id. Then register its Lambda function and the role Monte Carlo assumes:</p>
+<pre>montecarlo collection-agents register aws --deployment-id &lt;deployment_id&gt; --lambda-function-arn &lt;function_arn&gt; --role-arn &lt;role_arn&gt;</pre>
+
+<h3>Azure</h3>
+<p>Build the agent with the <a href="https://registry.terraform.io/modules/monte-carlo-data/mcd-agent/azurerm" target="_blank" rel="noopener">mcd-agent Azure module</a>. Monte Carlo calls it with the function app key, or with a service principal, which needs the Cloud Application Administrator role in your tenant to set up. Choose before you build it; <a href="https://docs.getmontecarlo.com/docs/create-and-register-an-azure-agent" target="_blank" rel="noopener">Azure: Agent Deployment</a> has the details. With the function app key:</p>
+<pre>montecarlo collection-agents register azure --deployment-id &lt;deployment_id&gt; --function-app-url &lt;url&gt; --authentication-type AZURE_FUNCTION_APP_KEY --function-app-key-app-key-prompt</pre>
+<p>With a service principal, pass <code>--authentication-type AZURE_FUNCTION_SERVICE_PRINCIPAL</code> and the <code>--service-principal-*</code> flags instead. See <a href="montecarlo_collection-agents_register_azure.html">collection-agents register azure</a>.</p>
+
+<h3>GCP</h3>
+<p>Build the agent with the <a href="https://registry.terraform.io/modules/monte-carlo-data/mcd-agent/google" target="_blank" rel="noopener">mcd-agent GCP module</a>, then register its Cloud Run service with the key of the service account Monte Carlo calls it as:</p>
+<pre>montecarlo collection-agents register gcp --deployment-id &lt;deployment_id&gt; --cloud-run-url &lt;url&gt; --authentication-type GCP_JSON_SERVICE_ACCOUNT_KEY --service-account-key @&lt;path&gt;</pre>
+
+<h3>Generic</h3>
+<p>A generic agent runs anywhere and connects out to Monte Carlo, so it needs a credential before it starts. Create an OAuth client for it, or a token with <code>create generic-token</code>. The secret is shown only once:</p>
+<pre>montecarlo collection-agents create generic-oauth-client --deployment-id &lt;deployment_id&gt;</pre>
+<p>Run the agent with that credential, for example on Kubernetes with the <a href="https://registry.terraform.io/modules/monte-carlo-data/mcd-k8s-agent/aws" target="_blank" rel="noopener">mcd-k8s-agent module</a>, or as <a href="https://docs.getmontecarlo.com/docs/generic-agent-platforms" target="_blank" rel="noopener">Generic Agent Deployment</a> describes. Then register it. Until the agent has connected, the command waits and retries for up to five minutes:</p>
+<pre>montecarlo collection-agents register generic --deployment-id &lt;deployment_id&gt;</pre>
+
+<h2>Register a data store</h2>
+<p>Create the deployment with <code>--type COLLECTION_DATA_STORE</code>, then create the bucket or container, and access for Monte Carlo to it, yourself. Registering writes a test object and reads it back before enabling the data store.</p>
+<p>On AWS, the role has to trust the deployment's external id and Monte Carlo's AWS account, shown as the AWS account ID under Collection on the Account Information page in Monte Carlo. <a href="https://docs.getmontecarlo.com/docs/direct-connection-with-an-aws-data-store" target="_blank" rel="noopener">AWS: Data Store Deployment</a> has the details.</p>
+<pre>montecarlo collection-data-stores register aws --deployment-id &lt;deployment_id&gt; --bucket-name &lt;bucket&gt; --role-arn &lt;role_arn&gt;</pre>
+<p>On Azure, with the storage account's connection string. See <a href="https://docs.getmontecarlo.com/docs/create-and-register-an-azure-blob-data-store" target="_blank" rel="noopener">Azure: Data Store Deployment</a>:</p>
+<pre>montecarlo collection-data-stores register azure --deployment-id &lt;deployment_id&gt; --container-name &lt;container&gt; --authentication-type AZURE_STORAGE_ACCOUNT_KEYS --storage-account-keys-connection-string-prompt</pre>
+<p>On GCP, with a key for a service account that can use the bucket:</p>
+<pre>montecarlo collection-data-stores register gcp --deployment-id &lt;deployment_id&gt; --bucket-name &lt;bucket&gt; --service-account-key @&lt;path&gt;</pre>
+
+<h2>Check it</h2>
+<p>The deployment is <code>enabled</code> once an agent or a data store is registered on it:</p>
+<pre>montecarlo deployments get &lt;deployment_id&gt;</pre>
+<p>Then connect a warehouse through it, as in <a href="connect-snowflake.html">Connect a Snowflake warehouse</a>. An agent you run can also read connection credentials from your own secret store; see <a href="self-hosted-credentials.html">Keep connection credentials in your own secret store</a>.</p>

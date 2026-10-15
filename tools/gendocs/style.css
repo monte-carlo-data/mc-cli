@@ -84,6 +84,13 @@ a:hover {
   text-decoration: underline;
 }
 
+/* Marks a link that leaves the reference and opens in a new tab. */
+a[target="_blank"]::after {
+  content: "\2197";
+  margin-left: 0.15em;
+  font-size: 0.8em;
+}
+
 header a {
   color: var(--fg);
 }
@@ -122,6 +129,44 @@ pre {
   border-radius: 6px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* Commands to run, in guides and the intro's install steps, stay on one line, so a flag is never
+   split; the block scrolls instead. */
+.runnable pre {
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+}
+
+/* copy.js wraps each of those blocks, leaving room on the right for its button. */
+.copyable {
+  position: relative;
+}
+
+.copyable pre {
+  padding-right: 3rem;
+}
+
+.copy-button {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 1.75rem;
+  width: 1.75rem;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--code-bg);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.copy-button:hover {
+  color: var(--fg);
 }
 
 .commands {
