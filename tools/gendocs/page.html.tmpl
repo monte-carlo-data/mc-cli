@@ -1,0 +1,98 @@
+{{define "head" -}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.}} · montecarlo CLI reference</title>
+<link rel="stylesheet" href="style.css">
+<script src="theme.js"></script>
+<link rel="icon" href="favicon.png" sizes="150x150">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+</head>
+<body>
+<header><a href="index.html">montecarlo CLI reference</a></header>
+<main>
+{{end}}
+
+{{define "foot" -}}
+</main>
+</body>
+</html>
+{{end}}
+
+{{define "links" -}}
+<table class="commands">
+{{- range .}}
+<tr><td><a href="{{.File}}">{{.Name}}</a></td><td>{{.Short}}</td></tr>
+{{- end}}
+</table>
+{{end}}
+
+{{define "command" -}}
+{{template "head" .Path}}
+{{- if .Crumbs}}<nav>{{range .Crumbs}}<a href="{{.File}}">{{.Name}}</a> › {{end}}</nav>{{end}}
+<h1 class="command">{{.Path}}</h1>
+<p class="version">Version: {{.Version}}</p>
+{{range .Blocks}}{{if eq .Kind "pre"}}<pre>{{.Text}}</pre>{{else if eq .Kind "h3"}}<h3>{{.Text}}</h3>{{else}}<p>{{.Text}}</p>{{end}}
+{{end -}}
+<h2>Usage</h2>
+<pre>{{range .Usage}}{{.}}
+{{end}}</pre>
+{{- if .Aliases}}
+<h2>Aliases</h2>
+<pre>{{.Aliases}}</pre>
+{{- end}}
+{{- if .Example}}
+<h2>Examples</h2>
+<pre>{{.Example}}</pre>
+{{- end}}
+{{- range .Groups}}
+<h2>{{.Title}}</h2>
+{{template "links" .Commands}}
+{{- end}}
+{{- if .Flags}}
+<h2>Flags</h2>
+<pre>{{.Flags}}</pre>
+{{- end}}
+{{- if .GlobalFlags}}
+<h2>Global flags</h2>
+<pre>{{.GlobalFlags}}</pre>
+{{- end}}
+{{template "foot"}}
+{{- end}}
+
+{{define "guide" -}}
+{{template "head" .Title}}
+<h1>{{.Title}}</h1>
+<p class="version">Version: {{.Version}}</p>
+{{.Body}}
+{{- template "foot"}}
+{{- end}}
+
+{{define "intro" -}}
+{{template "head" "Introduction"}}
+<h1>montecarlo CLI reference</h1>
+<p class="version">Version: {{.Version}}</p>
+<p><code>montecarlo</code> lets you manage your Monte Carlo account from a terminal or a script: connections, warehouses, agents and the rest of the REST API. Install it, set up credentials, then find any command below.</p>
+<h2>Install</h2>
+<p>On macOS and Linux:</p>
+<pre>{{index .Install 0}}</pre>
+<p>On Windows, in PowerShell:</p>
+<pre>{{index .Install 1}}</pre>
+<p>In CI or a script, pin the version:</p>
+<pre>{{.Pinned}}</pre>
+<p>The <a href="https://github.com/monte-carlo-data/mc-cli#install">README</a> shows how to verify the installers, and the other ways to install.</p>
+<h2>Getting started</h2>
+<p>Set up your credentials with <a href="montecarlo_configure.html">montecarlo configure</a>, then check them with <a href="montecarlo_whoami.html">montecarlo whoami</a>. The guides cover each kind of credential, and setting them up in a script or CI:</p>
+<ul>
+{{- range .Guides}}
+<li><a href="{{.File}}">{{.Name}}</a></li>
+{{- end}}
+</ul>
+{{template "links" .GettingStarted}}
+<h2>Commands</h2>
+<p><a href="{{.Root.File}}">montecarlo</a> lists the commands and the global flags every command takes.</p>
+{{template "links" .Commands}}
+{{template "foot"}}
+{{- end}}

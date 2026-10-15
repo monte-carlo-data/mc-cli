@@ -32,6 +32,7 @@ go test -race ./...
 go vet ./...
 gofmt -l .                      # must be empty
 go generate ./...               # rewrites THIRD_PARTY_NOTICES
+go run ./tools/gendocs -o site -version "preview of local"   # writes the reference site to site/
 
 go build -o . ./cmd/montecarlo  # writes ./montecarlo
 ./montecarlo --help
@@ -49,9 +50,11 @@ pwsh .github/scripts/install_test.ps1 -Dist dist -Tag v0.1.0   # needs Windows f
 | `cmd/montecarlo/` | The main package. |
 | `internal/cmd/` | The command tree: hand-written base files and the generated `*_cmd.gen.go`. |
 | `tools/notices/` | Writes `THIRD_PARTY_NOTICES`; `go generate ./...` runs it. |
+| `tools/gendocs/` | Writes the command reference site; see [Reference docs](#reference-docs). |
 | `install.sh`, `install.ps1` | The installers, attached to every release. |
 | `.github/scripts/` | The release-tag script, the installer tests and the release mirror they run against. |
 | `.github/actions/goreleaser/` | The pinned GoReleaser, shared by the snapshot and the release. |
+| `.github/workflows/publish-docs.yml`, `.github/actions/publish-docs/` | Build the reference on every pull request and publish it. |
 
 ## What is generated
 
@@ -114,9 +117,26 @@ Root help lists commands in two groups. Hand-written commands set their `GroupID
 
 The binary name lives in one constant, `binaryName` in `internal/cmd/root.go`, and in the `cmd/montecarlo/` directory name.
 
+## Reference docs
+
+`tools/gendocs` writes the command reference at https://clidocs.getmontecarlo.com/v2/index.html: one page per command from the cobra tree, which `cmd.DocsRoot()` returns as the command line sees it, the intro, and the hand-written guides in `tools/gendocs/guides/`. A command page holds what `--help` prints, so changing help text changes the page. The site is built when it is published, never committed, so nothing in `go generate` or a regeneration touches it.
+
+The pages are plain HTML with one stylesheet and one script, `theme.js`, the light/dark toggle: it follows the OS until the reader picks one, stored in `localStorage` as `colorMode`, as the API references do. The site's CSP allows only same-origin scripts and styles, with nothing inline and nothing loaded from elsewhere, and its host serves no directory index, so every link names a file. Tests in `tools/gendocs` check both, and that the commands a guide quotes exist. `/v2/` works because the publish also writes the intro at key `v2/`.
+
+`publish-docs.yml` builds the site on every pull request. A push to `dev` publishes a preview to https://clidocs.dev.getmontecarlo.com/v2/index.html. After CI succeeds on `main`, it publishes the latest release, with its tag as the version. It triggers on CI by its name, `CI`, so renaming that workflow stops it. Both publishing roles also trust only this file on its branch, `.github/workflows/publish-docs.yml` on `dev` or `main`, so renaming it, or moving its publish jobs into a reusable workflow, stops publishing. The roles, buckets and distributions are Actions secrets: `DOCS_DEV_*` in the repository, `DOCS_PROD_*` in the `release` environment, the only one the prod role trusts.
+
 ## Branching
 
 Branch from `main` as `<person>/<ticket-id>-<slug>`. Never commit directly to `main`.
+
+`dev` previews the reference docs and is never released: CI's push trigger is `main` only, so nothing tags or releases from it. To preview a branch, merge `main` and the branch into `dev` and push it:
+
+```bash
+git fetch origin && git switch dev && git merge origin/main
+git merge <branch> && git push origin dev
+```
+
+Nothing keeps `dev` in step with `main`. When abandoned previews pile up, reset it with `git push --force-with-lease origin origin/main:dev`; that push publishes `main`'s docs to dev again.
 
 ## Releasing
 
@@ -137,6 +157,6 @@ Don't create a release in the GitHub UI. If `release` or `attest` fails, use "Re
 
 CI's `release-snapshot` builds the same release on every pull request, at the tag the merge would get, without publishing, and checks what it built; `install-test` then runs both installers against it, served the way GitHub serves a release. A change that would break a release fails there, before it merges. [Common Commands](#common-commands) shows how to run both locally.
 
-The App key that creates tags is an org secret, readable from any branch's workflow, so anyone who can push a branch could tag and publish from it. A release built anywhere else fails `gh attestation verify` pinned to this workflow on `main`. That catches it when the archive or a downloaded installer is verified, which the README documents and the installers do for the archive when `gh` 2.49 or later is logged in. It does not when `latest/install.sh` is piped to a shell, since a rogue latest release serves its own installer; pinning a version guards against that. The `release` environment holds no secret and is no guard.
+The App key that creates tags is an org secret, readable from any branch's workflow, so anyone who can push a branch could tag and publish from it. A release built anywhere else fails `gh attestation verify` pinned to this workflow on `main`. That catches it when the archive or a downloaded installer is verified, which the README documents and the installers do for the archive when `gh` 2.49 or later is logged in. It does not when `latest/install.sh` is piped to a shell, since a rogue latest release serves its own installer; pinning a version guards against that. The `release` environment is no guard for releases: it holds the reference docs' secrets, and the prod docs role trusts only this environment, so its main-only branch policy must not be widened.
 
 The installers and the README verify provenance against `.github/workflows/ci.yml` on `main`, so renaming that file or moving `attest` out of it breaks verification for every published installer.

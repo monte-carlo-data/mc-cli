@@ -2,6 +2,8 @@
 /montecarlo
 /montecarlo.exe
 /dist/
+/site/
+/gendocs
 
 # OS / editor
 .DS_Store

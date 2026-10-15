@@ -1,3 +1,4 @@
+# publish-docs.yml triggers on this name.
 name: CI
 
 on:
@@ -343,8 +344,9 @@ jobs:
           echo "Tagged $GITHUB_SHA as $TAG."
 
   # Publishes only from a push to main, never on a tag push, which would run whichever commit was
-  # tagged; the tag is always this run's commit. The `release` environment accepts only main; it
-  # holds no secret, and records each release as a deployment.
+  # tagged; the tag is always this run's commit. The `release` environment accepts only main, which
+  # the prod docs role relies on; it holds the reference docs' secrets and records each release as
+  # a deployment.
   release:
     name: Build and publish the release
     needs: tag
