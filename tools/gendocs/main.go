@@ -46,6 +46,7 @@ var (
 		{Name: "Use profiles to switch between accounts", File: "profiles.html"},
 	}
 	taskGuides = []link{
+		{Name: "Deploy a collection agent or data store", File: "deploy-collection-agent.html"},
 		{Name: "Connect a Snowflake warehouse", File: "connect-snowflake.html"},
 	}
 )
