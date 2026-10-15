@@ -55,6 +55,24 @@ func problem(message, resolution string) []any {
 	return []any{map[string]any{"friendly_message": message, "resolution": resolution, "cause": nil, "stack_trace": nil}}
 }
 
+func TestFollowValidationRunPrintsTheCauseOfAProblem(t *testing.T) {
+	cmd, _, _, stderr := validationFixture(t)
+	failed := problem("Could not connect.", "Check the host.")
+	failed[0].(map[string]any)["cause"] = "password authentication failed\nno pg_hba.conf entry\n"
+	failed[0].(map[string]any)["stack_trace"] = "Traceback (most recent call last):"
+	fetch, _ := polls(run("completed", row("connect", "completed", false, map[string]any{"errors": failed})))
+
+	passed, err := followValidationRun(cmd, run("running", row("connect", "pending", nil)), fetch, "")
+
+	if err != nil || passed {
+		t.Fatalf("passed %v, err %v", passed, err)
+	}
+	want := "\nCheck connect:\n  Could not connect.\n    Check the host.\n    Cause: password authentication failed\n      no pg_hba.conf entry\n"
+	if !strings.Contains(stderr.String(), want) || strings.Contains(stderr.String(), "Traceback") {
+		t.Fatalf("stderr =\n%s\nwant it to hold\n%s", stderr, want)
+	}
+}
+
 // polls answers each fetch with the next state, then keeps answering the last.
 func polls(states ...map[string]any) (runFetch, *int) {
 	calls := 0

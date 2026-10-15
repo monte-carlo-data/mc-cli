@@ -47,6 +47,9 @@ type validationRow struct {
 type validationProblem struct {
 	FriendlyMessage *string `json:"friendly_message"`
 	Resolution      *string `json:"resolution"`
+	// The underlying error, which the friendly message often leaves out. The stack trace stays
+	// in --output json only.
+	Cause *string `json:"cause"`
 }
 
 // runFetch reads a validation run. With since set, the read lists only the validations
@@ -310,7 +313,8 @@ func (v *validationView) paint(symbol string) string {
 	return "\x1b[" + code + "m" + symbol + "\x1b[0m"
 }
 
-// problems prints what each validation reported: its errors, then its warnings.
+// problems prints what each validation reported, its errors then its warnings, each with its
+// resolution and cause.
 func (v *validationView) problems(run validationRun) {
 	for _, row := range run.Validations {
 		if len(row.Errors)+len(row.Warnings) == 0 {
@@ -323,6 +327,13 @@ func (v *validationView) problems(run validationRun) {
 			}
 			if p.Resolution != nil && *p.Resolution != "" {
 				fmt.Fprintf(v.w, "    %s\n", *p.Resolution)
+			}
+			if p.Cause != nil && strings.TrimSpace(*p.Cause) != "" {
+				lines := strings.Split(strings.TrimRight(*p.Cause, "\n"), "\n")
+				fmt.Fprintf(v.w, "    Cause: %s\n", lines[0])
+				for _, line := range lines[1:] {
+					fmt.Fprintf(v.w, "      %s\n", line)
+				}
 			}
 		}
 	}
