@@ -1969,7 +1969,7 @@ func newCredentialsCreateSnowflakeCmd() *cobra.Command {
 			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "account", "user", "warehouse")
 		},
 	}
-	cmd.Flags().String("account", "", "Snowflake account identifier, such as xy12345.us-east-1. Without the .snowflakecomputing.com suffix.")
+	cmd.Flags().String("account", "", "Snowflake account identifier, such as xy12345.us-east-1. Without the .snowflakecomputing.com suffix. Letters, digits, _, . and - only.")
 	_ = cmd.MarkFlagRequired("account")
 	cmd.Flags().String("user", "", "Snowflake user the key pair belongs to.")
 	_ = cmd.MarkFlagRequired("user")
@@ -4374,7 +4374,7 @@ func newCredentialsUpdateAzureDedicatedSqlPoolCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -4503,7 +4503,7 @@ func newCredentialsUpdateAzureSqlDatabaseCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -4601,7 +4601,7 @@ func newCredentialsUpdateClickhouseCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -4695,7 +4695,7 @@ func newCredentialsUpdateDatabricksMetastoreSqlWarehouseCmd() *cobra.Command {
 	cmd.Flags().String("token", "", "Personal access token or service principal token. Send this, or oauth_client_id and oauth_client_secret. Stored by Monte Carlo and never returned. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
 	cmd.Flags().String("workspace-id", "", "ID of the Databricks workspace.")
-	cmd.Flags().String("workspace-url", "", "URL of the Databricks workspace, or its host name.")
+	cmd.Flags().String("workspace-url", "", "URL of the Databricks workspace, or its host name. Changing it requires sending the credentials' secrets again.")
 	return cmd
 }
 
@@ -4785,7 +4785,7 @@ func newCredentialsUpdateDatabricksSqlWarehouseCmd() *cobra.Command {
 	cmd.Flags().String("token", "", "Personal access token or service principal token. Send this, or oauth_client_id and oauth_client_secret. Stored by Monte Carlo and never returned. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
 	cmd.Flags().String("workspace-id", "", "ID of the Databricks workspace.")
-	cmd.Flags().String("workspace-url", "", "URL of the Databricks workspace, or its host name.")
+	cmd.Flags().String("workspace-url", "", "URL of the Databricks workspace, or its host name. Changing it requires sending the credentials' secrets again.")
 	return cmd
 }
 
@@ -4860,7 +4860,7 @@ func newCredentialsUpdateDb2Cmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -5020,7 +5020,7 @@ func newCredentialsUpdateFivetranCmd() *cobra.Command {
 	cmd.Flags().Bool("api-key-prompt", false, "Read --api-key from a hidden prompt instead of the command line.")
 	cmd.Flags().String("api-password", "", "Secret of the Fivetran API key. Stored by Monte Carlo and never returned. Visible in the process list; --api-password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("api-password-prompt", false, "Read --api-password from a hidden prompt instead of the command line.")
-	cmd.Flags().String("base-url", "", "URL of the Fivetran REST API. Leave it out for https://api.fivetran.com/v1/.")
+	cmd.Flags().String("base-url", "", "URL of the Fivetran REST API. Leave it out for https://api.fivetran.com/v1/. Changing it requires sending the credentials' secrets again.")
 	return cmd
 }
 
@@ -5236,8 +5236,8 @@ func newCredentialsUpdateInformaticaV2Cmd() *cobra.Command {
 	}
 	cmd.Flags().String("auth-mode", "", "How Monte Carlo signs in. password takes username and password. oauth takes org_id and the oauth_* fields.")
 	_ = cmd.RegisterFlagCompletionFunc("auth-mode", enumCompletion(sdk.AllowedInformaticaV2AuthModeEnumValues))
-	cmd.Flags().String("base-url", "", "Informatica login URL for your POD. Leave it out for https://dm-us.informaticacloud.com.")
-	cmd.Flags().String("oauth-access-token-endpoint", "", "Identity provider URL Monte Carlo requests tokens from.")
+	cmd.Flags().String("base-url", "", "Informatica login URL for your POD. Leave it out for https://dm-us.informaticacloud.com. Changing it requires sending the credentials' secrets again.")
+	cmd.Flags().String("oauth-access-token-endpoint", "", "Identity provider URL Monte Carlo requests tokens from. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("oauth-client-id", "", "Client ID of the app registered with your identity provider, for oauth.")
 	cmd.Flags().String("oauth-client-secret", "", "Secret of the identity provider app, for oauth. Stored by Monte Carlo and never returned. Visible in the process list; --oauth-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("oauth-client-secret-prompt", false, "Read --oauth-client-secret from a hidden prompt instead of the command line.")
@@ -5306,7 +5306,7 @@ func newCredentialsUpdateLookerCmd() *cobra.Command {
 	cmd.Flags().String("api-client-id", "", "Client ID of the Looker API key.")
 	cmd.Flags().String("api-client-secret", "", "Client secret of the Looker API key. Stored by Monte Carlo and never returned. Visible in the process list; --api-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("api-client-secret-prompt", false, "Read --api-client-secret from a hidden prompt instead of the command line.")
-	cmd.Flags().String("base-url", "", "URL of the Looker API, such as https://acme.cloud.looker.com.")
+	cmd.Flags().String("base-url", "", "URL of the Looker API, such as https://acme.cloud.looker.com. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().Bool("verify-ssl", false, "Whether to verify Looker's TLS certificate. Verified when left out.")
 	return cmd
 }
@@ -5374,7 +5374,7 @@ func newCredentialsUpdateLookerGitCloneCmd() *cobra.Command {
 			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "repo_url", "username", "ssl_ca_data", "ssl_skip_cert_verification")
 		},
 	}
-	cmd.Flags().String("repo-url", "", "Clone URL of the LookML repository, over HTTPS or SSH.")
+	cmd.Flags().String("repo-url", "", "Clone URL of the LookML repository, over HTTPS or SSH. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("ssh-key", "", "Private key for an SSH clone, as PEM text including its BEGIN and END lines. Send this or username and token. Stored by Monte Carlo and never returned. Visible in the process list; --ssh-key-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("ssh-key-prompt", false, "Read --ssh-key from a hidden prompt instead of the command line.")
 	cmd.Flags().String("ssl-ca-data", "", "PEM certificate of the CA that signed the git server's certificate.")
@@ -5442,7 +5442,7 @@ func newCredentialsUpdateMariadbCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -5604,7 +5604,7 @@ func newCredentialsUpdateMysqlCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -5709,7 +5709,7 @@ func newCredentialsUpdateOracleCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -5821,7 +5821,7 @@ func newCredentialsUpdatePostgresCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -6006,7 +6006,7 @@ func newCredentialsUpdateRedshiftCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -6076,7 +6076,7 @@ func newCredentialsUpdateSapHanaCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -6140,7 +6140,7 @@ func newCredentialsUpdateSnowflakeCmd() *cobra.Command {
 			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "account", "user", "warehouse")
 		},
 	}
-	cmd.Flags().String("account", "", "New Snowflake account identifier, without the .snowflakecomputing.com suffix.")
+	cmd.Flags().String("account", "", "New Snowflake account identifier, without the .snowflakecomputing.com suffix. Letters, digits, _, . and - only.")
 	cmd.Flags().String("private-key", "", "New private key, as PEM text. Replaces the stored key and its passphrase; send private_key_passphrase in the same request if the new key has one. Visible in the process list; --private-key-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("private-key-prompt", false, "Read --private-key from a hidden prompt instead of the command line.")
 	cmd.Flags().String("private-key-passphrase", "", "Passphrase of the new private key. Only accepted together with private_key. Visible in the process list; --private-key-passphrase-prompt asks for it instead, and @<path> reads it from a file.")
@@ -6248,8 +6248,8 @@ func newCredentialsUpdateSqlServerCmd() *cobra.Command {
 	cmd.Flags().String("auth-mode", "", "How Monte Carlo signs in. sql takes user and password. kerberos takes realm, kdc, principal, and one of keytab_base64 or password.")
 	_ = cmd.RegisterFlagCompletionFunc("auth-mode", enumCompletion(sdk.AllowedSqlServerAuthModeEnumValues))
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint. For kerberos, the fully qualified name the server's service principal is registered under.")
-	cmd.Flags().String("kdc", "", "Hostname of the key distribution center, optionally with :port, for kerberos.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. For kerberos, the fully qualified name the server's service principal is registered under. Changing it requires sending the credentials' secrets again.")
+	cmd.Flags().String("kdc", "", "Hostname of the key distribution center, optionally with :port, for kerberos. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("keytab-base64", "", "Base64-encoded keytab for principal, for kerberos. Send this or password. Stored by Monte Carlo and never returned. Visible in the process list; --keytab-base64-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("keytab-base64-prompt", false, "Read --keytab-base64 from a hidden prompt instead of the command line.")
 	cmd.Flags().String("password", "", "Password of user for sql, or of the Active Directory account behind principal for kerberos. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
@@ -6332,7 +6332,7 @@ func newCredentialsUpdateStarburstEnterpriseCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -6399,7 +6399,7 @@ func newCredentialsUpdateStarburstGalaxyCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -6504,7 +6504,7 @@ func newCredentialsUpdateTableauCmd() *cobra.Command {
 	cmd.Flags().Bool("connected-app-secret-value-prompt", false, "Read --connected-app-secret-value from a hidden prompt instead of the command line.")
 	cmd.Flags().String("password", "", "Password of username. Send this, a personal access token, or a connected app. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
-	cmd.Flags().String("server-name", "", "URL of the Tableau server, starting with https:// or http://.")
+	cmd.Flags().String("server-name", "", "URL of the Tableau server, starting with https:// or http://. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("site-name", "", "Tableau site to connect to. Leave it out for the default site.")
 	cmd.Flags().String("token-name", "", "Name of a personal access token. Send it with token_value.")
 	cmd.Flags().String("token-value", "", "Secret of the personal access token in token_name. Stored by Monte Carlo and never returned. Visible in the process list; --token-value-prompt asks for it instead, and @<path> reads it from a file.")
@@ -6607,7 +6607,7 @@ func newCredentialsUpdateTeradataCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -7312,7 +7312,7 @@ func newCredentialsValidateAzureDedicatedSqlPoolChangeCmd() *cobra.Command {
 	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
 	_ = cmd.MarkFlagRequired("deployment-id")
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -7714,7 +7714,7 @@ func newCredentialsValidateAzureSqlDatabaseChangeCmd() *cobra.Command {
 	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
 	_ = cmd.MarkFlagRequired("deployment-id")
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -8052,7 +8052,7 @@ func newCredentialsValidateClickhouseChangeCmd() *cobra.Command {
 	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
 	_ = cmd.MarkFlagRequired("deployment-id")
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -8304,7 +8304,7 @@ func newCredentialsValidateDatabricksMetastoreSqlWarehouseChangeCmd() *cobra.Com
 	cmd.Flags().String("token", "", "Personal access token or service principal token. Send this, or oauth_client_id and oauth_client_secret. Stored by Monte Carlo and never returned. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
 	cmd.Flags().String("workspace-id", "", "ID of the Databricks workspace.")
-	cmd.Flags().String("workspace-url", "", "URL of the Databricks workspace, or its host name.")
+	cmd.Flags().String("workspace-url", "", "URL of the Databricks workspace, or its host name. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }
@@ -8554,7 +8554,7 @@ func newCredentialsValidateDatabricksSqlWarehouseChangeCmd() *cobra.Command {
 	cmd.Flags().String("token", "", "Personal access token or service principal token. Send this, or oauth_client_id and oauth_client_secret. Stored by Monte Carlo and never returned. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
 	cmd.Flags().String("workspace-id", "", "ID of the Databricks workspace.")
-	cmd.Flags().String("workspace-url", "", "URL of the Databricks workspace, or its host name.")
+	cmd.Flags().String("workspace-url", "", "URL of the Databricks workspace, or its host name. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }
@@ -8778,7 +8778,7 @@ func newCredentialsValidateDb2ChangeCmd() *cobra.Command {
 	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
 	_ = cmd.MarkFlagRequired("deployment-id")
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -9322,7 +9322,7 @@ func newCredentialsValidateFivetranChangeCmd() *cobra.Command {
 	cmd.Flags().Bool("api-key-prompt", false, "Read --api-key from a hidden prompt instead of the command line.")
 	cmd.Flags().String("api-password", "", "Secret of the Fivetran API key. Stored by Monte Carlo and never returned. Visible in the process list; --api-password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("api-password-prompt", false, "Read --api-password from a hidden prompt instead of the command line.")
-	cmd.Flags().String("base-url", "", "URL of the Fivetran REST API. Leave it out for https://api.fivetran.com/v1/.")
+	cmd.Flags().String("base-url", "", "URL of the Fivetran REST API. Leave it out for https://api.fivetran.com/v1/. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }
@@ -9988,8 +9988,8 @@ func newCredentialsValidateInformaticaV2ChangeCmd() *cobra.Command {
 	_ = cmd.MarkFlagRequired("deployment-id")
 	cmd.Flags().String("auth-mode", "", "How Monte Carlo signs in. password takes username and password. oauth takes org_id and the oauth_* fields.")
 	_ = cmd.RegisterFlagCompletionFunc("auth-mode", enumCompletion(sdk.AllowedInformaticaV2AuthModeEnumValues))
-	cmd.Flags().String("base-url", "", "Informatica login URL for your POD. Leave it out for https://dm-us.informaticacloud.com.")
-	cmd.Flags().String("oauth-access-token-endpoint", "", "Identity provider URL Monte Carlo requests tokens from.")
+	cmd.Flags().String("base-url", "", "Informatica login URL for your POD. Leave it out for https://dm-us.informaticacloud.com. Changing it requires sending the credentials' secrets again.")
+	cmd.Flags().String("oauth-access-token-endpoint", "", "Identity provider URL Monte Carlo requests tokens from. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("oauth-client-id", "", "Client ID of the app registered with your identity provider, for oauth.")
 	cmd.Flags().String("oauth-client-secret", "", "Secret of the identity provider app, for oauth. Stored by Monte Carlo and never returned. Visible in the process list; --oauth-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("oauth-client-secret-prompt", false, "Read --oauth-client-secret from a hidden prompt instead of the command line.")
@@ -10185,7 +10185,7 @@ func newCredentialsValidateLookerChangeCmd() *cobra.Command {
 	cmd.Flags().String("api-client-id", "", "Client ID of the Looker API key.")
 	cmd.Flags().String("api-client-secret", "", "Client secret of the Looker API key. Stored by Monte Carlo and never returned. Visible in the process list; --api-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("api-client-secret-prompt", false, "Read --api-client-secret from a hidden prompt instead of the command line.")
-	cmd.Flags().String("base-url", "", "URL of the Looker API, such as https://acme.cloud.looker.com.")
+	cmd.Flags().String("base-url", "", "URL of the Looker API, such as https://acme.cloud.looker.com. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().Bool("verify-ssl", false, "Whether to verify Looker's TLS certificate. Verified when left out.")
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
@@ -10399,7 +10399,7 @@ func newCredentialsValidateLookerGitCloneChangeCmd() *cobra.Command {
 	}
 	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
 	_ = cmd.MarkFlagRequired("deployment-id")
-	cmd.Flags().String("repo-url", "", "Clone URL of the LookML repository, over HTTPS or SSH.")
+	cmd.Flags().String("repo-url", "", "Clone URL of the LookML repository, over HTTPS or SSH. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("ssh-key", "", "Private key for an SSH clone, as PEM text including its BEGIN and END lines. Send this or username and token. Stored by Monte Carlo and never returned. Visible in the process list; --ssh-key-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("ssh-key-prompt", false, "Read --ssh-key from a hidden prompt instead of the command line.")
 	cmd.Flags().String("ssl-ca-data", "", "PEM certificate of the CA that signed the git server's certificate.")
@@ -10600,7 +10600,7 @@ func newCredentialsValidateMariadbChangeCmd() *cobra.Command {
 	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
 	_ = cmd.MarkFlagRequired("deployment-id")
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -11069,7 +11069,7 @@ func newCredentialsValidateMysqlChangeCmd() *cobra.Command {
 	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
 	_ = cmd.MarkFlagRequired("deployment-id")
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -11345,7 +11345,7 @@ func newCredentialsValidateOracleChangeCmd() *cobra.Command {
 	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
 	_ = cmd.MarkFlagRequired("deployment-id")
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -11636,7 +11636,7 @@ func newCredentialsValidatePostgresChangeCmd() *cobra.Command {
 	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
 	_ = cmd.MarkFlagRequired("deployment-id")
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -12139,7 +12139,7 @@ func newCredentialsValidateRedshiftChangeCmd() *cobra.Command {
 	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
 	_ = cmd.MarkFlagRequired("deployment-id")
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -12340,7 +12340,7 @@ func newCredentialsValidateSapHanaChangeCmd() *cobra.Command {
 	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
 	_ = cmd.MarkFlagRequired("deployment-id")
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -12435,7 +12435,7 @@ func newCredentialsValidateSnowflakeCmd() *cobra.Command {
 	}
 	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
 	_ = cmd.MarkFlagRequired("deployment-id")
-	cmd.Flags().String("account", "", "Snowflake account identifier, such as xy12345.us-east-1. Without the .snowflakecomputing.com suffix.")
+	cmd.Flags().String("account", "", "Snowflake account identifier, such as xy12345.us-east-1. Without the .snowflakecomputing.com suffix. Letters, digits, _, . and - only.")
 	_ = cmd.MarkFlagRequired("account")
 	cmd.Flags().String("user", "", "Snowflake user the key pair belongs to.")
 	_ = cmd.MarkFlagRequired("user")
@@ -12540,7 +12540,7 @@ func newCredentialsValidateSnowflakeChangeCmd() *cobra.Command {
 	}
 	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
 	_ = cmd.MarkFlagRequired("deployment-id")
-	cmd.Flags().String("account", "", "New Snowflake account identifier, without the .snowflakecomputing.com suffix.")
+	cmd.Flags().String("account", "", "New Snowflake account identifier, without the .snowflakecomputing.com suffix. Letters, digits, _, . and - only.")
 	cmd.Flags().String("private-key", "", "New private key, as PEM text. Replaces the stored key and its passphrase; send private_key_passphrase in the same request if the new key has one. Visible in the process list; --private-key-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("private-key-prompt", false, "Read --private-key from a hidden prompt instead of the command line.")
 	cmd.Flags().String("private-key-passphrase", "", "Passphrase of the new private key. Only accepted together with private_key. Visible in the process list; --private-key-passphrase-prompt asks for it instead, and @<path> reads it from a file.")
@@ -12829,8 +12829,8 @@ func newCredentialsValidateSqlServerChangeCmd() *cobra.Command {
 	cmd.Flags().String("auth-mode", "", "How Monte Carlo signs in. sql takes user and password. kerberos takes realm, kdc, principal, and one of keytab_base64 or password.")
 	_ = cmd.RegisterFlagCompletionFunc("auth-mode", enumCompletion(sdk.AllowedSqlServerAuthModeEnumValues))
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint. For kerberos, the fully qualified name the server's service principal is registered under.")
-	cmd.Flags().String("kdc", "", "Hostname of the key distribution center, optionally with :port, for kerberos.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. For kerberos, the fully qualified name the server's service principal is registered under. Changing it requires sending the credentials' secrets again.")
+	cmd.Flags().String("kdc", "", "Hostname of the key distribution center, optionally with :port, for kerberos. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("keytab-base64", "", "Base64-encoded keytab for principal, for kerberos. Send this or password. Stored by Monte Carlo and never returned. Visible in the process list; --keytab-base64-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("keytab-base64-prompt", false, "Read --keytab-base64 from a hidden prompt instead of the command line.")
 	cmd.Flags().String("password", "", "Password of user for sql, or of the Active Directory account behind principal for kerberos. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
@@ -13062,7 +13062,7 @@ func newCredentialsValidateStarburstEnterpriseChangeCmd() *cobra.Command {
 	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
 	_ = cmd.MarkFlagRequired("deployment-id")
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -13262,7 +13262,7 @@ func newCredentialsValidateStarburstGalaxyChangeCmd() *cobra.Command {
 	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
 	_ = cmd.MarkFlagRequired("deployment-id")
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -13546,7 +13546,7 @@ func newCredentialsValidateTableauChangeCmd() *cobra.Command {
 	cmd.Flags().Bool("connected-app-secret-value-prompt", false, "Read --connected-app-secret-value from a hidden prompt instead of the command line.")
 	cmd.Flags().String("password", "", "Password of username. Send this, a personal access token, or a connected app. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
-	cmd.Flags().String("server-name", "", "URL of the Tableau server, starting with https:// or http://.")
+	cmd.Flags().String("server-name", "", "URL of the Tableau server, starting with https:// or http://. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("site-name", "", "Tableau site to connect to. Leave it out for the default site.")
 	cmd.Flags().String("token-name", "", "Name of a personal access token. Send it with token_value.")
 	cmd.Flags().String("token-value", "", "Secret of the personal access token in token_name. Stored by Monte Carlo and never returned. Visible in the process list; --token-value-prompt asks for it instead, and @<path> reads it from a file.")
@@ -13824,7 +13824,7 @@ func newCredentialsValidateTeradataChangeCmd() *cobra.Command {
 	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
 	_ = cmd.MarkFlagRequired("deployment-id")
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
