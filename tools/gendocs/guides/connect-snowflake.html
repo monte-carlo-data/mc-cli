@@ -1,0 +1,37 @@
+<p>Monte Carlo reads Snowflake through a connection. A connection joins two things: a warehouse, the Monte Carlo object that sets which deployment the queries run through, and credentials, which hold the Snowflake key pair. One command creates all three, or you can create them one at a time.</p>
+
+<h2>Before you start</h2>
+<ul>
+<li>A Snowflake user for Monte Carlo, with a key pair and the grants Monte Carlo needs. See <a href="https://docs.getmontecarlo.com/docs/snowflake" target="_blank" rel="noopener">Snowflake</a> in the Monte Carlo docs. A key pair is the only authentication Snowflake credentials take.</li>
+<li>Credentials for the CLI. See <a href="credentials-oauth.html">OAuth client</a> or <a href="credentials-api-token.html">API token</a>.</li>
+<li>The deployment the queries run through. Monte Carlo hosts one for your account; a collection agent you run in your own cloud has one too. Find its id with:</li>
+</ul>
+<pre>montecarlo deployments list</pre>
+
+<h2>In one step</h2>
+<p>Check the key pair first. This runs the validations from the deployment and creates nothing:</p>
+<pre>montecarlo connections add snowflake --deployment-id &lt;deployment_id&gt; --account &lt;account&gt; --user &lt;user&gt; --private-key @&lt;path&gt; --validate-only</pre>
+<p>Then add the connection. It validates again, asks you to confirm, and then creates the warehouse, the credentials and the connection:</p>
+<pre>montecarlo connections add snowflake --name &lt;name&gt; --deployment-id &lt;deployment_id&gt; --account &lt;account&gt; --user &lt;user&gt; --private-key @&lt;path&gt;</pre>
+<p>If a step fails, or you interrupt it, what it created is deleted again. <code>--yes</code> answers the question, and is required without a terminal. To add the connection to a warehouse you already have, pass <code>--warehouse-id</code> instead of <code>--deployment-id</code>.</p>
+<ul>
+<li><code>--account</code> is the account identifier without <code>.snowflakecomputing.com</code>, such as <code>xy12345.us-east-1</code>.</li>
+<li><code>--private-key</code> is the PEM text, BEGIN and END lines included. <code>@&lt;path&gt;</code> reads it from a file, and <code>--private-key-prompt</code> asks for it instead. For an encrypted key, add <code>--private-key-passphrase-prompt</code>.</li>
+<li><code>--warehouse</code> is the Snowflake virtual warehouse the queries run in, not the Monte Carlo warehouse. Without it, the user's default is used.</li>
+</ul>
+<p>See <a href="montecarlo_connections_add_snowflake.html">montecarlo connections add snowflake</a> for every option.</p>
+
+<h2>Step by step</h2>
+<p>To create each part yourself, for example to reuse a warehouse or credentials, run these in order. Each prints the id the next one needs; <code>-o json</code> makes them easy to read from a script.</p>
+<ol>
+<li>Create the warehouse on the deployment:
+<pre>montecarlo warehouses create --name &lt;name&gt; --deployment-id &lt;deployment_id&gt; --type snowflake</pre></li>
+<li>Check the key pair from the deployment:
+<pre>montecarlo credentials validate snowflake --deployment-id &lt;deployment_id&gt; --account &lt;account&gt; --user &lt;user&gt; --private-key @&lt;path&gt;</pre></li>
+<li>Store it:
+<pre>montecarlo credentials create snowflake --account &lt;account&gt; --user &lt;user&gt; --private-key @&lt;path&gt;</pre></li>
+<li>Join the warehouse and the credentials in a connection:
+<pre>montecarlo connections create --name &lt;name&gt; --warehouse-id &lt;warehouse_id&gt; --credentials-id &lt;credentials_id&gt;</pre></li>
+<li>Check the connection:
+<pre>montecarlo connections validate &lt;connection_id&gt;</pre></li>
+</ol>

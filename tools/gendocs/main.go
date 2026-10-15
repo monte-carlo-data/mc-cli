@@ -45,7 +45,9 @@ var (
 		{Name: "Set up credentials with an API token", File: "credentials-api-token.html"},
 		{Name: "Use profiles to switch between accounts", File: "profiles.html"},
 	}
-	taskGuides = []link{}
+	taskGuides = []link{
+		{Name: "Connect a Snowflake warehouse", File: "connect-snowflake.html"},
+	}
 )
 
 func guides() []link {
