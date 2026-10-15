@@ -575,6 +575,17 @@ func newCollectionAgentsRegisterAzureCmd() *cobra.Command {
 				}
 				body.SetName(name)
 			}
+			if changed(cmd, "auth-headers-headers") {
+				if err := requireAny(cmd, "auth-headers-headers"); err != nil {
+					return err
+				}
+				authHeadersHeaders, err := flagStringMap(cmd, "auth-headers-headers")
+				if err != nil {
+					return err
+				}
+				nested := sdk.NewAuthHeadersCredentialsIn(authHeadersHeaders)
+				body.SetAuthHeaders(*nested)
+			}
 			if changed(cmd, "function-app-key-app-key", "function-app-key-app-key-prompt") {
 				if err := requireAny(cmd, "function-app-key-app-key", "function-app-key-app-key-prompt"); err != nil {
 					return err
@@ -634,6 +645,7 @@ func newCollectionAgentsRegisterAzureCmd() *cobra.Command {
 	cmd.Flags().String("function-app-url", "", "URL of the function app Monte Carlo should call.")
 	_ = cmd.MarkFlagRequired("function-app-url")
 	cmd.Flags().String("name", "", "Display name for the collection agent. Replaces the name it currently has.")
+	cmd.Flags().StringArray("auth-headers-headers", nil, "Header names, each mapped to the value to send for it. Names have to be valid HTTP header names. At most 20 headers, each value up to 8192 characters. Visible in the process list. Repeat key=value, or pass @file holding JSON.")
 	cmd.Flags().String("function-app-key-app-key", "", "Function app key Monte Carlo presents when it calls the agent. Visible in the process list; --function-app-key-app-key-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("function-app-key-app-key-prompt", false, "Read --function-app-key-app-key from a hidden prompt instead of the command line.")
 	cmd.Flags().String("service-principal-tenant-id", "", "Directory (tenant) id the service principal lives in.")
@@ -822,7 +834,7 @@ func newCollectionAgentsUpdateAzureCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "azure <collection_agent_id>",
 		Short: "Update an Azure collection agent",
-		Long:  "Change the function app, the credentials, the authentication type or the name.\n\nSend any of the fields, in any combination. An agent that has no function app URL yet needs\none supplied here, since there would otherwise be nothing for Monte Carlo to reach. Sending\ncredentials replaces the stored ones, so send every field of the object you send, along with\nthe matching `authentication_type`. Sending both is also how you move an agent from one\nauthentication type to the other. An agent that authenticates some other way refuses a\ncredentials or authentication type change, since this endpoint only manages the two Azure\nfunction authentication types.\n\nMonte Carlo reaches the agent and checks it again before saving the change, and re-enables\nthe agent if it was disabled. A successful response therefore always describes a working\nagent. If the check fails, nothing about the agent changes. Sending only `name` skips the\ncheck.\n\nAn id that names an agent on another platform, or no agent in your account, returns 404.",
+		Long:  "Change the function app, the credentials, the authentication type or the name.\n\nSend any of the fields, in any combination. An agent that has no function app URL yet needs\none supplied here, since there would otherwise be nothing for Monte Carlo to reach. Sending\ncredentials replaces the stored ones, so send every field of the object you send, along with\nthe matching `authentication_type`. Sending both is also how you move an agent from one\nauthentication type to another. An agent that authenticates some other way refuses a\ncredentials or authentication type change, since this endpoint manages only the types\n`authentication_type` accepts.\n\nMonte Carlo reaches the agent and checks it again before saving the change, and re-enables\nthe agent if it was disabled. A successful response therefore always describes a working\nagent. If the check fails, nothing about the agent changes. Sending only `name` skips the\ncheck.\n\nAn id that names an agent on another platform, or no agent in your account, returns 404.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			api, ctx, err := apiClient(cmd)
@@ -855,6 +867,17 @@ func newCollectionAgentsUpdateAzureCmd() *cobra.Command {
 					return err
 				}
 				body.SetName(name)
+			}
+			if changed(cmd, "auth-headers-headers") {
+				if err := requireAny(cmd, "auth-headers-headers"); err != nil {
+					return err
+				}
+				authHeadersHeaders, err := flagStringMap(cmd, "auth-headers-headers")
+				if err != nil {
+					return err
+				}
+				nested := sdk.NewAuthHeadersCredentialsIn(authHeadersHeaders)
+				body.SetAuthHeaders(*nested)
 			}
 			if changed(cmd, "function-app-key-app-key", "function-app-key-app-key-prompt") {
 				if err := requireAny(cmd, "function-app-key-app-key", "function-app-key-app-key-prompt"); err != nil {
@@ -911,6 +934,7 @@ func newCollectionAgentsUpdateAzureCmd() *cobra.Command {
 	_ = cmd.RegisterFlagCompletionFunc("authentication-type", enumCompletion(sdk.AllowedAzureAgentAuthenticationTypeEnumValues))
 	cmd.Flags().String("function-app-url", "", "URL of the function app Monte Carlo should call.")
 	cmd.Flags().String("name", "", "Display name for the collection agent. Replaces the name it currently has.")
+	cmd.Flags().StringArray("auth-headers-headers", nil, "Header names, each mapped to the value to send for it. Names have to be valid HTTP header names. At most 20 headers, each value up to 8192 characters. Visible in the process list. Repeat key=value, or pass @file holding JSON.")
 	cmd.Flags().String("function-app-key-app-key", "", "Function app key Monte Carlo presents when it calls the agent. Visible in the process list; --function-app-key-app-key-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("function-app-key-app-key-prompt", false, "Read --function-app-key-app-key from a hidden prompt instead of the command line.")
 	cmd.Flags().String("service-principal-tenant-id", "", "Directory (tenant) id the service principal lives in.")

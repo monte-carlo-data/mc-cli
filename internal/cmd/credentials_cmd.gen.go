@@ -6627,37 +6627,69 @@ func newCredentialsValidateCmd() *cobra.Command {
 		Short: "Validate credential",
 	}
 	cmd.AddCommand(newCredentialsValidateAwsSecretsManagerCmd())
+	cmd.AddCommand(newCredentialsValidateAwsSecretsManagerChangeCmd())
 	cmd.AddCommand(newCredentialsValidateAzureDataFactoryCmd())
+	cmd.AddCommand(newCredentialsValidateAzureDataFactoryChangeCmd())
 	cmd.AddCommand(newCredentialsValidateAzureDedicatedSqlPoolCmd())
+	cmd.AddCommand(newCredentialsValidateAzureDedicatedSqlPoolChangeCmd())
 	cmd.AddCommand(newCredentialsValidateAzureKeyVaultCmd())
+	cmd.AddCommand(newCredentialsValidateAzureKeyVaultChangeCmd())
 	cmd.AddCommand(newCredentialsValidateAzureSqlDatabaseCmd())
+	cmd.AddCommand(newCredentialsValidateAzureSqlDatabaseChangeCmd())
 	cmd.AddCommand(newCredentialsValidateBigqueryCmd())
+	cmd.AddCommand(newCredentialsValidateBigqueryChangeCmd())
 	cmd.AddCommand(newCredentialsValidateClickhouseCmd())
+	cmd.AddCommand(newCredentialsValidateClickhouseChangeCmd())
 	cmd.AddCommand(newCredentialsValidateDatabricksMetastoreSqlWarehouseCmd())
+	cmd.AddCommand(newCredentialsValidateDatabricksMetastoreSqlWarehouseChangeCmd())
 	cmd.AddCommand(newCredentialsValidateDatabricksSqlWarehouseCmd())
+	cmd.AddCommand(newCredentialsValidateDatabricksSqlWarehouseChangeCmd())
 	cmd.AddCommand(newCredentialsValidateDb2Cmd())
+	cmd.AddCommand(newCredentialsValidateDb2ChangeCmd())
 	cmd.AddCommand(newCredentialsValidateEnvVarCmd())
+	cmd.AddCommand(newCredentialsValidateEnvVarChangeCmd())
 	cmd.AddCommand(newCredentialsValidateFileCmd())
+	cmd.AddCommand(newCredentialsValidateFileChangeCmd())
 	cmd.AddCommand(newCredentialsValidateFivetranCmd())
+	cmd.AddCommand(newCredentialsValidateFivetranChangeCmd())
 	cmd.AddCommand(newCredentialsValidateGcpDataformCmd())
+	cmd.AddCommand(newCredentialsValidateGcpDataformChangeCmd())
 	cmd.AddCommand(newCredentialsValidateGcpSecretManagerCmd())
+	cmd.AddCommand(newCredentialsValidateGcpSecretManagerChangeCmd())
 	cmd.AddCommand(newCredentialsValidateInformaticaV2Cmd())
+	cmd.AddCommand(newCredentialsValidateInformaticaV2ChangeCmd())
 	cmd.AddCommand(newCredentialsValidateLookerCmd())
+	cmd.AddCommand(newCredentialsValidateLookerChangeCmd())
 	cmd.AddCommand(newCredentialsValidateLookerGitCloneCmd())
+	cmd.AddCommand(newCredentialsValidateLookerGitCloneChangeCmd())
 	cmd.AddCommand(newCredentialsValidateMariadbCmd())
+	cmd.AddCommand(newCredentialsValidateMariadbChangeCmd())
 	cmd.AddCommand(newCredentialsValidateMulesoftCmd())
+	cmd.AddCommand(newCredentialsValidateMulesoftChangeCmd())
 	cmd.AddCommand(newCredentialsValidateMysqlCmd())
+	cmd.AddCommand(newCredentialsValidateMysqlChangeCmd())
 	cmd.AddCommand(newCredentialsValidateOracleCmd())
+	cmd.AddCommand(newCredentialsValidateOracleChangeCmd())
 	cmd.AddCommand(newCredentialsValidatePostgresCmd())
+	cmd.AddCommand(newCredentialsValidatePostgresChangeCmd())
 	cmd.AddCommand(newCredentialsValidatePowerBiCmd())
+	cmd.AddCommand(newCredentialsValidatePowerBiChangeCmd())
 	cmd.AddCommand(newCredentialsValidateRedshiftCmd())
+	cmd.AddCommand(newCredentialsValidateRedshiftChangeCmd())
 	cmd.AddCommand(newCredentialsValidateSapHanaCmd())
+	cmd.AddCommand(newCredentialsValidateSapHanaChangeCmd())
 	cmd.AddCommand(newCredentialsValidateSnowflakeCmd())
+	cmd.AddCommand(newCredentialsValidateSnowflakeChangeCmd())
 	cmd.AddCommand(newCredentialsValidateSqlServerCmd())
+	cmd.AddCommand(newCredentialsValidateSqlServerChangeCmd())
 	cmd.AddCommand(newCredentialsValidateStarburstEnterpriseCmd())
+	cmd.AddCommand(newCredentialsValidateStarburstEnterpriseChangeCmd())
 	cmd.AddCommand(newCredentialsValidateStarburstGalaxyCmd())
+	cmd.AddCommand(newCredentialsValidateStarburstGalaxyChangeCmd())
 	cmd.AddCommand(newCredentialsValidateTableauCmd())
+	cmd.AddCommand(newCredentialsValidateTableauChangeCmd())
 	cmd.AddCommand(newCredentialsValidateTeradataCmd())
+	cmd.AddCommand(newCredentialsValidateTeradataChangeCmd())
 	return cmd
 }
 
@@ -6774,6 +6806,115 @@ func newCredentialsValidateAwsSecretsManagerCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsValidateAwsSecretsManagerChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "aws-secrets-manager-change <credentials_id>",
+		Short: "Validate a change to AWS Secrets Manager credentials",
+		Long:  "Check a change to AWS Secrets Manager credentials against the system they are for.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nstorage returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateAwsSecretsManagerCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewAwsSecretsManagerCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "assumable-role") {
+				assumableRole, err := flagString(cmd, "assumable-role")
+				if err != nil {
+					return err
+				}
+				body.SetAssumableRole(assumableRole)
+			}
+			if changed(cmd, "aws-region") {
+				awsRegion, err := flagString(cmd, "aws-region")
+				if err != nil {
+					return err
+				}
+				body.SetAwsRegion(awsRegion)
+			}
+			if changed(cmd, "aws-secret") {
+				awsSecret, err := flagString(cmd, "aws-secret")
+				if err != nil {
+					return err
+				}
+				body.SetAwsSecret(awsSecret)
+			}
+			if changed(cmd, "bq-project-id") {
+				bqProjectId, err := flagString(cmd, "bq-project-id")
+				if err != nil {
+					return err
+				}
+				body.SetBqProjectId(bqProjectId)
+			}
+			if changed(cmd, "external-id") {
+				externalId, err := flagString(cmd, "external-id")
+				if err != nil {
+					return err
+				}
+				body.SetExternalId(externalId)
+			}
+			if changed(cmd, "sql-warehouse-id") {
+				sqlWarehouseId, err := flagString(cmd, "sql-warehouse-id")
+				if err != nil {
+					return err
+				}
+				body.SetSqlWarehouseId(sqlWarehouseId)
+			}
+			req = req.AwsSecretsManagerCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("assumable-role", "", "ARN of a role the deployment assumes to read the secret. Omit it to read as itself.")
+	cmd.Flags().String("aws-region", "", "AWS region of the secret. Omit it to use the deployment's own region.")
+	cmd.Flags().String("aws-secret", "", "Name or ARN of the AWS Secrets Manager secret holding the connection's credentials.")
+	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
+	cmd.Flags().String("external-id", "", "External id the assumed role's trust policy requires, if it requires one.")
+	cmd.Flags().String("sql-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
 func newCredentialsValidateAzureDataFactoryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "azure-data-factory",
@@ -6874,6 +7015,116 @@ func newCredentialsValidateAzureDataFactoryCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsValidateAzureDataFactoryChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "azure-data-factory-change <credentials_id>",
+		Short: "Validate a change to Azure Data Factory credentials",
+		Long:  "Check a change to Azure Data Factory credentials before making it.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateAzureDataFactoryCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewAzureDataFactoryCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "app-client-id") {
+				appClientId, err := flagString(cmd, "app-client-id")
+				if err != nil {
+					return err
+				}
+				body.SetAppClientId(appClientId)
+			}
+			if changed(cmd, "app-client-secret", "app-client-secret-prompt") {
+				appClientSecret, err := flagSecret(cmd, "app-client-secret")
+				if err != nil {
+					return err
+				}
+				body.SetAppClientSecret(appClientSecret)
+			}
+			if changed(cmd, "factory-name") {
+				factoryName, err := flagString(cmd, "factory-name")
+				if err != nil {
+					return err
+				}
+				body.SetFactoryName(factoryName)
+			}
+			if changed(cmd, "resource-group-name") {
+				resourceGroupName, err := flagString(cmd, "resource-group-name")
+				if err != nil {
+					return err
+				}
+				body.SetResourceGroupName(resourceGroupName)
+			}
+			if changed(cmd, "subscription-id") {
+				subscriptionId, err := flagString(cmd, "subscription-id")
+				if err != nil {
+					return err
+				}
+				body.SetSubscriptionId(subscriptionId)
+			}
+			if changed(cmd, "tenant-id") {
+				tenantId, err := flagString(cmd, "tenant-id")
+				if err != nil {
+					return err
+				}
+				body.SetTenantId(tenantId)
+			}
+			req = req.AzureDataFactoryCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("app-client-id", "", "Client ID of the Entra ID app registration Monte Carlo signs in with.")
+	cmd.Flags().String("app-client-secret", "", "Secret of the app registration. Stored by Monte Carlo and never returned. Visible in the process list; --app-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("app-client-secret-prompt", false, "Read --app-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("factory-name", "", "Name of the data factory.")
+	cmd.Flags().String("resource-group-name", "", "Resource group that holds the data factory.")
+	cmd.Flags().String("subscription-id", "", "Azure subscription that holds the data factory.")
+	cmd.Flags().String("tenant-id", "", "Microsoft Entra ID tenant the data factory belongs to.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
 func newCredentialsValidateAzureDedicatedSqlPoolCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "azure-dedicated-sql-pool",
@@ -6964,6 +7215,108 @@ func newCredentialsValidateAzureDedicatedSqlPoolCmd() *cobra.Command {
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().String("db-name", "", "Database to connect to.")
 	_ = cmd.MarkFlagRequired("db-name")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateAzureDedicatedSqlPoolChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "azure-dedicated-sql-pool-change <credentials_id>",
+		Short: "Validate a change to Azure Dedicated SQL Pool credentials",
+		Long:  "Check a change to Azure Dedicated SQL Pool credentials before making it.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateAzureDedicatedSqlPoolCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewAzureDedicatedSqlPoolCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "user") {
+				user, err := flagString(cmd, "user")
+				if err != nil {
+					return err
+				}
+				body.SetUser(user)
+			}
+			req = req.AzureDedicatedSqlPoolCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }
@@ -7073,6 +7426,107 @@ func newCredentialsValidateAzureKeyVaultCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsValidateAzureKeyVaultChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "azure-key-vault-change <credentials_id>",
+		Short: "Validate a change to Azure Key Vault credentials",
+		Long:  "Check a change to Azure Key Vault credentials against the system they are for.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nstorage returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateAzureKeyVaultCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewAzureKeyVaultCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "akv-secret") {
+				akvSecret, err := flagString(cmd, "akv-secret")
+				if err != nil {
+					return err
+				}
+				body.SetAkvSecret(akvSecret)
+			}
+			if changed(cmd, "akv-vault-name") {
+				akvVaultName, err := flagString(cmd, "akv-vault-name")
+				if err != nil {
+					return err
+				}
+				body.SetAkvVaultName(akvVaultName)
+			}
+			if changed(cmd, "akv-vault-url") {
+				akvVaultUrl, err := flagString(cmd, "akv-vault-url")
+				if err != nil {
+					return err
+				}
+				body.SetAkvVaultUrl(akvVaultUrl)
+			}
+			if changed(cmd, "bq-project-id") {
+				bqProjectId, err := flagString(cmd, "bq-project-id")
+				if err != nil {
+					return err
+				}
+				body.SetBqProjectId(bqProjectId)
+			}
+			if changed(cmd, "sql-warehouse-id") {
+				sqlWarehouseId, err := flagString(cmd, "sql-warehouse-id")
+				if err != nil {
+					return err
+				}
+				body.SetSqlWarehouseId(sqlWarehouseId)
+			}
+			req = req.AzureKeyVaultCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("akv-secret", "", "Name of the Azure Key Vault secret holding the connection's credentials.")
+	cmd.Flags().String("akv-vault-name", "", "Name of the key vault. Send this, akv_vault_url, or both.")
+	cmd.Flags().String("akv-vault-url", "", "URL of the key vault. Send this, akv_vault_name, or both.")
+	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
+	cmd.Flags().String("sql-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
 func newCredentialsValidateAzureSqlDatabaseCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "azure-sql-database",
@@ -7167,6 +7621,108 @@ func newCredentialsValidateAzureSqlDatabaseCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsValidateAzureSqlDatabaseChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "azure-sql-database-change <credentials_id>",
+		Short: "Validate a change to Azure SQL Database credentials",
+		Long:  "Check a change to Azure SQL Database credentials before making it.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateAzureSqlDatabaseCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewAzureSqlDatabaseCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "user") {
+				user, err := flagString(cmd, "user")
+				if err != nil {
+					return err
+				}
+				body.SetUser(user)
+			}
+			req = req.AzureSqlDatabaseCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
 func newCredentialsValidateBigqueryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "bigquery",
@@ -7232,6 +7788,76 @@ func newCredentialsValidateBigqueryCmd() *cobra.Command {
 	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
 	_ = cmd.MarkFlagRequired("deployment-id")
 	cmd.Flags().String("service-account-key", "", "The service account's JSON key file, as its text. Used for this check and not kept. Visible in the process list; --service-account-key-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("service-account-key-prompt", false, "Read --service-account-key from a hidden prompt instead of the command line.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateBigqueryChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "bigquery-change <credentials_id>",
+		Short: "Validate a change to BigQuery credentials",
+		Long:  "Check a change to BigQuery credentials before making it.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateBigqueryCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewBigQueryCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "service-account-key", "service-account-key-prompt") {
+				serviceAccountKey, err := flagSecret(cmd, "service-account-key")
+				if err != nil {
+					return err
+				}
+				body.SetServiceAccountKey(serviceAccountKey)
+			}
+			req = req.BigQueryCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("service-account-key", "", "New JSON key file, as its text. Replaces the stored key whole. Visible in the process list; --service-account-key-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("service-account-key-prompt", false, "Read --service-account-key from a hidden prompt instead of the command line.")
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
@@ -7329,6 +7955,108 @@ func newCredentialsValidateClickhouseCmd() *cobra.Command {
 	cmd.Flags().String("password", "", "Password of the database user. Used for this check and not kept. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateClickhouseChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "clickhouse-change <credentials_id>",
+		Short: "Validate a change to ClickHouse credentials",
+		Long:  "Check a change to ClickHouse credentials before making it.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateClickhouseCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewClickHouseCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "user") {
+				user, err := flagString(cmd, "user")
+				if err != nil {
+					return err
+				}
+				body.SetUser(user)
+			}
+			req = req.ClickHouseCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }
@@ -7450,6 +8178,133 @@ func newCredentialsValidateDatabricksMetastoreSqlWarehouseCmd() *cobra.Command {
 	cmd.Flags().Bool("oauth-client-secret-prompt", false, "Read --oauth-client-secret from a hidden prompt instead of the command line.")
 	cmd.Flags().String("token", "", "Personal access token or service principal token. Send this, or oauth_client_id and oauth_client_secret. Used for this check and not kept. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateDatabricksMetastoreSqlWarehouseChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "databricks-metastore-sql-warehouse-change <credentials_id>",
+		Short: "Validate a change to Databricks metadata collection credentials",
+		Long:  "Check a change to Databricks metadata collection credentials before making it.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateDatabricksMetastoreSqlWarehouseCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewDatabricksMetastoreSqlWarehouseCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "azure-tenant-id") {
+				azureTenantId, err := flagString(cmd, "azure-tenant-id")
+				if err != nil {
+					return err
+				}
+				body.SetAzureTenantId(azureTenantId)
+			}
+			if changed(cmd, "azure-workspace-resource-id") {
+				azureWorkspaceResourceId, err := flagString(cmd, "azure-workspace-resource-id")
+				if err != nil {
+					return err
+				}
+				body.SetAzureWorkspaceResourceId(azureWorkspaceResourceId)
+			}
+			if changed(cmd, "oauth-client-id") {
+				oauthClientId, err := flagString(cmd, "oauth-client-id")
+				if err != nil {
+					return err
+				}
+				body.SetOauthClientId(oauthClientId)
+			}
+			if changed(cmd, "oauth-client-secret", "oauth-client-secret-prompt") {
+				oauthClientSecret, err := flagSecret(cmd, "oauth-client-secret")
+				if err != nil {
+					return err
+				}
+				body.SetOauthClientSecret(oauthClientSecret)
+			}
+			if changed(cmd, "sql-warehouse-id") {
+				sqlWarehouseId, err := flagString(cmd, "sql-warehouse-id")
+				if err != nil {
+					return err
+				}
+				body.SetSqlWarehouseId(sqlWarehouseId)
+			}
+			if changed(cmd, "token", "token-prompt") {
+				token, err := flagSecret(cmd, "token")
+				if err != nil {
+					return err
+				}
+				body.SetToken(token)
+			}
+			if changed(cmd, "workspace-id") {
+				workspaceId, err := flagString(cmd, "workspace-id")
+				if err != nil {
+					return err
+				}
+				body.SetWorkspaceId(workspaceId)
+			}
+			if changed(cmd, "workspace-url") {
+				workspaceUrl, err := flagString(cmd, "workspace-url")
+				if err != nil {
+					return err
+				}
+				body.SetWorkspaceUrl(workspaceUrl)
+			}
+			req = req.DatabricksMetastoreSqlWarehouseCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("azure-tenant-id", "", "Microsoft Entra ID tenant, for a service principal Azure manages. Send it with azure_workspace_resource_id and the OAuth client.")
+	cmd.Flags().String("azure-workspace-resource-id", "", "Azure resource ID of the workspace, for a service principal Azure manages. Send it with azure_tenant_id and the OAuth client.")
+	cmd.Flags().String("oauth-client-id", "", "Client ID of the service principal Monte Carlo signs in as with OAuth. Send it with oauth_client_secret, instead of token.")
+	cmd.Flags().String("oauth-client-secret", "", "OAuth secret of the service principal in oauth_client_id. Stored by Monte Carlo and never returned. Visible in the process list; --oauth-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("oauth-client-secret-prompt", false, "Read --oauth-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("sql-warehouse-id", "", "ID of the Databricks SQL warehouse the connection runs on.")
+	cmd.Flags().String("token", "", "Personal access token or service principal token. Send this, or oauth_client_id and oauth_client_secret. Stored by Monte Carlo and never returned. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
+	cmd.Flags().String("workspace-id", "", "ID of the Databricks workspace.")
+	cmd.Flags().String("workspace-url", "", "URL of the Databricks workspace, or its host name.")
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }
@@ -7577,6 +8432,133 @@ func newCredentialsValidateDatabricksSqlWarehouseCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsValidateDatabricksSqlWarehouseChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "databricks-sql-warehouse-change <credentials_id>",
+		Short: "Validate a change to Databricks query credentials",
+		Long:  "Check a change to Databricks query credentials before making it.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateDatabricksSqlWarehouseCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewDatabricksSqlWarehouseCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "azure-tenant-id") {
+				azureTenantId, err := flagString(cmd, "azure-tenant-id")
+				if err != nil {
+					return err
+				}
+				body.SetAzureTenantId(azureTenantId)
+			}
+			if changed(cmd, "azure-workspace-resource-id") {
+				azureWorkspaceResourceId, err := flagString(cmd, "azure-workspace-resource-id")
+				if err != nil {
+					return err
+				}
+				body.SetAzureWorkspaceResourceId(azureWorkspaceResourceId)
+			}
+			if changed(cmd, "oauth-client-id") {
+				oauthClientId, err := flagString(cmd, "oauth-client-id")
+				if err != nil {
+					return err
+				}
+				body.SetOauthClientId(oauthClientId)
+			}
+			if changed(cmd, "oauth-client-secret", "oauth-client-secret-prompt") {
+				oauthClientSecret, err := flagSecret(cmd, "oauth-client-secret")
+				if err != nil {
+					return err
+				}
+				body.SetOauthClientSecret(oauthClientSecret)
+			}
+			if changed(cmd, "sql-warehouse-id") {
+				sqlWarehouseId, err := flagString(cmd, "sql-warehouse-id")
+				if err != nil {
+					return err
+				}
+				body.SetSqlWarehouseId(sqlWarehouseId)
+			}
+			if changed(cmd, "token", "token-prompt") {
+				token, err := flagSecret(cmd, "token")
+				if err != nil {
+					return err
+				}
+				body.SetToken(token)
+			}
+			if changed(cmd, "workspace-id") {
+				workspaceId, err := flagString(cmd, "workspace-id")
+				if err != nil {
+					return err
+				}
+				body.SetWorkspaceId(workspaceId)
+			}
+			if changed(cmd, "workspace-url") {
+				workspaceUrl, err := flagString(cmd, "workspace-url")
+				if err != nil {
+					return err
+				}
+				body.SetWorkspaceUrl(workspaceUrl)
+			}
+			req = req.DatabricksSqlWarehouseCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("azure-tenant-id", "", "Microsoft Entra ID tenant, for a service principal Azure manages. Send it with azure_workspace_resource_id and the OAuth client.")
+	cmd.Flags().String("azure-workspace-resource-id", "", "Azure resource ID of the workspace, for a service principal Azure manages. Send it with azure_tenant_id and the OAuth client.")
+	cmd.Flags().String("oauth-client-id", "", "Client ID of the service principal Monte Carlo signs in as with OAuth. Send it with oauth_client_secret, instead of token.")
+	cmd.Flags().String("oauth-client-secret", "", "OAuth secret of the service principal in oauth_client_id. Stored by Monte Carlo and never returned. Visible in the process list; --oauth-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("oauth-client-secret-prompt", false, "Read --oauth-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("sql-warehouse-id", "", "ID of the Databricks SQL warehouse the connection runs on.")
+	cmd.Flags().String("token", "", "Personal access token or service principal token. Send this, or oauth_client_id and oauth_client_secret. Stored by Monte Carlo and never returned. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
+	cmd.Flags().String("workspace-id", "", "ID of the Databricks workspace.")
+	cmd.Flags().String("workspace-url", "", "URL of the Databricks workspace, or its host name.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
 func newCredentialsValidateDb2Cmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "db2",
@@ -7689,6 +8671,124 @@ func newCredentialsValidateDb2Cmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsValidateDb2ChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "db2-change <credentials_id>",
+		Short: "Validate a change to Db2 credentials",
+		Long:  "Check a change to Db2 credentials before making it.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateDb2CredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewDb2CredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "ssl-ca-data") {
+				sslCaData, err := flagString(cmd, "ssl-ca-data")
+				if err != nil {
+					return err
+				}
+				body.SetSslCaData(sslCaData)
+			}
+			if changed(cmd, "ssl-disabled") {
+				sslDisabled, err := flagBool(cmd, "ssl-disabled")
+				if err != nil {
+					return err
+				}
+				body.SetSslDisabled(sslDisabled)
+			}
+			if changed(cmd, "user") {
+				user, err := flagString(cmd, "user")
+				if err != nil {
+					return err
+				}
+				body.SetUser(user)
+			}
+			req = req.Db2CredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM text of the CA certificate the server's certificate is checked against.")
+	cmd.Flags().Bool("ssl-disabled", false, "Connect without TLS.")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
 func newCredentialsValidateEnvVarCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "env-var",
@@ -7786,6 +8886,99 @@ func newCredentialsValidateEnvVarCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsValidateEnvVarChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "env-var-change <credentials_id>",
+		Short: "Validate a change to environment variable credentials",
+		Long:  "Check a change to environment variable credentials against the system they are for.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nstorage returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateEnvVarCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewEnvVarCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "bq-project-id") {
+				bqProjectId, err := flagString(cmd, "bq-project-id")
+				if err != nil {
+					return err
+				}
+				body.SetBqProjectId(bqProjectId)
+			}
+			if changed(cmd, "env-var-name") {
+				envVarName, err := flagString(cmd, "env-var-name")
+				if err != nil {
+					return err
+				}
+				body.SetEnvVarName(envVarName)
+			}
+			if changed(cmd, "kms-key-id") {
+				kmsKeyId, err := flagString(cmd, "kms-key-id")
+				if err != nil {
+					return err
+				}
+				body.SetKmsKeyId(kmsKeyId)
+			}
+			if changed(cmd, "sql-warehouse-id") {
+				sqlWarehouseId, err := flagString(cmd, "sql-warehouse-id")
+				if err != nil {
+					return err
+				}
+				body.SetSqlWarehouseId(sqlWarehouseId)
+			}
+			req = req.EnvVarCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
+	cmd.Flags().String("env-var-name", "", "Name of the environment variable on the deployment that holds the connection's credentials. Must start with MCD_.")
+	cmd.Flags().String("kms-key-id", "", "AWS KMS key the variable's value is encrypted with. Omit it for a value stored in the clear.")
+	cmd.Flags().String("sql-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
 func newCredentialsValidateFileCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "file",
@@ -7870,6 +9063,91 @@ func newCredentialsValidateFileCmd() *cobra.Command {
 	cmd.Flags().String("file-path", "", "Path of the file on the deployment that holds the connection's credentials.")
 	_ = cmd.MarkFlagRequired("file-path")
 	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
+	cmd.Flags().String("sql-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateFileChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "file-change <credentials_id>",
+		Short: "Validate a change to file credentials",
+		Long:  "Check a change to file credentials against the system they are for.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nstorage returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateFileCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewFileCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "bq-project-id") {
+				bqProjectId, err := flagString(cmd, "bq-project-id")
+				if err != nil {
+					return err
+				}
+				body.SetBqProjectId(bqProjectId)
+			}
+			if changed(cmd, "file-path") {
+				filePath, err := flagString(cmd, "file-path")
+				if err != nil {
+					return err
+				}
+				body.SetFilePath(filePath)
+			}
+			if changed(cmd, "sql-warehouse-id") {
+				sqlWarehouseId, err := flagString(cmd, "sql-warehouse-id")
+				if err != nil {
+					return err
+				}
+				body.SetSqlWarehouseId(sqlWarehouseId)
+			}
+			req = req.FileCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
+	cmd.Flags().String("file-path", "", "Path of the file on the deployment that holds the connection's credentials.")
 	cmd.Flags().String("sql-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
@@ -7962,6 +9240,93 @@ func newCredentialsValidateFivetranCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsValidateFivetranChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "fivetran-change <credentials_id>",
+		Short: "Validate a change to Fivetran credentials",
+		Long:  "Check a change to Fivetran credentials before making it.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateFivetranCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewFivetranCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "api-key", "api-key-prompt") {
+				apiKey, err := flagSecret(cmd, "api-key")
+				if err != nil {
+					return err
+				}
+				body.SetApiKey(apiKey)
+			}
+			if changed(cmd, "api-password", "api-password-prompt") {
+				apiPassword, err := flagSecret(cmd, "api-password")
+				if err != nil {
+					return err
+				}
+				body.SetApiPassword(apiPassword)
+			}
+			if changed(cmd, "base-url") {
+				baseUrl, err := flagString(cmd, "base-url")
+				if err != nil {
+					return err
+				}
+				body.SetBaseUrl(baseUrl)
+			}
+			req = req.FivetranCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("api-key", "", "Key of the Fivetran API key. Stored by Monte Carlo and never returned. Visible in the process list; --api-key-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("api-key-prompt", false, "Read --api-key from a hidden prompt instead of the command line.")
+	cmd.Flags().String("api-password", "", "Secret of the Fivetran API key. Stored by Monte Carlo and never returned. Visible in the process list; --api-password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("api-password-prompt", false, "Read --api-password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("base-url", "", "URL of the Fivetran REST API. Leave it out for https://api.fivetran.com/v1/.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
 func newCredentialsValidateGcpDataformCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "gcp-dataform",
@@ -8039,6 +9404,92 @@ func newCredentialsValidateGcpDataformCmd() *cobra.Command {
 	cmd.Flags().StringSlice("locations", nil, "Google Cloud regions to read Dataform repositories in, such as us-central1.")
 	_ = cmd.MarkFlagRequired("locations")
 	cmd.Flags().String("service-account-key", "", "The service account's JSON key file, as its text. It needs Dataform API access. Used for this check and not kept. Visible in the process list; --service-account-key-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("service-account-key-prompt", false, "Read --service-account-key from a hidden prompt instead of the command line.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateGcpDataformChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "gcp-dataform-change <credentials_id>",
+		Short: "Validate a change to GCP Dataform credentials",
+		Long:  "Check a change to GCP Dataform credentials before making it.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateGcpDataformCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewGcpDataformCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "locations") {
+				locations, err := flagStringSlice(cmd, "locations")
+				if err != nil {
+					return err
+				}
+				body.SetLocations(locations)
+			}
+			if changed(cmd, "project-id") {
+				projectId, err := flagString(cmd, "project-id")
+				if err != nil {
+					return err
+				}
+				body.SetProjectId(projectId)
+			}
+			if changed(cmd, "service-account-key", "service-account-key-prompt") {
+				serviceAccountKey, err := flagSecret(cmd, "service-account-key")
+				if err != nil {
+					return err
+				}
+				body.SetServiceAccountKey(serviceAccountKey)
+			}
+			req = req.GcpDataformCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().StringSlice("locations", nil, "Google Cloud regions to read Dataform repositories in, such as us-central1.")
+	cmd.Flags().String("project-id", "", "Google Cloud project that holds the Dataform repositories.")
+	cmd.Flags().String("service-account-key", "", "The service account's JSON key file, as its text. It needs Dataform API access. Stored by Monte Carlo and never returned. Visible in the process list; --service-account-key-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("service-account-key-prompt", false, "Read --service-account-key from a hidden prompt instead of the command line.")
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
@@ -8128,6 +9579,91 @@ func newCredentialsValidateGcpSecretManagerCmd() *cobra.Command {
 	cmd.Flags().String("gcp-secret", "", "Name of the GCP Secret Manager secret holding the connection's credentials.")
 	_ = cmd.MarkFlagRequired("gcp-secret")
 	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
+	cmd.Flags().String("sql-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateGcpSecretManagerChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "gcp-secret-manager-change <credentials_id>",
+		Short: "Validate a change to GCP Secret Manager credentials",
+		Long:  "Check a change to GCP Secret Manager credentials against the system they are for.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nstorage returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateGcpSecretManagerCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewGcpSecretManagerCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "bq-project-id") {
+				bqProjectId, err := flagString(cmd, "bq-project-id")
+				if err != nil {
+					return err
+				}
+				body.SetBqProjectId(bqProjectId)
+			}
+			if changed(cmd, "gcp-secret") {
+				gcpSecret, err := flagString(cmd, "gcp-secret")
+				if err != nil {
+					return err
+				}
+				body.SetGcpSecret(gcpSecret)
+			}
+			if changed(cmd, "sql-warehouse-id") {
+				sqlWarehouseId, err := flagString(cmd, "sql-warehouse-id")
+				if err != nil {
+					return err
+				}
+				body.SetSqlWarehouseId(sqlWarehouseId)
+			}
+			req = req.GcpSecretManagerCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
+	cmd.Flags().String("gcp-secret", "", "Name of the GCP Secret Manager secret holding the connection's credentials.")
 	cmd.Flags().String("sql-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
@@ -8301,6 +9837,176 @@ func newCredentialsValidateInformaticaV2Cmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsValidateInformaticaV2ChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "informatica-v2-change <credentials_id>",
+		Short: "Validate a change to Informatica credentials",
+		Long:  "Check a change to Informatica credentials before making it.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateInformaticaV2CredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewInformaticaV2CredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "auth-mode") {
+				authModeValue, err := flagString(cmd, "auth-mode")
+				if err != nil {
+					return err
+				}
+				authMode, err := sdk.NewInformaticaV2AuthModeFromValue(authModeValue)
+				if err != nil {
+					return usageError("%w", err)
+				}
+				body.SetAuthMode(*authMode)
+			}
+			if changed(cmd, "base-url") {
+				baseUrl, err := flagString(cmd, "base-url")
+				if err != nil {
+					return err
+				}
+				body.SetBaseUrl(baseUrl)
+			}
+			if changed(cmd, "oauth-access-token-endpoint") {
+				oauthAccessTokenEndpoint, err := flagString(cmd, "oauth-access-token-endpoint")
+				if err != nil {
+					return err
+				}
+				body.SetOauthAccessTokenEndpoint(oauthAccessTokenEndpoint)
+			}
+			if changed(cmd, "oauth-client-id") {
+				oauthClientId, err := flagString(cmd, "oauth-client-id")
+				if err != nil {
+					return err
+				}
+				body.SetOauthClientId(oauthClientId)
+			}
+			if changed(cmd, "oauth-client-secret", "oauth-client-secret-prompt") {
+				oauthClientSecret, err := flagSecret(cmd, "oauth-client-secret")
+				if err != nil {
+					return err
+				}
+				body.SetOauthClientSecret(oauthClientSecret)
+			}
+			if changed(cmd, "oauth-grant-type") {
+				oauthGrantTypeValue, err := flagString(cmd, "oauth-grant-type")
+				if err != nil {
+					return err
+				}
+				oauthGrantType, err := sdk.NewOAuthGrantTypeFromValue(oauthGrantTypeValue)
+				if err != nil {
+					return usageError("%w", err)
+				}
+				body.SetOauthGrantType(*oauthGrantType)
+			}
+			if changed(cmd, "oauth-password", "oauth-password-prompt") {
+				oauthPassword, err := flagSecret(cmd, "oauth-password")
+				if err != nil {
+					return err
+				}
+				body.SetOauthPassword(oauthPassword)
+			}
+			if changed(cmd, "oauth-scope") {
+				oauthScope, err := flagString(cmd, "oauth-scope")
+				if err != nil {
+					return err
+				}
+				body.SetOauthScope(oauthScope)
+			}
+			if changed(cmd, "oauth-username") {
+				oauthUsername, err := flagString(cmd, "oauth-username")
+				if err != nil {
+					return err
+				}
+				body.SetOauthUsername(oauthUsername)
+			}
+			if changed(cmd, "org-id") {
+				orgId, err := flagString(cmd, "org-id")
+				if err != nil {
+					return err
+				}
+				body.SetOrgId(orgId)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "username") {
+				username, err := flagString(cmd, "username")
+				if err != nil {
+					return err
+				}
+				body.SetUsername(username)
+			}
+			req = req.InformaticaV2CredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("auth-mode", "", "How Monte Carlo signs in. password takes username and password. oauth takes org_id and the oauth_* fields.")
+	_ = cmd.RegisterFlagCompletionFunc("auth-mode", enumCompletion(sdk.AllowedInformaticaV2AuthModeEnumValues))
+	cmd.Flags().String("base-url", "", "Informatica login URL for your POD. Leave it out for https://dm-us.informaticacloud.com.")
+	cmd.Flags().String("oauth-access-token-endpoint", "", "Identity provider URL Monte Carlo requests tokens from.")
+	cmd.Flags().String("oauth-client-id", "", "Client ID of the app registered with your identity provider, for oauth.")
+	cmd.Flags().String("oauth-client-secret", "", "Secret of the identity provider app, for oauth. Stored by Monte Carlo and never returned. Visible in the process list; --oauth-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("oauth-client-secret-prompt", false, "Read --oauth-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("oauth-grant-type", "", "Grant Monte Carlo requests the token with, for oauth. password also takes oauth_username and oauth_password.")
+	_ = cmd.RegisterFlagCompletionFunc("oauth-grant-type", enumCompletion(sdk.AllowedOAuthGrantTypeEnumValues))
+	cmd.Flags().String("oauth-password", "", "Password of oauth_username, for the password grant. Stored by Monte Carlo and never returned. Visible in the process list; --oauth-password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("oauth-password-prompt", false, "Read --oauth-password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("oauth-scope", "", "Scope to request the token with. Leave it out to request none.")
+	cmd.Flags().String("oauth-username", "", "Identity provider user, for the password grant.")
+	cmd.Flags().String("org-id", "", "Informatica organization ID, for oauth.")
+	cmd.Flags().String("password", "", "Password of username, for password. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("username", "", "Informatica user, for password.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
 func newCredentialsValidateLookerCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "looker",
@@ -8386,6 +10092,100 @@ func newCredentialsValidateLookerCmd() *cobra.Command {
 	_ = cmd.MarkFlagRequired("api-client-id")
 	cmd.Flags().String("api-client-secret", "", "Client secret of the Looker API key. Used for this check and not kept. Visible in the process list; --api-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("api-client-secret-prompt", false, "Read --api-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().Bool("verify-ssl", false, "Whether to verify Looker's TLS certificate. Verified when left out.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateLookerChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "looker-change <credentials_id>",
+		Short: "Validate a change to Looker credentials",
+		Long:  "Check a change to Looker credentials before making it.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateLookerCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewLookerCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "api-client-id") {
+				apiClientId, err := flagString(cmd, "api-client-id")
+				if err != nil {
+					return err
+				}
+				body.SetApiClientId(apiClientId)
+			}
+			if changed(cmd, "api-client-secret", "api-client-secret-prompt") {
+				apiClientSecret, err := flagSecret(cmd, "api-client-secret")
+				if err != nil {
+					return err
+				}
+				body.SetApiClientSecret(apiClientSecret)
+			}
+			if changed(cmd, "base-url") {
+				baseUrl, err := flagString(cmd, "base-url")
+				if err != nil {
+					return err
+				}
+				body.SetBaseUrl(baseUrl)
+			}
+			if changed(cmd, "verify-ssl") {
+				verifySsl, err := flagBool(cmd, "verify-ssl")
+				if err != nil {
+					return err
+				}
+				body.SetVerifySsl(verifySsl)
+			}
+			req = req.LookerCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("api-client-id", "", "Client ID of the Looker API key.")
+	cmd.Flags().String("api-client-secret", "", "Client secret of the Looker API key. Stored by Monte Carlo and never returned. Visible in the process list; --api-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("api-client-secret-prompt", false, "Read --api-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("base-url", "", "URL of the Looker API, such as https://acme.cloud.looker.com.")
 	cmd.Flags().Bool("verify-ssl", false, "Whether to verify Looker's TLS certificate. Verified when left out.")
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
@@ -8500,6 +10300,117 @@ func newCredentialsValidateLookerGitCloneCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsValidateLookerGitCloneChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "looker-git-clone-change <credentials_id>",
+		Short: "Validate a change to LookML repository credentials",
+		Long:  "Check a change to LookML repository credentials before making it.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateLookerGitCloneCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewLookerGitCloneCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "repo-url") {
+				repoUrl, err := flagString(cmd, "repo-url")
+				if err != nil {
+					return err
+				}
+				body.SetRepoUrl(repoUrl)
+			}
+			if changed(cmd, "ssh-key", "ssh-key-prompt") {
+				sshKey, err := flagSecret(cmd, "ssh-key")
+				if err != nil {
+					return err
+				}
+				body.SetSshKey(sshKey)
+			}
+			if changed(cmd, "ssl-ca-data") {
+				sslCaData, err := flagString(cmd, "ssl-ca-data")
+				if err != nil {
+					return err
+				}
+				body.SetSslCaData(sslCaData)
+			}
+			if changed(cmd, "ssl-skip-cert-verification") {
+				sslSkipCertVerification, err := flagBool(cmd, "ssl-skip-cert-verification")
+				if err != nil {
+					return err
+				}
+				body.SetSslSkipCertVerification(sslSkipCertVerification)
+			}
+			if changed(cmd, "token", "token-prompt") {
+				token, err := flagSecret(cmd, "token")
+				if err != nil {
+					return err
+				}
+				body.SetToken(token)
+			}
+			if changed(cmd, "username") {
+				username, err := flagString(cmd, "username")
+				if err != nil {
+					return err
+				}
+				body.SetUsername(username)
+			}
+			req = req.LookerGitCloneCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("repo-url", "", "Clone URL of the LookML repository, over HTTPS or SSH.")
+	cmd.Flags().String("ssh-key", "", "Private key for an SSH clone, as PEM text including its BEGIN and END lines. Send this or username and token. Stored by Monte Carlo and never returned. Visible in the process list; --ssh-key-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("ssh-key-prompt", false, "Read --ssh-key from a hidden prompt instead of the command line.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM certificate of the CA that signed the git server's certificate.")
+	cmd.Flags().Bool("ssl-skip-cert-verification", false, "Skip verifying the git server's TLS certificate.")
+	cmd.Flags().String("token", "", "Access token of username, for an HTTPS clone. Send this or ssh_key. Stored by Monte Carlo and never returned. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
+	cmd.Flags().String("username", "", "Git user for an HTTPS clone. Send it with token.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
 func newCredentialsValidateMariadbCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mariadb",
@@ -8596,6 +10507,108 @@ func newCredentialsValidateMariadbCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsValidateMariadbChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "mariadb-change <credentials_id>",
+		Short: "Validate a change to MariaDB credentials",
+		Long:  "Check a change to MariaDB credentials before making it.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateMariadbCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewMariaDbCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "user") {
+				user, err := flagString(cmd, "user")
+				if err != nil {
+					return err
+				}
+				body.SetUser(user)
+			}
+			req = req.MariaDbCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
 func newCredentialsValidateMulesoftCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mulesoft",
@@ -8688,6 +10701,105 @@ func newCredentialsValidateMulesoftCmd() *cobra.Command {
 	cmd.Flags().Bool("app-client-secret-prompt", false, "Read --app-client-secret from a hidden prompt instead of the command line.")
 	cmd.Flags().String("org-id", "", "Anypoint organization or business group to collect from. Set it when your Mule applications are deployed in a business group. Leave it out to collect the organization that owns the connected app.")
 	cmd.Flags().String("region", "", "Anypoint Platform instance the organization lives on. US when left out.")
+	_ = cmd.RegisterFlagCompletionFunc("region", enumCompletion(sdk.AllowedMulesoftRegionEnumValues))
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateMulesoftChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "mulesoft-change <credentials_id>",
+		Short: "Validate a change to MuleSoft credentials",
+		Long:  "Check a change to MuleSoft credentials before making it.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateMulesoftCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewMulesoftCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "app-client-id") {
+				appClientId, err := flagString(cmd, "app-client-id")
+				if err != nil {
+					return err
+				}
+				body.SetAppClientId(appClientId)
+			}
+			if changed(cmd, "app-client-secret", "app-client-secret-prompt") {
+				appClientSecret, err := flagSecret(cmd, "app-client-secret")
+				if err != nil {
+					return err
+				}
+				body.SetAppClientSecret(appClientSecret)
+			}
+			if changed(cmd, "org-id") {
+				orgId, err := flagString(cmd, "org-id")
+				if err != nil {
+					return err
+				}
+				body.SetOrgId(orgId)
+			}
+			if changed(cmd, "region") {
+				regionValue, err := flagString(cmd, "region")
+				if err != nil {
+					return err
+				}
+				region, err := sdk.NewMulesoftRegionFromValue(regionValue)
+				if err != nil {
+					return usageError("%w", err)
+				}
+				body.SetRegion(*region)
+			}
+			req = req.MulesoftCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("app-client-id", "", "Client ID of the Anypoint connected app. The app needs the View Environment, Read Deployments and Exchange Viewer scopes.")
+	cmd.Flags().String("app-client-secret", "", "Secret of the Anypoint connected app. Stored by Monte Carlo and never returned. Visible in the process list; --app-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("app-client-secret-prompt", false, "Read --app-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("org-id", "", "Anypoint organization or business group to collect from. Set it when your Mule applications are deployed in a business group. Leave it out to collect the organization that owns the connected app.")
+	cmd.Flags().String("region", "", "Anypoint Platform instance the organization lives on.")
 	_ = cmd.RegisterFlagCompletionFunc("region", enumCompletion(sdk.AllowedMulesoftRegionEnumValues))
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
@@ -8829,6 +10941,148 @@ func newCredentialsValidateMysqlCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsValidateMysqlChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "mysql-change <credentials_id>",
+		Short: "Validate a change to MySQL credentials",
+		Long:  "Check a change to MySQL credentials before making it.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateMysqlCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewMySqlCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "ssl-ca-data") {
+				sslCaData, err := flagString(cmd, "ssl-ca-data")
+				if err != nil {
+					return err
+				}
+				body.SetSslCaData(sslCaData)
+			}
+			if changed(cmd, "ssl-disabled") {
+				sslDisabled, err := flagBool(cmd, "ssl-disabled")
+				if err != nil {
+					return err
+				}
+				body.SetSslDisabled(sslDisabled)
+			}
+			if changed(cmd, "ssl-skip-cert-verification") {
+				sslSkipCertVerification, err := flagBool(cmd, "ssl-skip-cert-verification")
+				if err != nil {
+					return err
+				}
+				body.SetSslSkipCertVerification(sslSkipCertVerification)
+			}
+			if changed(cmd, "ssl-verify-cert") {
+				sslVerifyCert, err := flagBool(cmd, "ssl-verify-cert")
+				if err != nil {
+					return err
+				}
+				body.SetSslVerifyCert(sslVerifyCert)
+			}
+			if changed(cmd, "ssl-verify-identity") {
+				sslVerifyIdentity, err := flagBool(cmd, "ssl-verify-identity")
+				if err != nil {
+					return err
+				}
+				body.SetSslVerifyIdentity(sslVerifyIdentity)
+			}
+			if changed(cmd, "user") {
+				user, err := flagString(cmd, "user")
+				if err != nil {
+					return err
+				}
+				body.SetUser(user)
+			}
+			req = req.MySqlCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM text of the CA certificate the server's certificate is checked against.")
+	cmd.Flags().Bool("ssl-disabled", false, "Connect without TLS.")
+	cmd.Flags().Bool("ssl-skip-cert-verification", false, "Encrypt the connection without checking the server's certificate.")
+	cmd.Flags().Bool("ssl-verify-cert", false, "Check the server's certificate against the CA.")
+	cmd.Flags().Bool("ssl-verify-identity", false, "Check the certificate and that it names the host.")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
 func newCredentialsValidateOracleCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "oracle",
@@ -8959,6 +11213,148 @@ func newCredentialsValidateOracleCmd() *cobra.Command {
 	cmd.Flags().Bool("ssl-skip-cert-verification", false, "Encrypt the connection without checking the server's certificate.")
 	cmd.Flags().Bool("ssl-verify-cert", false, "Check the server's certificate against the CA.")
 	cmd.Flags().Bool("ssl-verify-identity", false, "Check the certificate and that it names the host.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateOracleChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "oracle-change <credentials_id>",
+		Short: "Validate a change to Oracle credentials",
+		Long:  "Check a change to Oracle credentials before making it.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateOracleCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewOracleCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "ssl-ca-data") {
+				sslCaData, err := flagString(cmd, "ssl-ca-data")
+				if err != nil {
+					return err
+				}
+				body.SetSslCaData(sslCaData)
+			}
+			if changed(cmd, "ssl-disabled") {
+				sslDisabled, err := flagBool(cmd, "ssl-disabled")
+				if err != nil {
+					return err
+				}
+				body.SetSslDisabled(sslDisabled)
+			}
+			if changed(cmd, "ssl-skip-cert-verification") {
+				sslSkipCertVerification, err := flagBool(cmd, "ssl-skip-cert-verification")
+				if err != nil {
+					return err
+				}
+				body.SetSslSkipCertVerification(sslSkipCertVerification)
+			}
+			if changed(cmd, "ssl-verify-cert") {
+				sslVerifyCert, err := flagBool(cmd, "ssl-verify-cert")
+				if err != nil {
+					return err
+				}
+				body.SetSslVerifyCert(sslVerifyCert)
+			}
+			if changed(cmd, "ssl-verify-identity") {
+				sslVerifyIdentity, err := flagBool(cmd, "ssl-verify-identity")
+				if err != nil {
+					return err
+				}
+				body.SetSslVerifyIdentity(sslVerifyIdentity)
+			}
+			if changed(cmd, "user") {
+				user, err := flagString(cmd, "user")
+				if err != nil {
+					return err
+				}
+				body.SetUser(user)
+			}
+			req = req.OracleCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM text of the CA certificate the server's certificate is checked against.")
+	cmd.Flags().Bool("ssl-disabled", false, "Connect without TLS.")
+	cmd.Flags().Bool("ssl-skip-cert-verification", false, "Encrypt the connection without checking the server's certificate.")
+	cmd.Flags().Bool("ssl-verify-cert", false, "Check the server's certificate against the CA.")
+	cmd.Flags().Bool("ssl-verify-identity", false, "Check the certificate and that it names the host.")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }
@@ -9105,6 +11501,156 @@ func newCredentialsValidatePostgresCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsValidatePostgresChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "postgres-change <credentials_id>",
+		Short: "Validate a change to PostgreSQL credentials",
+		Long:  "Check a change to PostgreSQL credentials before making it.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidatePostgresCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewPostgresCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "rds-proxy") {
+				rdsProxy, err := flagBool(cmd, "rds-proxy")
+				if err != nil {
+					return err
+				}
+				body.SetRdsProxy(rdsProxy)
+			}
+			if changed(cmd, "ssl-ca-data") {
+				sslCaData, err := flagString(cmd, "ssl-ca-data")
+				if err != nil {
+					return err
+				}
+				body.SetSslCaData(sslCaData)
+			}
+			if changed(cmd, "ssl-disabled") {
+				sslDisabled, err := flagBool(cmd, "ssl-disabled")
+				if err != nil {
+					return err
+				}
+				body.SetSslDisabled(sslDisabled)
+			}
+			if changed(cmd, "ssl-skip-cert-verification") {
+				sslSkipCertVerification, err := flagBool(cmd, "ssl-skip-cert-verification")
+				if err != nil {
+					return err
+				}
+				body.SetSslSkipCertVerification(sslSkipCertVerification)
+			}
+			if changed(cmd, "ssl-verify-cert") {
+				sslVerifyCert, err := flagBool(cmd, "ssl-verify-cert")
+				if err != nil {
+					return err
+				}
+				body.SetSslVerifyCert(sslVerifyCert)
+			}
+			if changed(cmd, "ssl-verify-identity") {
+				sslVerifyIdentity, err := flagBool(cmd, "ssl-verify-identity")
+				if err != nil {
+					return err
+				}
+				body.SetSslVerifyIdentity(sslVerifyIdentity)
+			}
+			if changed(cmd, "user") {
+				user, err := flagString(cmd, "user")
+				if err != nil {
+					return err
+				}
+				body.SetUser(user)
+			}
+			req = req.PostgresCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	cmd.Flags().Bool("rds-proxy", false, "Whether host is an Amazon RDS Proxy endpoint.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM text of the CA certificate the server's certificate is checked against.")
+	cmd.Flags().Bool("ssl-disabled", false, "Connect without TLS.")
+	cmd.Flags().Bool("ssl-skip-cert-verification", false, "Encrypt the connection without checking the server's certificate.")
+	cmd.Flags().Bool("ssl-verify-cert", false, "Check the server's certificate against the CA.")
+	cmd.Flags().Bool("ssl-verify-identity", false, "Check the certificate and that it names the host.")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
 func newCredentialsValidatePowerBiCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "power-bi",
@@ -9210,6 +11756,122 @@ func newCredentialsValidatePowerBiCmd() *cobra.Command {
 	cmd.Flags().Bool("app-client-secret-prompt", false, "Read --app-client-secret from a hidden prompt instead of the command line.")
 	cmd.Flags().String("password", "", "Password of username, for primary_user. Used for this check and not kept. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("username", "", "User Monte Carlo signs in as, for primary_user.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidatePowerBiChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "power-bi-change <credentials_id>",
+		Short: "Validate a change to Power BI credentials",
+		Long:  "Check a change to Power BI credentials before making it.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidatePowerBiCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewPowerBiCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "app-client-id") {
+				appClientId, err := flagString(cmd, "app-client-id")
+				if err != nil {
+					return err
+				}
+				body.SetAppClientId(appClientId)
+			}
+			if changed(cmd, "app-client-secret", "app-client-secret-prompt") {
+				appClientSecret, err := flagSecret(cmd, "app-client-secret")
+				if err != nil {
+					return err
+				}
+				body.SetAppClientSecret(appClientSecret)
+			}
+			if changed(cmd, "auth-mode") {
+				authModeValue, err := flagString(cmd, "auth-mode")
+				if err != nil {
+					return err
+				}
+				authMode, err := sdk.NewPowerBiAuthModeFromValue(authModeValue)
+				if err != nil {
+					return usageError("%w", err)
+				}
+				body.SetAuthMode(*authMode)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "tenant-id") {
+				tenantId, err := flagString(cmd, "tenant-id")
+				if err != nil {
+					return err
+				}
+				body.SetTenantId(tenantId)
+			}
+			if changed(cmd, "username") {
+				username, err := flagString(cmd, "username")
+				if err != nil {
+					return err
+				}
+				body.SetUsername(username)
+			}
+			req = req.PowerBiCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("app-client-id", "", "Client ID of the Entra ID app registration Monte Carlo signs in with.")
+	cmd.Flags().String("app-client-secret", "", "Secret of the app registration, for service_principal. Stored by Monte Carlo and never returned. Visible in the process list; --app-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("app-client-secret-prompt", false, "Read --app-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("auth-mode", "", "How Monte Carlo signs in. service_principal takes app_client_secret. primary_user takes username and password.")
+	_ = cmd.RegisterFlagCompletionFunc("auth-mode", enumCompletion(sdk.AllowedPowerBiAuthModeEnumValues))
+	cmd.Flags().String("password", "", "Password of username, for primary_user. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("tenant-id", "", "Microsoft Entra ID tenant the Power BI service belongs to.")
 	cmd.Flags().String("username", "", "User Monte Carlo signs in as, for primary_user.")
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
@@ -9349,6 +12011,148 @@ func newCredentialsValidateRedshiftCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsValidateRedshiftChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "redshift-change <credentials_id>",
+		Short: "Validate a change to Redshift credentials",
+		Long:  "Check a change to Redshift credentials before making it.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateRedshiftCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewRedshiftCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "ssl-ca-data") {
+				sslCaData, err := flagString(cmd, "ssl-ca-data")
+				if err != nil {
+					return err
+				}
+				body.SetSslCaData(sslCaData)
+			}
+			if changed(cmd, "ssl-disabled") {
+				sslDisabled, err := flagBool(cmd, "ssl-disabled")
+				if err != nil {
+					return err
+				}
+				body.SetSslDisabled(sslDisabled)
+			}
+			if changed(cmd, "ssl-skip-cert-verification") {
+				sslSkipCertVerification, err := flagBool(cmd, "ssl-skip-cert-verification")
+				if err != nil {
+					return err
+				}
+				body.SetSslSkipCertVerification(sslSkipCertVerification)
+			}
+			if changed(cmd, "ssl-verify-cert") {
+				sslVerifyCert, err := flagBool(cmd, "ssl-verify-cert")
+				if err != nil {
+					return err
+				}
+				body.SetSslVerifyCert(sslVerifyCert)
+			}
+			if changed(cmd, "ssl-verify-identity") {
+				sslVerifyIdentity, err := flagBool(cmd, "ssl-verify-identity")
+				if err != nil {
+					return err
+				}
+				body.SetSslVerifyIdentity(sslVerifyIdentity)
+			}
+			if changed(cmd, "user") {
+				user, err := flagString(cmd, "user")
+				if err != nil {
+					return err
+				}
+				body.SetUser(user)
+			}
+			req = req.RedshiftCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM text of the CA certificate the server's certificate is checked against.")
+	cmd.Flags().Bool("ssl-disabled", false, "Connect without TLS.")
+	cmd.Flags().Bool("ssl-skip-cert-verification", false, "Encrypt the connection without checking the server's certificate.")
+	cmd.Flags().Bool("ssl-verify-cert", false, "Check the server's certificate against the CA.")
+	cmd.Flags().Bool("ssl-verify-identity", false, "Check the certificate and that it names the host.")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
 func newCredentialsValidateSapHanaCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sap-hana",
@@ -9439,6 +12243,108 @@ func newCredentialsValidateSapHanaCmd() *cobra.Command {
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().String("db-name", "", "Database to connect to.")
 	_ = cmd.MarkFlagRequired("db-name")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateSapHanaChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "sap-hana-change <credentials_id>",
+		Short: "Validate a change to SAP HANA credentials",
+		Long:  "Check a change to SAP HANA credentials before making it.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateSapHanaCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewSapHanaCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "user") {
+				user, err := flagString(cmd, "user")
+				if err != nil {
+					return err
+				}
+				body.SetUser(user)
+			}
+			req = req.SapHanaCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }
@@ -9538,6 +12444,109 @@ func newCredentialsValidateSnowflakeCmd() *cobra.Command {
 	cmd.Flags().String("private-key-passphrase", "", "Passphrase the private key is encrypted with. Omit it for an unencrypted key. Never returned. Visible in the process list; --private-key-passphrase-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("private-key-passphrase-prompt", false, "Read --private-key-passphrase from a hidden prompt instead of the command line.")
 	cmd.Flags().String("warehouse", "", "Snowflake virtual warehouse to run queries in. Omit it to use the user's default.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateSnowflakeChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "snowflake-change <credentials_id>",
+		Short: "Validate a change to Snowflake credentials",
+		Long:  "Check a change to Snowflake credentials against Snowflake before making it.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateSnowflakeCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewSnowflakeCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "account") {
+				account, err := flagString(cmd, "account")
+				if err != nil {
+					return err
+				}
+				body.SetAccount(account)
+			}
+			if changed(cmd, "private-key", "private-key-prompt") {
+				privateKey, err := flagSecret(cmd, "private-key")
+				if err != nil {
+					return err
+				}
+				body.SetPrivateKey(privateKey)
+			}
+			if changed(cmd, "private-key-passphrase", "private-key-passphrase-prompt") {
+				privateKeyPassphrase, err := flagSecret(cmd, "private-key-passphrase")
+				if err != nil {
+					return err
+				}
+				body.SetPrivateKeyPassphrase(privateKeyPassphrase)
+			}
+			if changed(cmd, "user") {
+				user, err := flagString(cmd, "user")
+				if err != nil {
+					return err
+				}
+				body.SetUser(user)
+			}
+			if changed(cmd, "warehouse") {
+				warehouse, err := flagString(cmd, "warehouse")
+				if err != nil {
+					return err
+				}
+				body.SetWarehouse(warehouse)
+			}
+			req = req.SnowflakeCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("account", "", "New Snowflake account identifier, without the .snowflakecomputing.com suffix.")
+	cmd.Flags().String("private-key", "", "New private key, as PEM text. Replaces the stored key and its passphrase; send private_key_passphrase in the same request if the new key has one. Visible in the process list; --private-key-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("private-key-prompt", false, "Read --private-key from a hidden prompt instead of the command line.")
+	cmd.Flags().String("private-key-passphrase", "", "Passphrase of the new private key. Only accepted together with private_key. Visible in the process list; --private-key-passphrase-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("private-key-passphrase-prompt", false, "Read --private-key-passphrase from a hidden prompt instead of the command line.")
+	cmd.Flags().String("user", "", "New Snowflake user.")
+	cmd.Flags().String("warehouse", "", "New Snowflake virtual warehouse. An explicit null clears it; queries then run in the user's default.")
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }
@@ -9686,6 +12695,154 @@ func newCredentialsValidateSqlServerCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsValidateSqlServerChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "sql-server-change <credentials_id>",
+		Short: "Validate a change to SQL Server credentials",
+		Long:  "Check a change to SQL Server credentials before making it.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateSqlServerCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewSqlServerCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "auth-mode") {
+				authModeValue, err := flagString(cmd, "auth-mode")
+				if err != nil {
+					return err
+				}
+				authMode, err := sdk.NewSqlServerAuthModeFromValue(authModeValue)
+				if err != nil {
+					return usageError("%w", err)
+				}
+				body.SetAuthMode(*authMode)
+			}
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "kdc") {
+				kdc, err := flagString(cmd, "kdc")
+				if err != nil {
+					return err
+				}
+				body.SetKdc(kdc)
+			}
+			if changed(cmd, "keytab-base64", "keytab-base64-prompt") {
+				keytabBase64, err := flagSecret(cmd, "keytab-base64")
+				if err != nil {
+					return err
+				}
+				body.SetKeytabBase64(keytabBase64)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "principal") {
+				principal, err := flagString(cmd, "principal")
+				if err != nil {
+					return err
+				}
+				body.SetPrincipal(principal)
+			}
+			if changed(cmd, "realm") {
+				realm, err := flagString(cmd, "realm")
+				if err != nil {
+					return err
+				}
+				body.SetRealm(realm)
+			}
+			if changed(cmd, "user") {
+				user, err := flagString(cmd, "user")
+				if err != nil {
+					return err
+				}
+				body.SetUser(user)
+			}
+			req = req.SqlServerCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("auth-mode", "", "How Monte Carlo signs in. sql takes user and password. kerberos takes realm, kdc, principal, and one of keytab_base64 or password.")
+	_ = cmd.RegisterFlagCompletionFunc("auth-mode", enumCompletion(sdk.AllowedSqlServerAuthModeEnumValues))
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. For kerberos, the fully qualified name the server's service principal is registered under.")
+	cmd.Flags().String("kdc", "", "Hostname of the key distribution center, optionally with :port, for kerberos.")
+	cmd.Flags().String("keytab-base64", "", "Base64-encoded keytab for principal, for kerberos. Send this or password. Stored by Monte Carlo and never returned. Visible in the process list; --keytab-base64-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("keytab-base64-prompt", false, "Read --keytab-base64 from a hidden prompt instead of the command line.")
+	cmd.Flags().String("password", "", "Password of user for sql, or of the Active Directory account behind principal for kerberos. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	cmd.Flags().String("principal", "", "Active Directory principal Monte Carlo signs in as, for kerberos.")
+	cmd.Flags().String("realm", "", "Kerberos realm, normally the Active Directory domain in capitals, for kerberos.")
+	cmd.Flags().String("user", "", "SQL login Monte Carlo signs in as, for sql.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
 func newCredentialsValidateStarburstEnterpriseCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "starburst-enterprise",
@@ -9798,6 +12955,124 @@ func newCredentialsValidateStarburstEnterpriseCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsValidateStarburstEnterpriseChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "starburst-enterprise-change <credentials_id>",
+		Short: "Validate a change to Starburst Enterprise credentials",
+		Long:  "Check a change to Starburst Enterprise credentials before making it.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateStarburstEnterpriseCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewStarburstEnterpriseCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "ssl-ca-data") {
+				sslCaData, err := flagString(cmd, "ssl-ca-data")
+				if err != nil {
+					return err
+				}
+				body.SetSslCaData(sslCaData)
+			}
+			if changed(cmd, "ssl-disabled") {
+				sslDisabled, err := flagBool(cmd, "ssl-disabled")
+				if err != nil {
+					return err
+				}
+				body.SetSslDisabled(sslDisabled)
+			}
+			if changed(cmd, "user") {
+				user, err := flagString(cmd, "user")
+				if err != nil {
+					return err
+				}
+				body.SetUser(user)
+			}
+			req = req.StarburstEnterpriseCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM text of the CA certificate the server's certificate is checked against.")
+	cmd.Flags().Bool("ssl-disabled", false, "Skip the check of the server's certificate. The connection always uses TLS.")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
 func newCredentialsValidateStarburstGalaxyCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "starburst-galaxy",
@@ -9890,6 +13165,108 @@ func newCredentialsValidateStarburstGalaxyCmd() *cobra.Command {
 	cmd.Flags().String("password", "", "Password of the database user. Used for this check and not kept. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateStarburstGalaxyChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "starburst-galaxy-change <credentials_id>",
+		Short: "Validate a change to Starburst Galaxy credentials",
+		Long:  "Check a change to Starburst Galaxy credentials before making it.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateStarburstGalaxyCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewStarburstGalaxyCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "user") {
+				user, err := flagString(cmd, "user")
+				if err != nil {
+					return err
+				}
+				body.SetUser(user)
+			}
+			req = req.StarburstGalaxyCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }
@@ -10036,6 +13413,150 @@ func newCredentialsValidateTableauCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsValidateTableauChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "tableau-change <credentials_id>",
+		Short: "Validate a change to Tableau credentials",
+		Long:  "Check a change to Tableau credentials before making it.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateTableauCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewTableauCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "connected-app-client-id") {
+				connectedAppClientId, err := flagString(cmd, "connected-app-client-id")
+				if err != nil {
+					return err
+				}
+				body.SetConnectedAppClientId(connectedAppClientId)
+			}
+			if changed(cmd, "connected-app-secret-id") {
+				connectedAppSecretId, err := flagString(cmd, "connected-app-secret-id")
+				if err != nil {
+					return err
+				}
+				body.SetConnectedAppSecretId(connectedAppSecretId)
+			}
+			if changed(cmd, "connected-app-secret-value", "connected-app-secret-value-prompt") {
+				connectedAppSecretValue, err := flagSecret(cmd, "connected-app-secret-value")
+				if err != nil {
+					return err
+				}
+				body.SetConnectedAppSecretValue(connectedAppSecretValue)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "server-name") {
+				serverName, err := flagString(cmd, "server-name")
+				if err != nil {
+					return err
+				}
+				body.SetServerName(serverName)
+			}
+			if changed(cmd, "site-name") {
+				siteName, err := flagString(cmd, "site-name")
+				if err != nil {
+					return err
+				}
+				body.SetSiteName(siteName)
+			}
+			if changed(cmd, "token-name") {
+				tokenName, err := flagString(cmd, "token-name")
+				if err != nil {
+					return err
+				}
+				body.SetTokenName(tokenName)
+			}
+			if changed(cmd, "token-value", "token-value-prompt") {
+				tokenValue, err := flagSecret(cmd, "token-value")
+				if err != nil {
+					return err
+				}
+				body.SetTokenValue(tokenValue)
+			}
+			if changed(cmd, "username") {
+				username, err := flagString(cmd, "username")
+				if err != nil {
+					return err
+				}
+				body.SetUsername(username)
+			}
+			if changed(cmd, "verify-ssl") {
+				verifySsl, err := flagBool(cmd, "verify-ssl")
+				if err != nil {
+					return err
+				}
+				body.SetVerifySsl(verifySsl)
+			}
+			req = req.TableauCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("connected-app-client-id", "", "Client ID of a Tableau connected app. Send it with connected_app_secret_id, connected_app_secret_value and username.")
+	cmd.Flags().String("connected-app-secret-id", "", "ID of the connected app's secret. An identifier, not the secret itself.")
+	cmd.Flags().String("connected-app-secret-value", "", "Value of the connected app's secret in connected_app_secret_id. Stored by Monte Carlo and never returned. Visible in the process list; --connected-app-secret-value-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("connected-app-secret-value-prompt", false, "Read --connected-app-secret-value from a hidden prompt instead of the command line.")
+	cmd.Flags().String("password", "", "Password of username. Send this, a personal access token, or a connected app. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("server-name", "", "URL of the Tableau server, starting with https:// or http://.")
+	cmd.Flags().String("site-name", "", "Tableau site to connect to. Leave it out for the default site.")
+	cmd.Flags().String("token-name", "", "Name of a personal access token. Send it with token_value.")
+	cmd.Flags().String("token-value", "", "Secret of the personal access token in token_name. Stored by Monte Carlo and never returned. Visible in the process list; --token-value-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("token-value-prompt", false, "Read --token-value from a hidden prompt instead of the command line.")
+	cmd.Flags().String("username", "", "Tableau user. Send it with password, or with a connected app. Not used with a personal access token.")
+	cmd.Flags().Bool("verify-ssl", false, "Whether to verify the server's TLS certificate. Verified when left out.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
 func newCredentialsValidateTeradataCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "teradata",
@@ -10170,6 +13691,150 @@ func newCredentialsValidateTeradataCmd() *cobra.Command {
 	_ = cmd.RegisterFlagCompletionFunc("td-logmech", enumCompletion(sdk.AllowedTeradataLogonMechanismEnumValues))
 	cmd.Flags().String("td-sslmode", "", "How the connection to Teradata uses TLS.")
 	_ = cmd.RegisterFlagCompletionFunc("td-sslmode", enumCompletion(sdk.AllowedTeradataSslModeEnumValues))
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateTeradataChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "teradata-change <credentials_id>",
+		Short: "Validate a change to Teradata credentials",
+		Long:  "Check a change to Teradata credentials before making it.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateTeradataCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewTeradataCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "ssl-ca-data") {
+				sslCaData, err := flagString(cmd, "ssl-ca-data")
+				if err != nil {
+					return err
+				}
+				body.SetSslCaData(sslCaData)
+			}
+			if changed(cmd, "ssl-disabled") {
+				sslDisabled, err := flagBool(cmd, "ssl-disabled")
+				if err != nil {
+					return err
+				}
+				body.SetSslDisabled(sslDisabled)
+			}
+			if changed(cmd, "td-logmech") {
+				tdLogmechValue, err := flagString(cmd, "td-logmech")
+				if err != nil {
+					return err
+				}
+				tdLogmech, err := sdk.NewTeradataLogonMechanismFromValue(tdLogmechValue)
+				if err != nil {
+					return usageError("%w", err)
+				}
+				body.SetTdLogmech(*tdLogmech)
+			}
+			if changed(cmd, "td-sslmode") {
+				tdSslmodeValue, err := flagString(cmd, "td-sslmode")
+				if err != nil {
+					return err
+				}
+				tdSslmode, err := sdk.NewTeradataSslModeFromValue(tdSslmodeValue)
+				if err != nil {
+					return usageError("%w", err)
+				}
+				body.SetTdSslmode(*tdSslmode)
+			}
+			if changed(cmd, "user") {
+				user, err := flagString(cmd, "user")
+				if err != nil {
+					return err
+				}
+				body.SetUser(user)
+			}
+			req = req.TeradataCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM text of the CA certificate the server's certificate is checked against.")
+	cmd.Flags().Bool("ssl-disabled", false, "Do not check the server against ssl_ca_data. td_sslmode decides whether the connection uses TLS.")
+	cmd.Flags().String("td-logmech", "", "How Teradata authenticates the user.")
+	_ = cmd.RegisterFlagCompletionFunc("td-logmech", enumCompletion(sdk.AllowedTeradataLogonMechanismEnumValues))
+	cmd.Flags().String("td-sslmode", "", "How the connection to Teradata uses TLS.")
+	_ = cmd.RegisterFlagCompletionFunc("td-sslmode", enumCompletion(sdk.AllowedTeradataSslModeEnumValues))
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }
