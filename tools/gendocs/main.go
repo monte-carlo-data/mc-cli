@@ -48,6 +48,7 @@ var (
 	taskGuides = []link{
 		{Name: "Deploy a collection agent or data store", File: "deploy-collection-agent.html"},
 		{Name: "Connect a Snowflake warehouse", File: "connect-snowflake.html"},
+		{Name: "Keep connection credentials in your own secret store", File: "self-hosted-credentials.html"},
 	}
 )
 
