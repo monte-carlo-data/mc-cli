@@ -329,7 +329,7 @@ func newConnectionsAddSnowflakeCmd() *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().String("account", "", "Snowflake account identifier, such as xy12345.us-east-1. Without the .snowflakecomputing.com suffix.")
+	cmd.Flags().String("account", "", "Snowflake account identifier, such as xy12345.us-east-1. Without the .snowflakecomputing.com suffix. Letters, digits, _, . and - only.")
 	cmd.Flags().String("user", "", "Snowflake user the key pair belongs to.")
 	cmd.Flags().String("private-key", "", "The private key of the pair, as PEM text including its BEGIN and END lines. Stored by Monte Carlo and never returned. Visible in the process list; --private-key-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("private-key-prompt", false, "Read --private-key from a hidden prompt instead of the command line.")
@@ -4227,7 +4227,7 @@ func runConnectionsAdd(cmd *cobra.Command, connectionType string, native *connec
 
 // connectionsUpdateCredentials validates a change to a connection's credentials, and makes it.
 type connectionsUpdateCredentials struct {
-	validate func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error)
+	validate func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error)
 	patch    func(ctx context.Context) (*http.Response, error)
 }
 
@@ -4242,7 +4242,7 @@ func newConnectionsUpdateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update <connection_id>",
 		Short: "Update a connection, and change its credentials",
-		Long:  "Updates a connection. The flags that change credentials are validated first, then the command asks before changing them. The change applies to every connection using the credentials. Each field is taken from its flag, else from the stored credentials. A secret cannot be read back, so validating needs it passed, or --skip-validations. Pass a credentials flag as \"\" to clear its field.\n\nThis command changes self-hosted credentials, one set of --self-hosted-* flags, or the shared flags alone for the storage the connection has; the subcommands change each connection type's own credentials.",
+		Long:  "Updates a connection. The flags that change credentials are validated first, then the command asks before changing them. The stored credentials fill every field the flags leave alone. Changing a host or URL needs the secrets again. The change applies to every connection using the credentials. Pass a credentials flag as \"\" to clear its field.\n\nThis command changes self-hosted credentials, one set of --self-hosted-* flags, or the shared flags alone for the storage the connection has; the subcommands change each connection type's own credentials.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], nil)
@@ -4307,7 +4307,7 @@ func newConnectionsUpdateSnowflakeCmd() *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().String("account", "", "New Snowflake account identifier, without the .snowflakecomputing.com suffix.")
+	cmd.Flags().String("account", "", "New Snowflake account identifier, without the .snowflakecomputing.com suffix. Letters, digits, _, . and - only.")
 	cmd.Flags().String("private-key", "", "New private key, as PEM text. Replaces the stored key and its passphrase; send private_key_passphrase in the same request if the new key has one. Visible in the process list; --private-key-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("private-key-prompt", false, "Read --private-key from a hidden prompt instead of the command line.")
 	cmd.Flags().String("private-key-passphrase", "", "Passphrase of the new private key. Only accepted together with private_key. Visible in the process list; --private-key-passphrase-prompt asks for it instead, and @<path> reads it from a file.")
@@ -4353,7 +4353,7 @@ func newConnectionsUpdateRedshiftCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -4390,7 +4390,7 @@ func newConnectionsUpdateDatabricksMetastoreSqlWarehouseCmd() *cobra.Command {
 	cmd.Flags().String("token", "", "Personal access token or service principal token. Send this, or oauth_client_id and oauth_client_secret. Stored by Monte Carlo and never returned. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
 	cmd.Flags().String("workspace-id", "", "ID of the Databricks workspace.")
-	cmd.Flags().String("workspace-url", "", "URL of the Databricks workspace, or its host name.")
+	cmd.Flags().String("workspace-url", "", "URL of the Databricks workspace, or its host name. Changing it requires sending the credentials' secrets again.")
 	registerConnectionsUpdateFlags(cmd)
 	return cmd
 }
@@ -4418,7 +4418,7 @@ func newConnectionsUpdateDatabricksSqlWarehouseCmd() *cobra.Command {
 	cmd.Flags().String("token", "", "Personal access token or service principal token. Send this, or oauth_client_id and oauth_client_secret. Stored by Monte Carlo and never returned. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
 	cmd.Flags().String("workspace-id", "", "ID of the Databricks workspace.")
-	cmd.Flags().String("workspace-url", "", "URL of the Databricks workspace, or its host name.")
+	cmd.Flags().String("workspace-url", "", "URL of the Databricks workspace, or its host name. Changing it requires sending the credentials' secrets again.")
 	registerConnectionsUpdateFlags(cmd)
 	return cmd
 }
@@ -4438,7 +4438,7 @@ func newConnectionsUpdatePostgresCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -4468,7 +4468,7 @@ func newConnectionsUpdateMysqlCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -4497,7 +4497,7 @@ func newConnectionsUpdateMariadbCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -4521,7 +4521,7 @@ func newConnectionsUpdateOracleCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -4550,7 +4550,7 @@ func newConnectionsUpdateDb2Cmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -4576,7 +4576,7 @@ func newConnectionsUpdateTeradataCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -4606,7 +4606,7 @@ func newConnectionsUpdateClickhouseCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -4630,7 +4630,7 @@ func newConnectionsUpdateStarburstEnterpriseCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -4656,7 +4656,7 @@ func newConnectionsUpdateStarburstGalaxyCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -4680,7 +4680,7 @@ func newConnectionsUpdateAzureSqlDatabaseCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -4704,7 +4704,7 @@ func newConnectionsUpdateAzureDedicatedSqlPoolCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -4728,7 +4728,7 @@ func newConnectionsUpdateSapHanaCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
@@ -4754,8 +4754,8 @@ func newConnectionsUpdateSqlServerCmd() *cobra.Command {
 	cmd.Flags().String("auth-mode", "", "How Monte Carlo signs in. sql takes user and password. kerberos takes realm, kdc, principal, and one of keytab_base64 or password.")
 	_ = cmd.RegisterFlagCompletionFunc("auth-mode", enumCompletion(sdk.AllowedSqlServerAuthModeEnumValues))
 	cmd.Flags().String("db-name", "", "Database to connect to.")
-	cmd.Flags().String("host", "", "Hostname of the database endpoint. For kerberos, the fully qualified name the server's service principal is registered under.")
-	cmd.Flags().String("kdc", "", "Hostname of the key distribution center, optionally with :port, for kerberos.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. For kerberos, the fully qualified name the server's service principal is registered under. Changing it requires sending the credentials' secrets again.")
+	cmd.Flags().String("kdc", "", "Hostname of the key distribution center, optionally with :port, for kerberos. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("keytab-base64", "", "Base64-encoded keytab for principal, for kerberos. Send this or password. Stored by Monte Carlo and never returned. Visible in the process list; --keytab-base64-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("keytab-base64-prompt", false, "Read --keytab-base64 from a hidden prompt instead of the command line.")
 	cmd.Flags().String("password", "", "Password of user for sql, or of the Active Directory account behind principal for kerberos. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
@@ -4788,7 +4788,7 @@ func newConnectionsUpdateTableauCmd() *cobra.Command {
 	cmd.Flags().Bool("connected-app-secret-value-prompt", false, "Read --connected-app-secret-value from a hidden prompt instead of the command line.")
 	cmd.Flags().String("password", "", "Password of username. Send this, a personal access token, or a connected app. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
-	cmd.Flags().String("server-name", "", "URL of the Tableau server, starting with https:// or http://.")
+	cmd.Flags().String("server-name", "", "URL of the Tableau server, starting with https:// or http://. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("site-name", "", "Tableau site to connect to. Leave it out for the default site.")
 	cmd.Flags().String("token-name", "", "Name of a personal access token. Send it with token_value.")
 	cmd.Flags().String("token-value", "", "Secret of the personal access token in token_name. Stored by Monte Carlo and never returned. Visible in the process list; --token-value-prompt asks for it instead, and @<path> reads it from a file.")
@@ -4816,7 +4816,7 @@ func newConnectionsUpdateLookerCmd() *cobra.Command {
 	cmd.Flags().String("api-client-id", "", "Client ID of the Looker API key.")
 	cmd.Flags().String("api-client-secret", "", "Client secret of the Looker API key. Stored by Monte Carlo and never returned. Visible in the process list; --api-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("api-client-secret-prompt", false, "Read --api-client-secret from a hidden prompt instead of the command line.")
-	cmd.Flags().String("base-url", "", "URL of the Looker API, such as https://acme.cloud.looker.com.")
+	cmd.Flags().String("base-url", "", "URL of the Looker API, such as https://acme.cloud.looker.com. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().Bool("verify-ssl", false, "Whether to verify Looker's TLS certificate. Verified when left out.")
 	registerConnectionsUpdateFlags(cmd)
 	return cmd
@@ -4836,7 +4836,7 @@ func newConnectionsUpdateLookerGitCloneCmd() *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().String("repo-url", "", "Clone URL of the LookML repository, over HTTPS or SSH.")
+	cmd.Flags().String("repo-url", "", "Clone URL of the LookML repository, over HTTPS or SSH. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("ssh-key", "", "Private key for an SSH clone, as PEM text including its BEGIN and END lines. Send this or username and token. Stored by Monte Carlo and never returned. Visible in the process list; --ssh-key-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("ssh-key-prompt", false, "Read --ssh-key from a hidden prompt instead of the command line.")
 	cmd.Flags().String("ssl-ca-data", "", "PEM certificate of the CA that signed the git server's certificate.")
@@ -4893,7 +4893,7 @@ func newConnectionsUpdateFivetranCmd() *cobra.Command {
 	cmd.Flags().Bool("api-key-prompt", false, "Read --api-key from a hidden prompt instead of the command line.")
 	cmd.Flags().String("api-password", "", "Secret of the Fivetran API key. Stored by Monte Carlo and never returned. Visible in the process list; --api-password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("api-password-prompt", false, "Read --api-password from a hidden prompt instead of the command line.")
-	cmd.Flags().String("base-url", "", "URL of the Fivetran REST API. Leave it out for https://api.fivetran.com/v1/.")
+	cmd.Flags().String("base-url", "", "URL of the Fivetran REST API. Leave it out for https://api.fivetran.com/v1/. Changing it requires sending the credentials' secrets again.")
 	registerConnectionsUpdateFlags(cmd)
 	return cmd
 }
@@ -4939,8 +4939,8 @@ func newConnectionsUpdateInformaticaV2Cmd() *cobra.Command {
 	}
 	cmd.Flags().String("auth-mode", "", "How Monte Carlo signs in. password takes username and password. oauth takes org_id and the oauth_* fields.")
 	_ = cmd.RegisterFlagCompletionFunc("auth-mode", enumCompletion(sdk.AllowedInformaticaV2AuthModeEnumValues))
-	cmd.Flags().String("base-url", "", "Informatica login URL for your POD. Leave it out for https://dm-us.informaticacloud.com.")
-	cmd.Flags().String("oauth-access-token-endpoint", "", "Identity provider URL Monte Carlo requests tokens from.")
+	cmd.Flags().String("base-url", "", "Informatica login URL for your POD. Leave it out for https://dm-us.informaticacloud.com. Changing it requires sending the credentials' secrets again.")
+	cmd.Flags().String("oauth-access-token-endpoint", "", "Identity provider URL Monte Carlo requests tokens from. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("oauth-client-id", "", "Client ID of the app registered with your identity provider, for oauth.")
 	cmd.Flags().String("oauth-client-secret", "", "Secret of the identity provider app, for oauth. Stored by Monte Carlo and never returned. Visible in the process list; --oauth-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("oauth-client-secret-prompt", false, "Read --oauth-client-secret from a hidden prompt instead of the command line.")
@@ -5070,87 +5070,56 @@ func buildConnectionsUpdateSnowflake(cmd *cobra.Command, api *sdk.APIClient, cre
 		}
 	}
 	patch := sdk.NewSnowflakeCredentialsPatchWithDefaults()
+	check := sdk.NewSnowflakeCredentialsChangeValidateInWithDefaults()
 	if changed(cmd, "account") {
 		if account == "" {
 			patch.SetAccountNil()
+			check.SetAccountNil()
 		} else {
 			patch.SetAccount(account)
+			check.SetAccount(account)
 		}
 	}
 	if changed(cmd, "private-key", "private-key-prompt") {
 		if privateKey == "" {
 			patch.SetPrivateKeyNil()
+			check.SetPrivateKeyNil()
 		} else {
 			patch.SetPrivateKey(privateKey)
+			check.SetPrivateKey(privateKey)
 		}
 	}
 	if changed(cmd, "private-key-passphrase", "private-key-passphrase-prompt") {
 		if privateKeyPassphrase == "" {
 			patch.SetPrivateKeyPassphraseNil()
+			check.SetPrivateKeyPassphraseNil()
 		} else {
 			patch.SetPrivateKeyPassphrase(privateKeyPassphrase)
+			check.SetPrivateKeyPassphrase(privateKeyPassphrase)
 		}
 	}
 	if changed(cmd, "user") {
 		if user == "" {
 			patch.SetUserNil()
+			check.SetUserNil()
 		} else {
 			patch.SetUser(user)
+			check.SetUser(user)
 		}
 	}
 	if changed(cmd, "warehouse") {
 		if warehouse == "" {
 			patch.SetWarehouseNil()
+			check.SetWarehouseNil()
 		} else {
 			patch.SetWarehouse(warehouse)
+			check.SetWarehouse(warehouse)
 		}
 	}
 	return &connectionsUpdateCredentials{
-		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
-			stored, resp, err := api.CredentialsAPI.GetSnowflakeCredentials(ctx, credentialsId).Execute()
-			if err != nil {
-				return nil, resp, err
-			}
-			candidate := sdk.NewSnowflakeCredentialsValidateInWithDefaults()
-			var missing []string
-			candidate.SetDeploymentId(deploymentId)
-			if changed(cmd, "account") {
-				if account != "" {
-					candidate.SetAccount(account)
-				}
-			} else if v, ok := stored.GetAccountOk(); ok && v != nil {
-				candidate.SetAccount(*v)
-			}
-			if changed(cmd, "user") {
-				if user != "" {
-					candidate.SetUser(user)
-				}
-			} else if v, ok := stored.GetUserOk(); ok && v != nil {
-				candidate.SetUser(*v)
-			}
-			if changed(cmd, "private-key", "private-key-prompt") {
-				if privateKey != "" {
-					candidate.SetPrivateKey(privateKey)
-				}
-			} else {
-				missing = append(missing, "--private-key")
-			}
-			if changed(cmd, "private-key-passphrase", "private-key-passphrase-prompt") {
-				if privateKeyPassphrase != "" {
-					candidate.SetPrivateKeyPassphrase(privateKeyPassphrase)
-				}
-			}
-			if changed(cmd, "warehouse") {
-				if warehouse != "" {
-					candidate.SetWarehouse(warehouse)
-				}
-			} else if v, ok := stored.GetWarehouseOk(); ok && v != nil {
-				candidate.SetWarehouse(*v)
-			}
-			if len(missing) > 0 {
-				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
-			}
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateSnowflakeCredentials(ctx).SnowflakeCredentialsValidateIn(*candidate).Execute)
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateSnowflakeCredentialsChange(ctx, credentialsId).SnowflakeCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateSnowflakeCredentials(ctx, credentialsId).SnowflakeCredentialsPatch(*patch).Execute)
@@ -5169,29 +5138,20 @@ func buildConnectionsUpdateBigquery(cmd *cobra.Command, api *sdk.APIClient, cred
 		}
 	}
 	patch := sdk.NewBigQueryCredentialsPatchWithDefaults()
+	check := sdk.NewBigQueryCredentialsChangeValidateInWithDefaults()
 	if changed(cmd, "service-account-key", "service-account-key-prompt") {
 		if serviceAccountKey == "" {
 			patch.SetServiceAccountKeyNil()
+			check.SetServiceAccountKeyNil()
 		} else {
 			patch.SetServiceAccountKey(serviceAccountKey)
+			check.SetServiceAccountKey(serviceAccountKey)
 		}
 	}
 	return &connectionsUpdateCredentials{
-		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
-			candidate := sdk.NewBigQueryCredentialsValidateInWithDefaults()
-			var missing []string
-			candidate.SetDeploymentId(deploymentId)
-			if changed(cmd, "service-account-key", "service-account-key-prompt") {
-				if serviceAccountKey != "" {
-					candidate.SetServiceAccountKey(serviceAccountKey)
-				}
-			} else {
-				missing = append(missing, "--service-account-key")
-			}
-			if len(missing) > 0 {
-				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
-			}
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateBigqueryCredentials(ctx).BigQueryCredentialsValidateIn(*candidate).Execute)
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateBigqueryCredentialsChange(ctx, credentialsId).BigQueryCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateBigqueryCredentials(ctx, credentialsId).BigQueryCredentialsPatch(*patch).Execute)
@@ -5273,129 +5233,76 @@ func buildConnectionsUpdateRedshift(cmd *cobra.Command, api *sdk.APIClient, cred
 		}
 	}
 	patch := sdk.NewRedshiftCredentialsPatchWithDefaults()
+	check := sdk.NewRedshiftCredentialsChangeValidateInWithDefaults()
 	if changed(cmd, "db-name") {
 		if dbName == "" {
 			patch.SetDbNameNil()
+			check.SetDbNameNil()
 		} else {
 			patch.SetDbName(dbName)
+			check.SetDbName(dbName)
 		}
 	}
 	if changed(cmd, "host") {
 		if host == "" {
 			patch.SetHostNil()
+			check.SetHostNil()
 		} else {
 			patch.SetHost(host)
+			check.SetHost(host)
 		}
 	}
 	if changed(cmd, "password", "password-prompt") {
 		if password == "" {
 			patch.SetPasswordNil()
+			check.SetPasswordNil()
 		} else {
 			patch.SetPassword(password)
+			check.SetPassword(password)
 		}
 	}
 	if changed(cmd, "port") {
 		patch.SetPort(port)
+		check.SetPort(port)
 	}
 	if changed(cmd, "ssl-ca-data") {
 		if sslCaData == "" {
 			patch.SetSslCaDataNil()
+			check.SetSslCaDataNil()
 		} else {
 			patch.SetSslCaData(sslCaData)
+			check.SetSslCaData(sslCaData)
 		}
 	}
 	if changed(cmd, "ssl-disabled") {
 		patch.SetSslDisabled(sslDisabled)
+		check.SetSslDisabled(sslDisabled)
 	}
 	if changed(cmd, "ssl-skip-cert-verification") {
 		patch.SetSslSkipCertVerification(sslSkipCertVerification)
+		check.SetSslSkipCertVerification(sslSkipCertVerification)
 	}
 	if changed(cmd, "ssl-verify-cert") {
 		patch.SetSslVerifyCert(sslVerifyCert)
+		check.SetSslVerifyCert(sslVerifyCert)
 	}
 	if changed(cmd, "ssl-verify-identity") {
 		patch.SetSslVerifyIdentity(sslVerifyIdentity)
+		check.SetSslVerifyIdentity(sslVerifyIdentity)
 	}
 	if changed(cmd, "user") {
 		if user == "" {
 			patch.SetUserNil()
+			check.SetUserNil()
 		} else {
 			patch.SetUser(user)
+			check.SetUser(user)
 		}
 	}
 	return &connectionsUpdateCredentials{
-		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
-			stored, resp, err := api.CredentialsAPI.GetRedshiftCredentials(ctx, credentialsId).Execute()
-			if err != nil {
-				return nil, resp, err
-			}
-			candidate := sdk.NewRedshiftCredentialsValidateInWithDefaults()
-			var missing []string
-			candidate.SetDeploymentId(deploymentId)
-			if changed(cmd, "host") {
-				if host != "" {
-					candidate.SetHost(host)
-				}
-			} else if v, ok := stored.GetHostOk(); ok && v != nil {
-				candidate.SetHost(*v)
-			}
-			if changed(cmd, "port") {
-				candidate.SetPort(port)
-			} else if v, ok := stored.GetPortOk(); ok && v != nil {
-				candidate.SetPort(*v)
-			}
-			if changed(cmd, "user") {
-				if user != "" {
-					candidate.SetUser(user)
-				}
-			} else if v, ok := stored.GetUserOk(); ok && v != nil {
-				candidate.SetUser(*v)
-			}
-			if changed(cmd, "password", "password-prompt") {
-				if password != "" {
-					candidate.SetPassword(password)
-				}
-			} else {
-				missing = append(missing, "--password")
-			}
-			if changed(cmd, "db-name") {
-				if dbName != "" {
-					candidate.SetDbName(dbName)
-				}
-			} else if v, ok := stored.GetDbNameOk(); ok && v != nil {
-				candidate.SetDbName(*v)
-			}
-			if changed(cmd, "ssl-ca-data") {
-				if sslCaData != "" {
-					candidate.SetSslCaData(sslCaData)
-				}
-			} else if v, ok := stored.GetSslCaDataOk(); ok && v != nil {
-				candidate.SetSslCaData(*v)
-			}
-			if changed(cmd, "ssl-disabled") {
-				candidate.SetSslDisabled(sslDisabled)
-			} else if v, ok := stored.GetSslDisabledOk(); ok && v != nil {
-				candidate.SetSslDisabled(*v)
-			}
-			if changed(cmd, "ssl-skip-cert-verification") {
-				candidate.SetSslSkipCertVerification(sslSkipCertVerification)
-			} else if v, ok := stored.GetSslSkipCertVerificationOk(); ok && v != nil {
-				candidate.SetSslSkipCertVerification(*v)
-			}
-			if changed(cmd, "ssl-verify-cert") {
-				candidate.SetSslVerifyCert(sslVerifyCert)
-			} else if v, ok := stored.GetSslVerifyCertOk(); ok && v != nil {
-				candidate.SetSslVerifyCert(*v)
-			}
-			if changed(cmd, "ssl-verify-identity") {
-				candidate.SetSslVerifyIdentity(sslVerifyIdentity)
-			} else if v, ok := stored.GetSslVerifyIdentityOk(); ok && v != nil {
-				candidate.SetSslVerifyIdentity(*v)
-			}
-			if len(missing) > 0 {
-				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
-			}
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateRedshiftCredentials(ctx).RedshiftCredentialsValidateIn(*candidate).Execute)
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateRedshiftCredentialsChange(ctx, credentialsId).RedshiftCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateRedshiftCredentials(ctx, credentialsId).RedshiftCredentialsPatch(*patch).Execute)
@@ -5463,127 +5370,83 @@ func buildConnectionsUpdateDatabricksMetastoreSqlWarehouse(cmd *cobra.Command, a
 		}
 	}
 	patch := sdk.NewDatabricksMetastoreSqlWarehouseCredentialsPatchWithDefaults()
+	check := sdk.NewDatabricksMetastoreSqlWarehouseCredentialsChangeValidateInWithDefaults()
 	if changed(cmd, "azure-tenant-id") {
 		if azureTenantId == "" {
 			patch.SetAzureTenantIdNil()
+			check.SetAzureTenantIdNil()
 		} else {
 			patch.SetAzureTenantId(azureTenantId)
+			check.SetAzureTenantId(azureTenantId)
 		}
 	}
 	if changed(cmd, "azure-workspace-resource-id") {
 		if azureWorkspaceResourceId == "" {
 			patch.SetAzureWorkspaceResourceIdNil()
+			check.SetAzureWorkspaceResourceIdNil()
 		} else {
 			patch.SetAzureWorkspaceResourceId(azureWorkspaceResourceId)
+			check.SetAzureWorkspaceResourceId(azureWorkspaceResourceId)
 		}
 	}
 	if changed(cmd, "oauth-client-id") {
 		if oauthClientId == "" {
 			patch.SetOauthClientIdNil()
+			check.SetOauthClientIdNil()
 		} else {
 			patch.SetOauthClientId(oauthClientId)
+			check.SetOauthClientId(oauthClientId)
 		}
 	}
 	if changed(cmd, "oauth-client-secret", "oauth-client-secret-prompt") {
 		if oauthClientSecret == "" {
 			patch.SetOauthClientSecretNil()
+			check.SetOauthClientSecretNil()
 		} else {
 			patch.SetOauthClientSecret(oauthClientSecret)
+			check.SetOauthClientSecret(oauthClientSecret)
 		}
 	}
 	if changed(cmd, "sql-warehouse-id") {
 		if sqlWarehouseId == "" {
 			patch.SetSqlWarehouseIdNil()
+			check.SetSqlWarehouseIdNil()
 		} else {
 			patch.SetSqlWarehouseId(sqlWarehouseId)
+			check.SetSqlWarehouseId(sqlWarehouseId)
 		}
 	}
 	if changed(cmd, "token", "token-prompt") {
 		if token == "" {
 			patch.SetTokenNil()
+			check.SetTokenNil()
 		} else {
 			patch.SetToken(token)
+			check.SetToken(token)
 		}
 	}
 	if changed(cmd, "workspace-id") {
 		if workspaceId == "" {
 			patch.SetWorkspaceIdNil()
+			check.SetWorkspaceIdNil()
 		} else {
 			patch.SetWorkspaceId(workspaceId)
+			check.SetWorkspaceId(workspaceId)
 		}
 	}
 	if changed(cmd, "workspace-url") {
 		if workspaceUrl == "" {
 			patch.SetWorkspaceUrlNil()
+			check.SetWorkspaceUrlNil()
 		} else {
 			patch.SetWorkspaceUrl(workspaceUrl)
+			check.SetWorkspaceUrl(workspaceUrl)
 		}
 	}
 	return &connectionsUpdateCredentials{
-		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
-			stored, resp, err := api.CredentialsAPI.GetDatabricksMetastoreSqlWarehouseCredentials(ctx, credentialsId).Execute()
-			if err != nil {
-				return nil, resp, err
-			}
-			candidate := sdk.NewDatabricksMetastoreSqlWarehouseCredentialsValidateInWithDefaults()
-			var missing []string
-			candidate.SetDeploymentId(deploymentId)
-			if changed(cmd, "workspace-url") {
-				if workspaceUrl != "" {
-					candidate.SetWorkspaceUrl(workspaceUrl)
-				}
-			} else if v, ok := stored.GetWorkspaceUrlOk(); ok && v != nil {
-				candidate.SetWorkspaceUrl(*v)
-			}
-			if changed(cmd, "sql-warehouse-id") {
-				if sqlWarehouseId != "" {
-					candidate.SetSqlWarehouseId(sqlWarehouseId)
-				}
-			} else if v, ok := stored.GetSqlWarehouseIdOk(); ok && v != nil {
-				candidate.SetSqlWarehouseId(*v)
-			}
-			if changed(cmd, "workspace-id") {
-				if workspaceId != "" {
-					candidate.SetWorkspaceId(workspaceId)
-				}
-			} else if v, ok := stored.GetWorkspaceIdOk(); ok && v != nil {
-				candidate.SetWorkspaceId(*v)
-			}
-			if changed(cmd, "azure-tenant-id") {
-				if azureTenantId != "" {
-					candidate.SetAzureTenantId(azureTenantId)
-				}
-			} else if v, ok := stored.GetAzureTenantIdOk(); ok && v != nil {
-				candidate.SetAzureTenantId(*v)
-			}
-			if changed(cmd, "azure-workspace-resource-id") {
-				if azureWorkspaceResourceId != "" {
-					candidate.SetAzureWorkspaceResourceId(azureWorkspaceResourceId)
-				}
-			} else if v, ok := stored.GetAzureWorkspaceResourceIdOk(); ok && v != nil {
-				candidate.SetAzureWorkspaceResourceId(*v)
-			}
-			if changed(cmd, "oauth-client-id") {
-				if oauthClientId != "" {
-					candidate.SetOauthClientId(oauthClientId)
-				}
-			} else if v, ok := stored.GetOauthClientIdOk(); ok && v != nil {
-				candidate.SetOauthClientId(*v)
-			}
-			if changed(cmd, "oauth-client-secret", "oauth-client-secret-prompt") {
-				if oauthClientSecret != "" {
-					candidate.SetOauthClientSecret(oauthClientSecret)
-				}
-			}
-			if changed(cmd, "token", "token-prompt") {
-				if token != "" {
-					candidate.SetToken(token)
-				}
-			}
-			if len(missing) > 0 {
-				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
-			}
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateDatabricksMetastoreSqlWarehouseCredentials(ctx).DatabricksMetastoreSqlWarehouseCredentialsValidateIn(*candidate).Execute)
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateDatabricksMetastoreSqlWarehouseCredentialsChange(ctx, credentialsId).DatabricksMetastoreSqlWarehouseCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateDatabricksMetastoreSqlWarehouseCredentials(ctx, credentialsId).DatabricksMetastoreSqlWarehouseCredentialsPatch(*patch).Execute)
@@ -5651,127 +5514,83 @@ func buildConnectionsUpdateDatabricksSqlWarehouse(cmd *cobra.Command, api *sdk.A
 		}
 	}
 	patch := sdk.NewDatabricksSqlWarehouseCredentialsPatchWithDefaults()
+	check := sdk.NewDatabricksSqlWarehouseCredentialsChangeValidateInWithDefaults()
 	if changed(cmd, "azure-tenant-id") {
 		if azureTenantId == "" {
 			patch.SetAzureTenantIdNil()
+			check.SetAzureTenantIdNil()
 		} else {
 			patch.SetAzureTenantId(azureTenantId)
+			check.SetAzureTenantId(azureTenantId)
 		}
 	}
 	if changed(cmd, "azure-workspace-resource-id") {
 		if azureWorkspaceResourceId == "" {
 			patch.SetAzureWorkspaceResourceIdNil()
+			check.SetAzureWorkspaceResourceIdNil()
 		} else {
 			patch.SetAzureWorkspaceResourceId(azureWorkspaceResourceId)
+			check.SetAzureWorkspaceResourceId(azureWorkspaceResourceId)
 		}
 	}
 	if changed(cmd, "oauth-client-id") {
 		if oauthClientId == "" {
 			patch.SetOauthClientIdNil()
+			check.SetOauthClientIdNil()
 		} else {
 			patch.SetOauthClientId(oauthClientId)
+			check.SetOauthClientId(oauthClientId)
 		}
 	}
 	if changed(cmd, "oauth-client-secret", "oauth-client-secret-prompt") {
 		if oauthClientSecret == "" {
 			patch.SetOauthClientSecretNil()
+			check.SetOauthClientSecretNil()
 		} else {
 			patch.SetOauthClientSecret(oauthClientSecret)
+			check.SetOauthClientSecret(oauthClientSecret)
 		}
 	}
 	if changed(cmd, "sql-warehouse-id") {
 		if sqlWarehouseId == "" {
 			patch.SetSqlWarehouseIdNil()
+			check.SetSqlWarehouseIdNil()
 		} else {
 			patch.SetSqlWarehouseId(sqlWarehouseId)
+			check.SetSqlWarehouseId(sqlWarehouseId)
 		}
 	}
 	if changed(cmd, "token", "token-prompt") {
 		if token == "" {
 			patch.SetTokenNil()
+			check.SetTokenNil()
 		} else {
 			patch.SetToken(token)
+			check.SetToken(token)
 		}
 	}
 	if changed(cmd, "workspace-id") {
 		if workspaceId == "" {
 			patch.SetWorkspaceIdNil()
+			check.SetWorkspaceIdNil()
 		} else {
 			patch.SetWorkspaceId(workspaceId)
+			check.SetWorkspaceId(workspaceId)
 		}
 	}
 	if changed(cmd, "workspace-url") {
 		if workspaceUrl == "" {
 			patch.SetWorkspaceUrlNil()
+			check.SetWorkspaceUrlNil()
 		} else {
 			patch.SetWorkspaceUrl(workspaceUrl)
+			check.SetWorkspaceUrl(workspaceUrl)
 		}
 	}
 	return &connectionsUpdateCredentials{
-		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
-			stored, resp, err := api.CredentialsAPI.GetDatabricksSqlWarehouseCredentials(ctx, credentialsId).Execute()
-			if err != nil {
-				return nil, resp, err
-			}
-			candidate := sdk.NewDatabricksSqlWarehouseCredentialsValidateInWithDefaults()
-			var missing []string
-			candidate.SetDeploymentId(deploymentId)
-			if changed(cmd, "workspace-url") {
-				if workspaceUrl != "" {
-					candidate.SetWorkspaceUrl(workspaceUrl)
-				}
-			} else if v, ok := stored.GetWorkspaceUrlOk(); ok && v != nil {
-				candidate.SetWorkspaceUrl(*v)
-			}
-			if changed(cmd, "sql-warehouse-id") {
-				if sqlWarehouseId != "" {
-					candidate.SetSqlWarehouseId(sqlWarehouseId)
-				}
-			} else if v, ok := stored.GetSqlWarehouseIdOk(); ok && v != nil {
-				candidate.SetSqlWarehouseId(*v)
-			}
-			if changed(cmd, "azure-tenant-id") {
-				if azureTenantId != "" {
-					candidate.SetAzureTenantId(azureTenantId)
-				}
-			} else if v, ok := stored.GetAzureTenantIdOk(); ok && v != nil {
-				candidate.SetAzureTenantId(*v)
-			}
-			if changed(cmd, "azure-workspace-resource-id") {
-				if azureWorkspaceResourceId != "" {
-					candidate.SetAzureWorkspaceResourceId(azureWorkspaceResourceId)
-				}
-			} else if v, ok := stored.GetAzureWorkspaceResourceIdOk(); ok && v != nil {
-				candidate.SetAzureWorkspaceResourceId(*v)
-			}
-			if changed(cmd, "oauth-client-id") {
-				if oauthClientId != "" {
-					candidate.SetOauthClientId(oauthClientId)
-				}
-			} else if v, ok := stored.GetOauthClientIdOk(); ok && v != nil {
-				candidate.SetOauthClientId(*v)
-			}
-			if changed(cmd, "oauth-client-secret", "oauth-client-secret-prompt") {
-				if oauthClientSecret != "" {
-					candidate.SetOauthClientSecret(oauthClientSecret)
-				}
-			}
-			if changed(cmd, "token", "token-prompt") {
-				if token != "" {
-					candidate.SetToken(token)
-				}
-			}
-			if changed(cmd, "workspace-id") {
-				if workspaceId != "" {
-					candidate.SetWorkspaceId(workspaceId)
-				}
-			} else if v, ok := stored.GetWorkspaceIdOk(); ok && v != nil {
-				candidate.SetWorkspaceId(*v)
-			}
-			if len(missing) > 0 {
-				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
-			}
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateDatabricksSqlWarehouseCredentials(ctx).DatabricksSqlWarehouseCredentialsValidateIn(*candidate).Execute)
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateDatabricksSqlWarehouseCredentialsChange(ctx, credentialsId).DatabricksSqlWarehouseCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateDatabricksSqlWarehouseCredentials(ctx, credentialsId).DatabricksSqlWarehouseCredentialsPatch(*patch).Execute)
@@ -5860,137 +5679,80 @@ func buildConnectionsUpdatePostgres(cmd *cobra.Command, api *sdk.APIClient, cred
 		}
 	}
 	patch := sdk.NewPostgresCredentialsPatchWithDefaults()
+	check := sdk.NewPostgresCredentialsChangeValidateInWithDefaults()
 	if changed(cmd, "db-name") {
 		if dbName == "" {
 			patch.SetDbNameNil()
+			check.SetDbNameNil()
 		} else {
 			patch.SetDbName(dbName)
+			check.SetDbName(dbName)
 		}
 	}
 	if changed(cmd, "host") {
 		if host == "" {
 			patch.SetHostNil()
+			check.SetHostNil()
 		} else {
 			patch.SetHost(host)
+			check.SetHost(host)
 		}
 	}
 	if changed(cmd, "password", "password-prompt") {
 		if password == "" {
 			patch.SetPasswordNil()
+			check.SetPasswordNil()
 		} else {
 			patch.SetPassword(password)
+			check.SetPassword(password)
 		}
 	}
 	if changed(cmd, "port") {
 		patch.SetPort(port)
+		check.SetPort(port)
 	}
 	if changed(cmd, "rds-proxy") {
 		patch.SetRdsProxy(rdsProxy)
+		check.SetRdsProxy(rdsProxy)
 	}
 	if changed(cmd, "ssl-ca-data") {
 		if sslCaData == "" {
 			patch.SetSslCaDataNil()
+			check.SetSslCaDataNil()
 		} else {
 			patch.SetSslCaData(sslCaData)
+			check.SetSslCaData(sslCaData)
 		}
 	}
 	if changed(cmd, "ssl-disabled") {
 		patch.SetSslDisabled(sslDisabled)
+		check.SetSslDisabled(sslDisabled)
 	}
 	if changed(cmd, "ssl-skip-cert-verification") {
 		patch.SetSslSkipCertVerification(sslSkipCertVerification)
+		check.SetSslSkipCertVerification(sslSkipCertVerification)
 	}
 	if changed(cmd, "ssl-verify-cert") {
 		patch.SetSslVerifyCert(sslVerifyCert)
+		check.SetSslVerifyCert(sslVerifyCert)
 	}
 	if changed(cmd, "ssl-verify-identity") {
 		patch.SetSslVerifyIdentity(sslVerifyIdentity)
+		check.SetSslVerifyIdentity(sslVerifyIdentity)
 	}
 	if changed(cmd, "user") {
 		if user == "" {
 			patch.SetUserNil()
+			check.SetUserNil()
 		} else {
 			patch.SetUser(user)
+			check.SetUser(user)
 		}
 	}
 	return &connectionsUpdateCredentials{
-		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
-			stored, resp, err := api.CredentialsAPI.GetPostgresCredentials(ctx, credentialsId).Execute()
-			if err != nil {
-				return nil, resp, err
-			}
-			candidate := sdk.NewPostgresCredentialsValidateInWithDefaults()
-			var missing []string
-			candidate.SetDeploymentId(deploymentId)
-			if changed(cmd, "host") {
-				if host != "" {
-					candidate.SetHost(host)
-				}
-			} else if v, ok := stored.GetHostOk(); ok && v != nil {
-				candidate.SetHost(*v)
-			}
-			if changed(cmd, "port") {
-				candidate.SetPort(port)
-			} else if v, ok := stored.GetPortOk(); ok && v != nil {
-				candidate.SetPort(*v)
-			}
-			if changed(cmd, "user") {
-				if user != "" {
-					candidate.SetUser(user)
-				}
-			} else if v, ok := stored.GetUserOk(); ok && v != nil {
-				candidate.SetUser(*v)
-			}
-			if changed(cmd, "password", "password-prompt") {
-				if password != "" {
-					candidate.SetPassword(password)
-				}
-			} else {
-				missing = append(missing, "--password")
-			}
-			if changed(cmd, "db-name") {
-				if dbName != "" {
-					candidate.SetDbName(dbName)
-				}
-			} else if v, ok := stored.GetDbNameOk(); ok && v != nil {
-				candidate.SetDbName(*v)
-			}
-			if changed(cmd, "rds-proxy") {
-				candidate.SetRdsProxy(rdsProxy)
-			} else if v, ok := stored.GetRdsProxyOk(); ok && v != nil {
-				candidate.SetRdsProxy(*v)
-			}
-			if changed(cmd, "ssl-ca-data") {
-				if sslCaData != "" {
-					candidate.SetSslCaData(sslCaData)
-				}
-			} else if v, ok := stored.GetSslCaDataOk(); ok && v != nil {
-				candidate.SetSslCaData(*v)
-			}
-			if changed(cmd, "ssl-disabled") {
-				candidate.SetSslDisabled(sslDisabled)
-			} else if v, ok := stored.GetSslDisabledOk(); ok && v != nil {
-				candidate.SetSslDisabled(*v)
-			}
-			if changed(cmd, "ssl-skip-cert-verification") {
-				candidate.SetSslSkipCertVerification(sslSkipCertVerification)
-			} else if v, ok := stored.GetSslSkipCertVerificationOk(); ok && v != nil {
-				candidate.SetSslSkipCertVerification(*v)
-			}
-			if changed(cmd, "ssl-verify-cert") {
-				candidate.SetSslVerifyCert(sslVerifyCert)
-			} else if v, ok := stored.GetSslVerifyCertOk(); ok && v != nil {
-				candidate.SetSslVerifyCert(*v)
-			}
-			if changed(cmd, "ssl-verify-identity") {
-				candidate.SetSslVerifyIdentity(sslVerifyIdentity)
-			} else if v, ok := stored.GetSslVerifyIdentityOk(); ok && v != nil {
-				candidate.SetSslVerifyIdentity(*v)
-			}
-			if len(missing) > 0 {
-				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
-			}
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidatePostgresCredentials(ctx).PostgresCredentialsValidateIn(*candidate).Execute)
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidatePostgresCredentialsChange(ctx, credentialsId).PostgresCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdatePostgresCredentials(ctx, credentialsId).PostgresCredentialsPatch(*patch).Execute)
@@ -6072,129 +5834,76 @@ func buildConnectionsUpdateMysql(cmd *cobra.Command, api *sdk.APIClient, credent
 		}
 	}
 	patch := sdk.NewMySqlCredentialsPatchWithDefaults()
+	check := sdk.NewMySqlCredentialsChangeValidateInWithDefaults()
 	if changed(cmd, "db-name") {
 		if dbName == "" {
 			patch.SetDbNameNil()
+			check.SetDbNameNil()
 		} else {
 			patch.SetDbName(dbName)
+			check.SetDbName(dbName)
 		}
 	}
 	if changed(cmd, "host") {
 		if host == "" {
 			patch.SetHostNil()
+			check.SetHostNil()
 		} else {
 			patch.SetHost(host)
+			check.SetHost(host)
 		}
 	}
 	if changed(cmd, "password", "password-prompt") {
 		if password == "" {
 			patch.SetPasswordNil()
+			check.SetPasswordNil()
 		} else {
 			patch.SetPassword(password)
+			check.SetPassword(password)
 		}
 	}
 	if changed(cmd, "port") {
 		patch.SetPort(port)
+		check.SetPort(port)
 	}
 	if changed(cmd, "ssl-ca-data") {
 		if sslCaData == "" {
 			patch.SetSslCaDataNil()
+			check.SetSslCaDataNil()
 		} else {
 			patch.SetSslCaData(sslCaData)
+			check.SetSslCaData(sslCaData)
 		}
 	}
 	if changed(cmd, "ssl-disabled") {
 		patch.SetSslDisabled(sslDisabled)
+		check.SetSslDisabled(sslDisabled)
 	}
 	if changed(cmd, "ssl-skip-cert-verification") {
 		patch.SetSslSkipCertVerification(sslSkipCertVerification)
+		check.SetSslSkipCertVerification(sslSkipCertVerification)
 	}
 	if changed(cmd, "ssl-verify-cert") {
 		patch.SetSslVerifyCert(sslVerifyCert)
+		check.SetSslVerifyCert(sslVerifyCert)
 	}
 	if changed(cmd, "ssl-verify-identity") {
 		patch.SetSslVerifyIdentity(sslVerifyIdentity)
+		check.SetSslVerifyIdentity(sslVerifyIdentity)
 	}
 	if changed(cmd, "user") {
 		if user == "" {
 			patch.SetUserNil()
+			check.SetUserNil()
 		} else {
 			patch.SetUser(user)
+			check.SetUser(user)
 		}
 	}
 	return &connectionsUpdateCredentials{
-		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
-			stored, resp, err := api.CredentialsAPI.GetMysqlCredentials(ctx, credentialsId).Execute()
-			if err != nil {
-				return nil, resp, err
-			}
-			candidate := sdk.NewMySqlCredentialsValidateInWithDefaults()
-			var missing []string
-			candidate.SetDeploymentId(deploymentId)
-			if changed(cmd, "host") {
-				if host != "" {
-					candidate.SetHost(host)
-				}
-			} else if v, ok := stored.GetHostOk(); ok && v != nil {
-				candidate.SetHost(*v)
-			}
-			if changed(cmd, "port") {
-				candidate.SetPort(port)
-			} else if v, ok := stored.GetPortOk(); ok && v != nil {
-				candidate.SetPort(*v)
-			}
-			if changed(cmd, "user") {
-				if user != "" {
-					candidate.SetUser(user)
-				}
-			} else if v, ok := stored.GetUserOk(); ok && v != nil {
-				candidate.SetUser(*v)
-			}
-			if changed(cmd, "password", "password-prompt") {
-				if password != "" {
-					candidate.SetPassword(password)
-				}
-			} else {
-				missing = append(missing, "--password")
-			}
-			if changed(cmd, "db-name") {
-				if dbName != "" {
-					candidate.SetDbName(dbName)
-				}
-			} else if v, ok := stored.GetDbNameOk(); ok && v != nil {
-				candidate.SetDbName(*v)
-			}
-			if changed(cmd, "ssl-ca-data") {
-				if sslCaData != "" {
-					candidate.SetSslCaData(sslCaData)
-				}
-			} else if v, ok := stored.GetSslCaDataOk(); ok && v != nil {
-				candidate.SetSslCaData(*v)
-			}
-			if changed(cmd, "ssl-disabled") {
-				candidate.SetSslDisabled(sslDisabled)
-			} else if v, ok := stored.GetSslDisabledOk(); ok && v != nil {
-				candidate.SetSslDisabled(*v)
-			}
-			if changed(cmd, "ssl-skip-cert-verification") {
-				candidate.SetSslSkipCertVerification(sslSkipCertVerification)
-			} else if v, ok := stored.GetSslSkipCertVerificationOk(); ok && v != nil {
-				candidate.SetSslSkipCertVerification(*v)
-			}
-			if changed(cmd, "ssl-verify-cert") {
-				candidate.SetSslVerifyCert(sslVerifyCert)
-			} else if v, ok := stored.GetSslVerifyCertOk(); ok && v != nil {
-				candidate.SetSslVerifyCert(*v)
-			}
-			if changed(cmd, "ssl-verify-identity") {
-				candidate.SetSslVerifyIdentity(sslVerifyIdentity)
-			} else if v, ok := stored.GetSslVerifyIdentityOk(); ok && v != nil {
-				candidate.SetSslVerifyIdentity(*v)
-			}
-			if len(missing) > 0 {
-				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
-			}
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateMysqlCredentials(ctx).MySqlCredentialsValidateIn(*candidate).Execute)
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateMysqlCredentialsChange(ctx, credentialsId).MySqlCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateMysqlCredentials(ctx, credentialsId).MySqlCredentialsPatch(*patch).Execute)
@@ -6241,83 +5950,51 @@ func buildConnectionsUpdateMariadb(cmd *cobra.Command, api *sdk.APIClient, crede
 		}
 	}
 	patch := sdk.NewMariaDbCredentialsPatchWithDefaults()
+	check := sdk.NewMariaDbCredentialsChangeValidateInWithDefaults()
 	if changed(cmd, "db-name") {
 		if dbName == "" {
 			patch.SetDbNameNil()
+			check.SetDbNameNil()
 		} else {
 			patch.SetDbName(dbName)
+			check.SetDbName(dbName)
 		}
 	}
 	if changed(cmd, "host") {
 		if host == "" {
 			patch.SetHostNil()
+			check.SetHostNil()
 		} else {
 			patch.SetHost(host)
+			check.SetHost(host)
 		}
 	}
 	if changed(cmd, "password", "password-prompt") {
 		if password == "" {
 			patch.SetPasswordNil()
+			check.SetPasswordNil()
 		} else {
 			patch.SetPassword(password)
+			check.SetPassword(password)
 		}
 	}
 	if changed(cmd, "port") {
 		patch.SetPort(port)
+		check.SetPort(port)
 	}
 	if changed(cmd, "user") {
 		if user == "" {
 			patch.SetUserNil()
+			check.SetUserNil()
 		} else {
 			patch.SetUser(user)
+			check.SetUser(user)
 		}
 	}
 	return &connectionsUpdateCredentials{
-		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
-			stored, resp, err := api.CredentialsAPI.GetMariadbCredentials(ctx, credentialsId).Execute()
-			if err != nil {
-				return nil, resp, err
-			}
-			candidate := sdk.NewMariaDbCredentialsValidateInWithDefaults()
-			var missing []string
-			candidate.SetDeploymentId(deploymentId)
-			if changed(cmd, "host") {
-				if host != "" {
-					candidate.SetHost(host)
-				}
-			} else if v, ok := stored.GetHostOk(); ok && v != nil {
-				candidate.SetHost(*v)
-			}
-			if changed(cmd, "port") {
-				candidate.SetPort(port)
-			} else if v, ok := stored.GetPortOk(); ok && v != nil {
-				candidate.SetPort(*v)
-			}
-			if changed(cmd, "user") {
-				if user != "" {
-					candidate.SetUser(user)
-				}
-			} else if v, ok := stored.GetUserOk(); ok && v != nil {
-				candidate.SetUser(*v)
-			}
-			if changed(cmd, "password", "password-prompt") {
-				if password != "" {
-					candidate.SetPassword(password)
-				}
-			} else {
-				missing = append(missing, "--password")
-			}
-			if changed(cmd, "db-name") {
-				if dbName != "" {
-					candidate.SetDbName(dbName)
-				}
-			} else if v, ok := stored.GetDbNameOk(); ok && v != nil {
-				candidate.SetDbName(*v)
-			}
-			if len(missing) > 0 {
-				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
-			}
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateMariadbCredentials(ctx).MariaDbCredentialsValidateIn(*candidate).Execute)
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateMariadbCredentialsChange(ctx, credentialsId).MariaDbCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateMariadbCredentials(ctx, credentialsId).MariaDbCredentialsPatch(*patch).Execute)
@@ -6399,129 +6076,76 @@ func buildConnectionsUpdateOracle(cmd *cobra.Command, api *sdk.APIClient, creden
 		}
 	}
 	patch := sdk.NewOracleCredentialsPatchWithDefaults()
+	check := sdk.NewOracleCredentialsChangeValidateInWithDefaults()
 	if changed(cmd, "db-name") {
 		if dbName == "" {
 			patch.SetDbNameNil()
+			check.SetDbNameNil()
 		} else {
 			patch.SetDbName(dbName)
+			check.SetDbName(dbName)
 		}
 	}
 	if changed(cmd, "host") {
 		if host == "" {
 			patch.SetHostNil()
+			check.SetHostNil()
 		} else {
 			patch.SetHost(host)
+			check.SetHost(host)
 		}
 	}
 	if changed(cmd, "password", "password-prompt") {
 		if password == "" {
 			patch.SetPasswordNil()
+			check.SetPasswordNil()
 		} else {
 			patch.SetPassword(password)
+			check.SetPassword(password)
 		}
 	}
 	if changed(cmd, "port") {
 		patch.SetPort(port)
+		check.SetPort(port)
 	}
 	if changed(cmd, "ssl-ca-data") {
 		if sslCaData == "" {
 			patch.SetSslCaDataNil()
+			check.SetSslCaDataNil()
 		} else {
 			patch.SetSslCaData(sslCaData)
+			check.SetSslCaData(sslCaData)
 		}
 	}
 	if changed(cmd, "ssl-disabled") {
 		patch.SetSslDisabled(sslDisabled)
+		check.SetSslDisabled(sslDisabled)
 	}
 	if changed(cmd, "ssl-skip-cert-verification") {
 		patch.SetSslSkipCertVerification(sslSkipCertVerification)
+		check.SetSslSkipCertVerification(sslSkipCertVerification)
 	}
 	if changed(cmd, "ssl-verify-cert") {
 		patch.SetSslVerifyCert(sslVerifyCert)
+		check.SetSslVerifyCert(sslVerifyCert)
 	}
 	if changed(cmd, "ssl-verify-identity") {
 		patch.SetSslVerifyIdentity(sslVerifyIdentity)
+		check.SetSslVerifyIdentity(sslVerifyIdentity)
 	}
 	if changed(cmd, "user") {
 		if user == "" {
 			patch.SetUserNil()
+			check.SetUserNil()
 		} else {
 			patch.SetUser(user)
+			check.SetUser(user)
 		}
 	}
 	return &connectionsUpdateCredentials{
-		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
-			stored, resp, err := api.CredentialsAPI.GetOracleCredentials(ctx, credentialsId).Execute()
-			if err != nil {
-				return nil, resp, err
-			}
-			candidate := sdk.NewOracleCredentialsValidateInWithDefaults()
-			var missing []string
-			candidate.SetDeploymentId(deploymentId)
-			if changed(cmd, "host") {
-				if host != "" {
-					candidate.SetHost(host)
-				}
-			} else if v, ok := stored.GetHostOk(); ok && v != nil {
-				candidate.SetHost(*v)
-			}
-			if changed(cmd, "port") {
-				candidate.SetPort(port)
-			} else if v, ok := stored.GetPortOk(); ok && v != nil {
-				candidate.SetPort(*v)
-			}
-			if changed(cmd, "user") {
-				if user != "" {
-					candidate.SetUser(user)
-				}
-			} else if v, ok := stored.GetUserOk(); ok && v != nil {
-				candidate.SetUser(*v)
-			}
-			if changed(cmd, "password", "password-prompt") {
-				if password != "" {
-					candidate.SetPassword(password)
-				}
-			} else {
-				missing = append(missing, "--password")
-			}
-			if changed(cmd, "db-name") {
-				if dbName != "" {
-					candidate.SetDbName(dbName)
-				}
-			} else if v, ok := stored.GetDbNameOk(); ok && v != nil {
-				candidate.SetDbName(*v)
-			}
-			if changed(cmd, "ssl-ca-data") {
-				if sslCaData != "" {
-					candidate.SetSslCaData(sslCaData)
-				}
-			} else if v, ok := stored.GetSslCaDataOk(); ok && v != nil {
-				candidate.SetSslCaData(*v)
-			}
-			if changed(cmd, "ssl-disabled") {
-				candidate.SetSslDisabled(sslDisabled)
-			} else if v, ok := stored.GetSslDisabledOk(); ok && v != nil {
-				candidate.SetSslDisabled(*v)
-			}
-			if changed(cmd, "ssl-skip-cert-verification") {
-				candidate.SetSslSkipCertVerification(sslSkipCertVerification)
-			} else if v, ok := stored.GetSslSkipCertVerificationOk(); ok && v != nil {
-				candidate.SetSslSkipCertVerification(*v)
-			}
-			if changed(cmd, "ssl-verify-cert") {
-				candidate.SetSslVerifyCert(sslVerifyCert)
-			} else if v, ok := stored.GetSslVerifyCertOk(); ok && v != nil {
-				candidate.SetSslVerifyCert(*v)
-			}
-			if changed(cmd, "ssl-verify-identity") {
-				candidate.SetSslVerifyIdentity(sslVerifyIdentity)
-			} else if v, ok := stored.GetSslVerifyIdentityOk(); ok && v != nil {
-				candidate.SetSslVerifyIdentity(*v)
-			}
-			if len(missing) > 0 {
-				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
-			}
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateOracleCredentials(ctx).OracleCredentialsValidateIn(*candidate).Execute)
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateOracleCredentialsChange(ctx, credentialsId).OracleCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateOracleCredentials(ctx, credentialsId).OracleCredentialsPatch(*patch).Execute)
@@ -6582,105 +6206,64 @@ func buildConnectionsUpdateDb2(cmd *cobra.Command, api *sdk.APIClient, credentia
 		}
 	}
 	patch := sdk.NewDb2CredentialsPatchWithDefaults()
+	check := sdk.NewDb2CredentialsChangeValidateInWithDefaults()
 	if changed(cmd, "db-name") {
 		if dbName == "" {
 			patch.SetDbNameNil()
+			check.SetDbNameNil()
 		} else {
 			patch.SetDbName(dbName)
+			check.SetDbName(dbName)
 		}
 	}
 	if changed(cmd, "host") {
 		if host == "" {
 			patch.SetHostNil()
+			check.SetHostNil()
 		} else {
 			patch.SetHost(host)
+			check.SetHost(host)
 		}
 	}
 	if changed(cmd, "password", "password-prompt") {
 		if password == "" {
 			patch.SetPasswordNil()
+			check.SetPasswordNil()
 		} else {
 			patch.SetPassword(password)
+			check.SetPassword(password)
 		}
 	}
 	if changed(cmd, "port") {
 		patch.SetPort(port)
+		check.SetPort(port)
 	}
 	if changed(cmd, "ssl-ca-data") {
 		if sslCaData == "" {
 			patch.SetSslCaDataNil()
+			check.SetSslCaDataNil()
 		} else {
 			patch.SetSslCaData(sslCaData)
+			check.SetSslCaData(sslCaData)
 		}
 	}
 	if changed(cmd, "ssl-disabled") {
 		patch.SetSslDisabled(sslDisabled)
+		check.SetSslDisabled(sslDisabled)
 	}
 	if changed(cmd, "user") {
 		if user == "" {
 			patch.SetUserNil()
+			check.SetUserNil()
 		} else {
 			patch.SetUser(user)
+			check.SetUser(user)
 		}
 	}
 	return &connectionsUpdateCredentials{
-		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
-			stored, resp, err := api.CredentialsAPI.GetDb2Credentials(ctx, credentialsId).Execute()
-			if err != nil {
-				return nil, resp, err
-			}
-			candidate := sdk.NewDb2CredentialsValidateInWithDefaults()
-			var missing []string
-			candidate.SetDeploymentId(deploymentId)
-			if changed(cmd, "host") {
-				if host != "" {
-					candidate.SetHost(host)
-				}
-			} else if v, ok := stored.GetHostOk(); ok && v != nil {
-				candidate.SetHost(*v)
-			}
-			if changed(cmd, "port") {
-				candidate.SetPort(port)
-			} else if v, ok := stored.GetPortOk(); ok && v != nil {
-				candidate.SetPort(*v)
-			}
-			if changed(cmd, "user") {
-				if user != "" {
-					candidate.SetUser(user)
-				}
-			} else if v, ok := stored.GetUserOk(); ok && v != nil {
-				candidate.SetUser(*v)
-			}
-			if changed(cmd, "password", "password-prompt") {
-				if password != "" {
-					candidate.SetPassword(password)
-				}
-			} else {
-				missing = append(missing, "--password")
-			}
-			if changed(cmd, "db-name") {
-				if dbName != "" {
-					candidate.SetDbName(dbName)
-				}
-			} else if v, ok := stored.GetDbNameOk(); ok && v != nil {
-				candidate.SetDbName(*v)
-			}
-			if changed(cmd, "ssl-ca-data") {
-				if sslCaData != "" {
-					candidate.SetSslCaData(sslCaData)
-				}
-			} else if v, ok := stored.GetSslCaDataOk(); ok && v != nil {
-				candidate.SetSslCaData(*v)
-			}
-			if changed(cmd, "ssl-disabled") {
-				candidate.SetSslDisabled(sslDisabled)
-			} else if v, ok := stored.GetSslDisabledOk(); ok && v != nil {
-				candidate.SetSslDisabled(*v)
-			}
-			if len(missing) > 0 {
-				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
-			}
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateDb2Credentials(ctx).Db2CredentialsValidateIn(*candidate).Execute)
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateDb2CredentialsChange(ctx, credentialsId).Db2CredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateDb2Credentials(ctx, credentialsId).Db2CredentialsPatch(*patch).Execute)
@@ -6763,121 +6346,72 @@ func buildConnectionsUpdateTeradata(cmd *cobra.Command, api *sdk.APIClient, cred
 		}
 	}
 	patch := sdk.NewTeradataCredentialsPatchWithDefaults()
+	check := sdk.NewTeradataCredentialsChangeValidateInWithDefaults()
 	if changed(cmd, "db-name") {
 		if dbName == "" {
 			patch.SetDbNameNil()
+			check.SetDbNameNil()
 		} else {
 			patch.SetDbName(dbName)
+			check.SetDbName(dbName)
 		}
 	}
 	if changed(cmd, "host") {
 		if host == "" {
 			patch.SetHostNil()
+			check.SetHostNil()
 		} else {
 			patch.SetHost(host)
+			check.SetHost(host)
 		}
 	}
 	if changed(cmd, "password", "password-prompt") {
 		if password == "" {
 			patch.SetPasswordNil()
+			check.SetPasswordNil()
 		} else {
 			patch.SetPassword(password)
+			check.SetPassword(password)
 		}
 	}
 	if changed(cmd, "port") {
 		patch.SetPort(port)
+		check.SetPort(port)
 	}
 	if changed(cmd, "ssl-ca-data") {
 		if sslCaData == "" {
 			patch.SetSslCaDataNil()
+			check.SetSslCaDataNil()
 		} else {
 			patch.SetSslCaData(sslCaData)
+			check.SetSslCaData(sslCaData)
 		}
 	}
 	if changed(cmd, "ssl-disabled") {
 		patch.SetSslDisabled(sslDisabled)
+		check.SetSslDisabled(sslDisabled)
 	}
 	if changed(cmd, "td-logmech") {
 		patch.SetTdLogmech(*tdLogmech)
+		check.SetTdLogmech(*tdLogmech)
 	}
 	if changed(cmd, "td-sslmode") {
 		patch.SetTdSslmode(*tdSslmode)
+		check.SetTdSslmode(*tdSslmode)
 	}
 	if changed(cmd, "user") {
 		if user == "" {
 			patch.SetUserNil()
+			check.SetUserNil()
 		} else {
 			patch.SetUser(user)
+			check.SetUser(user)
 		}
 	}
 	return &connectionsUpdateCredentials{
-		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
-			stored, resp, err := api.CredentialsAPI.GetTeradataCredentials(ctx, credentialsId).Execute()
-			if err != nil {
-				return nil, resp, err
-			}
-			candidate := sdk.NewTeradataCredentialsValidateInWithDefaults()
-			var missing []string
-			candidate.SetDeploymentId(deploymentId)
-			if changed(cmd, "host") {
-				if host != "" {
-					candidate.SetHost(host)
-				}
-			} else if v, ok := stored.GetHostOk(); ok && v != nil {
-				candidate.SetHost(*v)
-			}
-			if changed(cmd, "port") {
-				candidate.SetPort(port)
-			} else if v, ok := stored.GetPortOk(); ok && v != nil {
-				candidate.SetPort(*v)
-			}
-			if changed(cmd, "user") {
-				if user != "" {
-					candidate.SetUser(user)
-				}
-			} else if v, ok := stored.GetUserOk(); ok && v != nil {
-				candidate.SetUser(*v)
-			}
-			if changed(cmd, "password", "password-prompt") {
-				if password != "" {
-					candidate.SetPassword(password)
-				}
-			} else {
-				missing = append(missing, "--password")
-			}
-			if changed(cmd, "db-name") {
-				if dbName != "" {
-					candidate.SetDbName(dbName)
-				}
-			} else if v, ok := stored.GetDbNameOk(); ok && v != nil {
-				candidate.SetDbName(*v)
-			}
-			if changed(cmd, "ssl-ca-data") {
-				if sslCaData != "" {
-					candidate.SetSslCaData(sslCaData)
-				}
-			} else if v, ok := stored.GetSslCaDataOk(); ok && v != nil {
-				candidate.SetSslCaData(*v)
-			}
-			if changed(cmd, "ssl-disabled") {
-				candidate.SetSslDisabled(sslDisabled)
-			} else if v, ok := stored.GetSslDisabledOk(); ok && v != nil {
-				candidate.SetSslDisabled(*v)
-			}
-			if changed(cmd, "td-logmech") {
-				candidate.SetTdLogmech(*tdLogmech)
-			} else if v, ok := stored.GetTdLogmechOk(); ok && v != nil {
-				candidate.SetTdLogmech(*v)
-			}
-			if changed(cmd, "td-sslmode") {
-				candidate.SetTdSslmode(*tdSslmode)
-			} else if v, ok := stored.GetTdSslmodeOk(); ok && v != nil {
-				candidate.SetTdSslmode(*v)
-			}
-			if len(missing) > 0 {
-				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
-			}
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateTeradataCredentials(ctx).TeradataCredentialsValidateIn(*candidate).Execute)
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateTeradataCredentialsChange(ctx, credentialsId).TeradataCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateTeradataCredentials(ctx, credentialsId).TeradataCredentialsPatch(*patch).Execute)
@@ -6924,83 +6458,51 @@ func buildConnectionsUpdateClickhouse(cmd *cobra.Command, api *sdk.APIClient, cr
 		}
 	}
 	patch := sdk.NewClickHouseCredentialsPatchWithDefaults()
+	check := sdk.NewClickHouseCredentialsChangeValidateInWithDefaults()
 	if changed(cmd, "db-name") {
 		if dbName == "" {
 			patch.SetDbNameNil()
+			check.SetDbNameNil()
 		} else {
 			patch.SetDbName(dbName)
+			check.SetDbName(dbName)
 		}
 	}
 	if changed(cmd, "host") {
 		if host == "" {
 			patch.SetHostNil()
+			check.SetHostNil()
 		} else {
 			patch.SetHost(host)
+			check.SetHost(host)
 		}
 	}
 	if changed(cmd, "password", "password-prompt") {
 		if password == "" {
 			patch.SetPasswordNil()
+			check.SetPasswordNil()
 		} else {
 			patch.SetPassword(password)
+			check.SetPassword(password)
 		}
 	}
 	if changed(cmd, "port") {
 		patch.SetPort(port)
+		check.SetPort(port)
 	}
 	if changed(cmd, "user") {
 		if user == "" {
 			patch.SetUserNil()
+			check.SetUserNil()
 		} else {
 			patch.SetUser(user)
+			check.SetUser(user)
 		}
 	}
 	return &connectionsUpdateCredentials{
-		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
-			stored, resp, err := api.CredentialsAPI.GetClickhouseCredentials(ctx, credentialsId).Execute()
-			if err != nil {
-				return nil, resp, err
-			}
-			candidate := sdk.NewClickHouseCredentialsValidateInWithDefaults()
-			var missing []string
-			candidate.SetDeploymentId(deploymentId)
-			if changed(cmd, "host") {
-				if host != "" {
-					candidate.SetHost(host)
-				}
-			} else if v, ok := stored.GetHostOk(); ok && v != nil {
-				candidate.SetHost(*v)
-			}
-			if changed(cmd, "port") {
-				candidate.SetPort(port)
-			} else if v, ok := stored.GetPortOk(); ok && v != nil {
-				candidate.SetPort(*v)
-			}
-			if changed(cmd, "user") {
-				if user != "" {
-					candidate.SetUser(user)
-				}
-			} else if v, ok := stored.GetUserOk(); ok && v != nil {
-				candidate.SetUser(*v)
-			}
-			if changed(cmd, "password", "password-prompt") {
-				if password != "" {
-					candidate.SetPassword(password)
-				}
-			} else {
-				missing = append(missing, "--password")
-			}
-			if changed(cmd, "db-name") {
-				if dbName != "" {
-					candidate.SetDbName(dbName)
-				}
-			} else if v, ok := stored.GetDbNameOk(); ok && v != nil {
-				candidate.SetDbName(*v)
-			}
-			if len(missing) > 0 {
-				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
-			}
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateClickhouseCredentials(ctx).ClickHouseCredentialsValidateIn(*candidate).Execute)
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateClickhouseCredentialsChange(ctx, credentialsId).ClickHouseCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateClickhouseCredentials(ctx, credentialsId).ClickHouseCredentialsPatch(*patch).Execute)
@@ -7061,105 +6563,64 @@ func buildConnectionsUpdateStarburstEnterprise(cmd *cobra.Command, api *sdk.APIC
 		}
 	}
 	patch := sdk.NewStarburstEnterpriseCredentialsPatchWithDefaults()
+	check := sdk.NewStarburstEnterpriseCredentialsChangeValidateInWithDefaults()
 	if changed(cmd, "db-name") {
 		if dbName == "" {
 			patch.SetDbNameNil()
+			check.SetDbNameNil()
 		} else {
 			patch.SetDbName(dbName)
+			check.SetDbName(dbName)
 		}
 	}
 	if changed(cmd, "host") {
 		if host == "" {
 			patch.SetHostNil()
+			check.SetHostNil()
 		} else {
 			patch.SetHost(host)
+			check.SetHost(host)
 		}
 	}
 	if changed(cmd, "password", "password-prompt") {
 		if password == "" {
 			patch.SetPasswordNil()
+			check.SetPasswordNil()
 		} else {
 			patch.SetPassword(password)
+			check.SetPassword(password)
 		}
 	}
 	if changed(cmd, "port") {
 		patch.SetPort(port)
+		check.SetPort(port)
 	}
 	if changed(cmd, "ssl-ca-data") {
 		if sslCaData == "" {
 			patch.SetSslCaDataNil()
+			check.SetSslCaDataNil()
 		} else {
 			patch.SetSslCaData(sslCaData)
+			check.SetSslCaData(sslCaData)
 		}
 	}
 	if changed(cmd, "ssl-disabled") {
 		patch.SetSslDisabled(sslDisabled)
+		check.SetSslDisabled(sslDisabled)
 	}
 	if changed(cmd, "user") {
 		if user == "" {
 			patch.SetUserNil()
+			check.SetUserNil()
 		} else {
 			patch.SetUser(user)
+			check.SetUser(user)
 		}
 	}
 	return &connectionsUpdateCredentials{
-		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
-			stored, resp, err := api.CredentialsAPI.GetStarburstEnterpriseCredentials(ctx, credentialsId).Execute()
-			if err != nil {
-				return nil, resp, err
-			}
-			candidate := sdk.NewStarburstEnterpriseCredentialsValidateInWithDefaults()
-			var missing []string
-			candidate.SetDeploymentId(deploymentId)
-			if changed(cmd, "host") {
-				if host != "" {
-					candidate.SetHost(host)
-				}
-			} else if v, ok := stored.GetHostOk(); ok && v != nil {
-				candidate.SetHost(*v)
-			}
-			if changed(cmd, "port") {
-				candidate.SetPort(port)
-			} else if v, ok := stored.GetPortOk(); ok && v != nil {
-				candidate.SetPort(*v)
-			}
-			if changed(cmd, "user") {
-				if user != "" {
-					candidate.SetUser(user)
-				}
-			} else if v, ok := stored.GetUserOk(); ok && v != nil {
-				candidate.SetUser(*v)
-			}
-			if changed(cmd, "password", "password-prompt") {
-				if password != "" {
-					candidate.SetPassword(password)
-				}
-			} else {
-				missing = append(missing, "--password")
-			}
-			if changed(cmd, "db-name") {
-				if dbName != "" {
-					candidate.SetDbName(dbName)
-				}
-			} else if v, ok := stored.GetDbNameOk(); ok && v != nil {
-				candidate.SetDbName(*v)
-			}
-			if changed(cmd, "ssl-ca-data") {
-				if sslCaData != "" {
-					candidate.SetSslCaData(sslCaData)
-				}
-			} else if v, ok := stored.GetSslCaDataOk(); ok && v != nil {
-				candidate.SetSslCaData(*v)
-			}
-			if changed(cmd, "ssl-disabled") {
-				candidate.SetSslDisabled(sslDisabled)
-			} else if v, ok := stored.GetSslDisabledOk(); ok && v != nil {
-				candidate.SetSslDisabled(*v)
-			}
-			if len(missing) > 0 {
-				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
-			}
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateStarburstEnterpriseCredentials(ctx).StarburstEnterpriseCredentialsValidateIn(*candidate).Execute)
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateStarburstEnterpriseCredentialsChange(ctx, credentialsId).StarburstEnterpriseCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateStarburstEnterpriseCredentials(ctx, credentialsId).StarburstEnterpriseCredentialsPatch(*patch).Execute)
@@ -7206,83 +6667,51 @@ func buildConnectionsUpdateStarburstGalaxy(cmd *cobra.Command, api *sdk.APIClien
 		}
 	}
 	patch := sdk.NewStarburstGalaxyCredentialsPatchWithDefaults()
+	check := sdk.NewStarburstGalaxyCredentialsChangeValidateInWithDefaults()
 	if changed(cmd, "db-name") {
 		if dbName == "" {
 			patch.SetDbNameNil()
+			check.SetDbNameNil()
 		} else {
 			patch.SetDbName(dbName)
+			check.SetDbName(dbName)
 		}
 	}
 	if changed(cmd, "host") {
 		if host == "" {
 			patch.SetHostNil()
+			check.SetHostNil()
 		} else {
 			patch.SetHost(host)
+			check.SetHost(host)
 		}
 	}
 	if changed(cmd, "password", "password-prompt") {
 		if password == "" {
 			patch.SetPasswordNil()
+			check.SetPasswordNil()
 		} else {
 			patch.SetPassword(password)
+			check.SetPassword(password)
 		}
 	}
 	if changed(cmd, "port") {
 		patch.SetPort(port)
+		check.SetPort(port)
 	}
 	if changed(cmd, "user") {
 		if user == "" {
 			patch.SetUserNil()
+			check.SetUserNil()
 		} else {
 			patch.SetUser(user)
+			check.SetUser(user)
 		}
 	}
 	return &connectionsUpdateCredentials{
-		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
-			stored, resp, err := api.CredentialsAPI.GetStarburstGalaxyCredentials(ctx, credentialsId).Execute()
-			if err != nil {
-				return nil, resp, err
-			}
-			candidate := sdk.NewStarburstGalaxyCredentialsValidateInWithDefaults()
-			var missing []string
-			candidate.SetDeploymentId(deploymentId)
-			if changed(cmd, "host") {
-				if host != "" {
-					candidate.SetHost(host)
-				}
-			} else if v, ok := stored.GetHostOk(); ok && v != nil {
-				candidate.SetHost(*v)
-			}
-			if changed(cmd, "port") {
-				candidate.SetPort(port)
-			} else if v, ok := stored.GetPortOk(); ok && v != nil {
-				candidate.SetPort(*v)
-			}
-			if changed(cmd, "user") {
-				if user != "" {
-					candidate.SetUser(user)
-				}
-			} else if v, ok := stored.GetUserOk(); ok && v != nil {
-				candidate.SetUser(*v)
-			}
-			if changed(cmd, "password", "password-prompt") {
-				if password != "" {
-					candidate.SetPassword(password)
-				}
-			} else {
-				missing = append(missing, "--password")
-			}
-			if changed(cmd, "db-name") {
-				if dbName != "" {
-					candidate.SetDbName(dbName)
-				}
-			} else if v, ok := stored.GetDbNameOk(); ok && v != nil {
-				candidate.SetDbName(*v)
-			}
-			if len(missing) > 0 {
-				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
-			}
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateStarburstGalaxyCredentials(ctx).StarburstGalaxyCredentialsValidateIn(*candidate).Execute)
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateStarburstGalaxyCredentialsChange(ctx, credentialsId).StarburstGalaxyCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateStarburstGalaxyCredentials(ctx, credentialsId).StarburstGalaxyCredentialsPatch(*patch).Execute)
@@ -7329,83 +6758,51 @@ func buildConnectionsUpdateAzureSqlDatabase(cmd *cobra.Command, api *sdk.APIClie
 		}
 	}
 	patch := sdk.NewAzureSqlDatabaseCredentialsPatchWithDefaults()
+	check := sdk.NewAzureSqlDatabaseCredentialsChangeValidateInWithDefaults()
 	if changed(cmd, "db-name") {
 		if dbName == "" {
 			patch.SetDbNameNil()
+			check.SetDbNameNil()
 		} else {
 			patch.SetDbName(dbName)
+			check.SetDbName(dbName)
 		}
 	}
 	if changed(cmd, "host") {
 		if host == "" {
 			patch.SetHostNil()
+			check.SetHostNil()
 		} else {
 			patch.SetHost(host)
+			check.SetHost(host)
 		}
 	}
 	if changed(cmd, "password", "password-prompt") {
 		if password == "" {
 			patch.SetPasswordNil()
+			check.SetPasswordNil()
 		} else {
 			patch.SetPassword(password)
+			check.SetPassword(password)
 		}
 	}
 	if changed(cmd, "port") {
 		patch.SetPort(port)
+		check.SetPort(port)
 	}
 	if changed(cmd, "user") {
 		if user == "" {
 			patch.SetUserNil()
+			check.SetUserNil()
 		} else {
 			patch.SetUser(user)
+			check.SetUser(user)
 		}
 	}
 	return &connectionsUpdateCredentials{
-		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
-			stored, resp, err := api.CredentialsAPI.GetAzureSqlDatabaseCredentials(ctx, credentialsId).Execute()
-			if err != nil {
-				return nil, resp, err
-			}
-			candidate := sdk.NewAzureSqlDatabaseCredentialsValidateInWithDefaults()
-			var missing []string
-			candidate.SetDeploymentId(deploymentId)
-			if changed(cmd, "host") {
-				if host != "" {
-					candidate.SetHost(host)
-				}
-			} else if v, ok := stored.GetHostOk(); ok && v != nil {
-				candidate.SetHost(*v)
-			}
-			if changed(cmd, "port") {
-				candidate.SetPort(port)
-			} else if v, ok := stored.GetPortOk(); ok && v != nil {
-				candidate.SetPort(*v)
-			}
-			if changed(cmd, "user") {
-				if user != "" {
-					candidate.SetUser(user)
-				}
-			} else if v, ok := stored.GetUserOk(); ok && v != nil {
-				candidate.SetUser(*v)
-			}
-			if changed(cmd, "password", "password-prompt") {
-				if password != "" {
-					candidate.SetPassword(password)
-				}
-			} else {
-				missing = append(missing, "--password")
-			}
-			if changed(cmd, "db-name") {
-				if dbName != "" {
-					candidate.SetDbName(dbName)
-				}
-			} else if v, ok := stored.GetDbNameOk(); ok && v != nil {
-				candidate.SetDbName(*v)
-			}
-			if len(missing) > 0 {
-				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
-			}
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateAzureSqlDatabaseCredentials(ctx).AzureSqlDatabaseCredentialsValidateIn(*candidate).Execute)
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateAzureSqlDatabaseCredentialsChange(ctx, credentialsId).AzureSqlDatabaseCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateAzureSqlDatabaseCredentials(ctx, credentialsId).AzureSqlDatabaseCredentialsPatch(*patch).Execute)
@@ -7452,83 +6849,51 @@ func buildConnectionsUpdateAzureDedicatedSqlPool(cmd *cobra.Command, api *sdk.AP
 		}
 	}
 	patch := sdk.NewAzureDedicatedSqlPoolCredentialsPatchWithDefaults()
+	check := sdk.NewAzureDedicatedSqlPoolCredentialsChangeValidateInWithDefaults()
 	if changed(cmd, "db-name") {
 		if dbName == "" {
 			patch.SetDbNameNil()
+			check.SetDbNameNil()
 		} else {
 			patch.SetDbName(dbName)
+			check.SetDbName(dbName)
 		}
 	}
 	if changed(cmd, "host") {
 		if host == "" {
 			patch.SetHostNil()
+			check.SetHostNil()
 		} else {
 			patch.SetHost(host)
+			check.SetHost(host)
 		}
 	}
 	if changed(cmd, "password", "password-prompt") {
 		if password == "" {
 			patch.SetPasswordNil()
+			check.SetPasswordNil()
 		} else {
 			patch.SetPassword(password)
+			check.SetPassword(password)
 		}
 	}
 	if changed(cmd, "port") {
 		patch.SetPort(port)
+		check.SetPort(port)
 	}
 	if changed(cmd, "user") {
 		if user == "" {
 			patch.SetUserNil()
+			check.SetUserNil()
 		} else {
 			patch.SetUser(user)
+			check.SetUser(user)
 		}
 	}
 	return &connectionsUpdateCredentials{
-		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
-			stored, resp, err := api.CredentialsAPI.GetAzureDedicatedSqlPoolCredentials(ctx, credentialsId).Execute()
-			if err != nil {
-				return nil, resp, err
-			}
-			candidate := sdk.NewAzureDedicatedSqlPoolCredentialsValidateInWithDefaults()
-			var missing []string
-			candidate.SetDeploymentId(deploymentId)
-			if changed(cmd, "host") {
-				if host != "" {
-					candidate.SetHost(host)
-				}
-			} else if v, ok := stored.GetHostOk(); ok && v != nil {
-				candidate.SetHost(*v)
-			}
-			if changed(cmd, "port") {
-				candidate.SetPort(port)
-			} else if v, ok := stored.GetPortOk(); ok && v != nil {
-				candidate.SetPort(*v)
-			}
-			if changed(cmd, "user") {
-				if user != "" {
-					candidate.SetUser(user)
-				}
-			} else if v, ok := stored.GetUserOk(); ok && v != nil {
-				candidate.SetUser(*v)
-			}
-			if changed(cmd, "password", "password-prompt") {
-				if password != "" {
-					candidate.SetPassword(password)
-				}
-			} else {
-				missing = append(missing, "--password")
-			}
-			if changed(cmd, "db-name") {
-				if dbName != "" {
-					candidate.SetDbName(dbName)
-				}
-			} else if v, ok := stored.GetDbNameOk(); ok && v != nil {
-				candidate.SetDbName(*v)
-			}
-			if len(missing) > 0 {
-				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
-			}
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateAzureDedicatedSqlPoolCredentials(ctx).AzureDedicatedSqlPoolCredentialsValidateIn(*candidate).Execute)
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateAzureDedicatedSqlPoolCredentialsChange(ctx, credentialsId).AzureDedicatedSqlPoolCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateAzureDedicatedSqlPoolCredentials(ctx, credentialsId).AzureDedicatedSqlPoolCredentialsPatch(*patch).Execute)
@@ -7575,83 +6940,51 @@ func buildConnectionsUpdateSapHana(cmd *cobra.Command, api *sdk.APIClient, crede
 		}
 	}
 	patch := sdk.NewSapHanaCredentialsPatchWithDefaults()
+	check := sdk.NewSapHanaCredentialsChangeValidateInWithDefaults()
 	if changed(cmd, "db-name") {
 		if dbName == "" {
 			patch.SetDbNameNil()
+			check.SetDbNameNil()
 		} else {
 			patch.SetDbName(dbName)
+			check.SetDbName(dbName)
 		}
 	}
 	if changed(cmd, "host") {
 		if host == "" {
 			patch.SetHostNil()
+			check.SetHostNil()
 		} else {
 			patch.SetHost(host)
+			check.SetHost(host)
 		}
 	}
 	if changed(cmd, "password", "password-prompt") {
 		if password == "" {
 			patch.SetPasswordNil()
+			check.SetPasswordNil()
 		} else {
 			patch.SetPassword(password)
+			check.SetPassword(password)
 		}
 	}
 	if changed(cmd, "port") {
 		patch.SetPort(port)
+		check.SetPort(port)
 	}
 	if changed(cmd, "user") {
 		if user == "" {
 			patch.SetUserNil()
+			check.SetUserNil()
 		} else {
 			patch.SetUser(user)
+			check.SetUser(user)
 		}
 	}
 	return &connectionsUpdateCredentials{
-		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
-			stored, resp, err := api.CredentialsAPI.GetSapHanaCredentials(ctx, credentialsId).Execute()
-			if err != nil {
-				return nil, resp, err
-			}
-			candidate := sdk.NewSapHanaCredentialsValidateInWithDefaults()
-			var missing []string
-			candidate.SetDeploymentId(deploymentId)
-			if changed(cmd, "host") {
-				if host != "" {
-					candidate.SetHost(host)
-				}
-			} else if v, ok := stored.GetHostOk(); ok && v != nil {
-				candidate.SetHost(*v)
-			}
-			if changed(cmd, "port") {
-				candidate.SetPort(port)
-			} else if v, ok := stored.GetPortOk(); ok && v != nil {
-				candidate.SetPort(*v)
-			}
-			if changed(cmd, "user") {
-				if user != "" {
-					candidate.SetUser(user)
-				}
-			} else if v, ok := stored.GetUserOk(); ok && v != nil {
-				candidate.SetUser(*v)
-			}
-			if changed(cmd, "password", "password-prompt") {
-				if password != "" {
-					candidate.SetPassword(password)
-				}
-			} else {
-				missing = append(missing, "--password")
-			}
-			if changed(cmd, "db-name") {
-				if dbName != "" {
-					candidate.SetDbName(dbName)
-				}
-			} else if v, ok := stored.GetDbNameOk(); ok && v != nil {
-				candidate.SetDbName(*v)
-			}
-			if len(missing) > 0 {
-				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
-			}
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateSapHanaCredentials(ctx).SapHanaCredentialsValidateIn(*candidate).Execute)
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateSapHanaCredentialsChange(ctx, credentialsId).SapHanaCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateSapHanaCredentials(ctx, credentialsId).SapHanaCredentialsPatch(*patch).Execute)
@@ -7737,143 +7070,91 @@ func buildConnectionsUpdateSqlServer(cmd *cobra.Command, api *sdk.APIClient, cre
 		}
 	}
 	patch := sdk.NewSqlServerCredentialsPatchWithDefaults()
+	check := sdk.NewSqlServerCredentialsChangeValidateInWithDefaults()
 	if changed(cmd, "auth-mode") {
 		patch.SetAuthMode(*authMode)
+		check.SetAuthMode(*authMode)
 	}
 	if changed(cmd, "db-name") {
 		if dbName == "" {
 			patch.SetDbNameNil()
+			check.SetDbNameNil()
 		} else {
 			patch.SetDbName(dbName)
+			check.SetDbName(dbName)
 		}
 	}
 	if changed(cmd, "host") {
 		if host == "" {
 			patch.SetHostNil()
+			check.SetHostNil()
 		} else {
 			patch.SetHost(host)
+			check.SetHost(host)
 		}
 	}
 	if changed(cmd, "kdc") {
 		if kdc == "" {
 			patch.SetKdcNil()
+			check.SetKdcNil()
 		} else {
 			patch.SetKdc(kdc)
+			check.SetKdc(kdc)
 		}
 	}
 	if changed(cmd, "keytab-base64", "keytab-base64-prompt") {
 		if keytabBase64 == "" {
 			patch.SetKeytabBase64Nil()
+			check.SetKeytabBase64Nil()
 		} else {
 			patch.SetKeytabBase64(keytabBase64)
+			check.SetKeytabBase64(keytabBase64)
 		}
 	}
 	if changed(cmd, "password", "password-prompt") {
 		if password == "" {
 			patch.SetPasswordNil()
+			check.SetPasswordNil()
 		} else {
 			patch.SetPassword(password)
+			check.SetPassword(password)
 		}
 	}
 	if changed(cmd, "port") {
 		patch.SetPort(port)
+		check.SetPort(port)
 	}
 	if changed(cmd, "principal") {
 		if principal == "" {
 			patch.SetPrincipalNil()
+			check.SetPrincipalNil()
 		} else {
 			patch.SetPrincipal(principal)
+			check.SetPrincipal(principal)
 		}
 	}
 	if changed(cmd, "realm") {
 		if realm == "" {
 			patch.SetRealmNil()
+			check.SetRealmNil()
 		} else {
 			patch.SetRealm(realm)
+			check.SetRealm(realm)
 		}
 	}
 	if changed(cmd, "user") {
 		if user == "" {
 			patch.SetUserNil()
+			check.SetUserNil()
 		} else {
 			patch.SetUser(user)
+			check.SetUser(user)
 		}
 	}
 	return &connectionsUpdateCredentials{
-		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
-			stored, resp, err := api.CredentialsAPI.GetSqlServerCredentials(ctx, credentialsId).Execute()
-			if err != nil {
-				return nil, resp, err
-			}
-			candidate := sdk.NewSqlServerCredentialsValidateInWithDefaults()
-			var missing []string
-			candidate.SetDeploymentId(deploymentId)
-			if changed(cmd, "host") {
-				if host != "" {
-					candidate.SetHost(host)
-				}
-			} else if v, ok := stored.GetHostOk(); ok && v != nil {
-				candidate.SetHost(*v)
-			}
-			if changed(cmd, "port") {
-				candidate.SetPort(port)
-			} else if v, ok := stored.GetPortOk(); ok && v != nil {
-				candidate.SetPort(*v)
-			}
-			if changed(cmd, "auth-mode") {
-				candidate.SetAuthMode(*authMode)
-			} else if v, ok := stored.GetAuthModeOk(); ok && v != nil {
-				candidate.SetAuthMode(*v)
-			}
-			if changed(cmd, "db-name") {
-				if dbName != "" {
-					candidate.SetDbName(dbName)
-				}
-			} else if v, ok := stored.GetDbNameOk(); ok && v != nil {
-				candidate.SetDbName(*v)
-			}
-			if changed(cmd, "kdc") {
-				if kdc != "" {
-					candidate.SetKdc(kdc)
-				}
-			} else if v, ok := stored.GetKdcOk(); ok && v != nil {
-				candidate.SetKdc(*v)
-			}
-			if changed(cmd, "keytab-base64", "keytab-base64-prompt") {
-				if keytabBase64 != "" {
-					candidate.SetKeytabBase64(keytabBase64)
-				}
-			}
-			if changed(cmd, "password", "password-prompt") {
-				if password != "" {
-					candidate.SetPassword(password)
-				}
-			}
-			if changed(cmd, "principal") {
-				if principal != "" {
-					candidate.SetPrincipal(principal)
-				}
-			} else if v, ok := stored.GetPrincipalOk(); ok && v != nil {
-				candidate.SetPrincipal(*v)
-			}
-			if changed(cmd, "realm") {
-				if realm != "" {
-					candidate.SetRealm(realm)
-				}
-			} else if v, ok := stored.GetRealmOk(); ok && v != nil {
-				candidate.SetRealm(*v)
-			}
-			if changed(cmd, "user") {
-				if user != "" {
-					candidate.SetUser(user)
-				}
-			} else if v, ok := stored.GetUserOk(); ok && v != nil {
-				candidate.SetUser(*v)
-			}
-			if len(missing) > 0 {
-				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
-			}
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateSqlServerCredentials(ctx).SqlServerCredentialsValidateIn(*candidate).Execute)
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateSqlServerCredentialsChange(ctx, credentialsId).SqlServerCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateSqlServerCredentials(ctx, credentialsId).SqlServerCredentialsPatch(*patch).Execute)
@@ -7955,147 +7236,96 @@ func buildConnectionsUpdateTableau(cmd *cobra.Command, api *sdk.APIClient, crede
 		}
 	}
 	patch := sdk.NewTableauCredentialsPatchWithDefaults()
+	check := sdk.NewTableauCredentialsChangeValidateInWithDefaults()
 	if changed(cmd, "connected-app-client-id") {
 		if connectedAppClientId == "" {
 			patch.SetConnectedAppClientIdNil()
+			check.SetConnectedAppClientIdNil()
 		} else {
 			patch.SetConnectedAppClientId(connectedAppClientId)
+			check.SetConnectedAppClientId(connectedAppClientId)
 		}
 	}
 	if changed(cmd, "connected-app-secret-id") {
 		if connectedAppSecretId == "" {
 			patch.SetConnectedAppSecretIdNil()
+			check.SetConnectedAppSecretIdNil()
 		} else {
 			patch.SetConnectedAppSecretId(connectedAppSecretId)
+			check.SetConnectedAppSecretId(connectedAppSecretId)
 		}
 	}
 	if changed(cmd, "connected-app-secret-value", "connected-app-secret-value-prompt") {
 		if connectedAppSecretValue == "" {
 			patch.SetConnectedAppSecretValueNil()
+			check.SetConnectedAppSecretValueNil()
 		} else {
 			patch.SetConnectedAppSecretValue(connectedAppSecretValue)
+			check.SetConnectedAppSecretValue(connectedAppSecretValue)
 		}
 	}
 	if changed(cmd, "password", "password-prompt") {
 		if password == "" {
 			patch.SetPasswordNil()
+			check.SetPasswordNil()
 		} else {
 			patch.SetPassword(password)
+			check.SetPassword(password)
 		}
 	}
 	if changed(cmd, "server-name") {
 		if serverName == "" {
 			patch.SetServerNameNil()
+			check.SetServerNameNil()
 		} else {
 			patch.SetServerName(serverName)
+			check.SetServerName(serverName)
 		}
 	}
 	if changed(cmd, "site-name") {
 		if siteName == "" {
 			patch.SetSiteNameNil()
+			check.SetSiteNameNil()
 		} else {
 			patch.SetSiteName(siteName)
+			check.SetSiteName(siteName)
 		}
 	}
 	if changed(cmd, "token-name") {
 		if tokenName == "" {
 			patch.SetTokenNameNil()
+			check.SetTokenNameNil()
 		} else {
 			patch.SetTokenName(tokenName)
+			check.SetTokenName(tokenName)
 		}
 	}
 	if changed(cmd, "token-value", "token-value-prompt") {
 		if tokenValue == "" {
 			patch.SetTokenValueNil()
+			check.SetTokenValueNil()
 		} else {
 			patch.SetTokenValue(tokenValue)
+			check.SetTokenValue(tokenValue)
 		}
 	}
 	if changed(cmd, "username") {
 		if username == "" {
 			patch.SetUsernameNil()
+			check.SetUsernameNil()
 		} else {
 			patch.SetUsername(username)
+			check.SetUsername(username)
 		}
 	}
 	if changed(cmd, "verify-ssl") {
 		patch.SetVerifySsl(verifySsl)
+		check.SetVerifySsl(verifySsl)
 	}
 	return &connectionsUpdateCredentials{
-		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
-			stored, resp, err := api.CredentialsAPI.GetTableauCredentials(ctx, credentialsId).Execute()
-			if err != nil {
-				return nil, resp, err
-			}
-			candidate := sdk.NewTableauCredentialsValidateInWithDefaults()
-			var missing []string
-			candidate.SetDeploymentId(deploymentId)
-			if changed(cmd, "server-name") {
-				if serverName != "" {
-					candidate.SetServerName(serverName)
-				}
-			} else if v, ok := stored.GetServerNameOk(); ok && v != nil {
-				candidate.SetServerName(*v)
-			}
-			if changed(cmd, "connected-app-client-id") {
-				if connectedAppClientId != "" {
-					candidate.SetConnectedAppClientId(connectedAppClientId)
-				}
-			} else if v, ok := stored.GetConnectedAppClientIdOk(); ok && v != nil {
-				candidate.SetConnectedAppClientId(*v)
-			}
-			if changed(cmd, "connected-app-secret-id") {
-				if connectedAppSecretId != "" {
-					candidate.SetConnectedAppSecretId(connectedAppSecretId)
-				}
-			} else if v, ok := stored.GetConnectedAppSecretIdOk(); ok && v != nil {
-				candidate.SetConnectedAppSecretId(*v)
-			}
-			if changed(cmd, "connected-app-secret-value", "connected-app-secret-value-prompt") {
-				if connectedAppSecretValue != "" {
-					candidate.SetConnectedAppSecretValue(connectedAppSecretValue)
-				}
-			}
-			if changed(cmd, "password", "password-prompt") {
-				if password != "" {
-					candidate.SetPassword(password)
-				}
-			}
-			if changed(cmd, "site-name") {
-				if siteName != "" {
-					candidate.SetSiteName(siteName)
-				}
-			} else if v, ok := stored.GetSiteNameOk(); ok && v != nil {
-				candidate.SetSiteName(*v)
-			}
-			if changed(cmd, "token-name") {
-				if tokenName != "" {
-					candidate.SetTokenName(tokenName)
-				}
-			} else if v, ok := stored.GetTokenNameOk(); ok && v != nil {
-				candidate.SetTokenName(*v)
-			}
-			if changed(cmd, "token-value", "token-value-prompt") {
-				if tokenValue != "" {
-					candidate.SetTokenValue(tokenValue)
-				}
-			}
-			if changed(cmd, "username") {
-				if username != "" {
-					candidate.SetUsername(username)
-				}
-			} else if v, ok := stored.GetUsernameOk(); ok && v != nil {
-				candidate.SetUsername(*v)
-			}
-			if changed(cmd, "verify-ssl") {
-				candidate.SetVerifySsl(verifySsl)
-			} else if v, ok := stored.GetVerifySslOk(); ok && v != nil {
-				candidate.SetVerifySsl(*v)
-			}
-			if len(missing) > 0 {
-				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
-			}
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateTableauCredentials(ctx).TableauCredentialsValidateIn(*candidate).Execute)
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateTableauCredentialsChange(ctx, credentialsId).TableauCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateTableauCredentials(ctx, credentialsId).TableauCredentialsPatch(*patch).Execute)
@@ -8135,69 +7365,42 @@ func buildConnectionsUpdateLooker(cmd *cobra.Command, api *sdk.APIClient, creden
 		}
 	}
 	patch := sdk.NewLookerCredentialsPatchWithDefaults()
+	check := sdk.NewLookerCredentialsChangeValidateInWithDefaults()
 	if changed(cmd, "api-client-id") {
 		if apiClientId == "" {
 			patch.SetApiClientIdNil()
+			check.SetApiClientIdNil()
 		} else {
 			patch.SetApiClientId(apiClientId)
+			check.SetApiClientId(apiClientId)
 		}
 	}
 	if changed(cmd, "api-client-secret", "api-client-secret-prompt") {
 		if apiClientSecret == "" {
 			patch.SetApiClientSecretNil()
+			check.SetApiClientSecretNil()
 		} else {
 			patch.SetApiClientSecret(apiClientSecret)
+			check.SetApiClientSecret(apiClientSecret)
 		}
 	}
 	if changed(cmd, "base-url") {
 		if baseUrl == "" {
 			patch.SetBaseUrlNil()
+			check.SetBaseUrlNil()
 		} else {
 			patch.SetBaseUrl(baseUrl)
+			check.SetBaseUrl(baseUrl)
 		}
 	}
 	if changed(cmd, "verify-ssl") {
 		patch.SetVerifySsl(verifySsl)
+		check.SetVerifySsl(verifySsl)
 	}
 	return &connectionsUpdateCredentials{
-		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
-			stored, resp, err := api.CredentialsAPI.GetLookerCredentials(ctx, credentialsId).Execute()
-			if err != nil {
-				return nil, resp, err
-			}
-			candidate := sdk.NewLookerCredentialsValidateInWithDefaults()
-			var missing []string
-			candidate.SetDeploymentId(deploymentId)
-			if changed(cmd, "base-url") {
-				if baseUrl != "" {
-					candidate.SetBaseUrl(baseUrl)
-				}
-			} else if v, ok := stored.GetBaseUrlOk(); ok && v != nil {
-				candidate.SetBaseUrl(*v)
-			}
-			if changed(cmd, "api-client-id") {
-				if apiClientId != "" {
-					candidate.SetApiClientId(apiClientId)
-				}
-			} else if v, ok := stored.GetApiClientIdOk(); ok && v != nil {
-				candidate.SetApiClientId(*v)
-			}
-			if changed(cmd, "api-client-secret", "api-client-secret-prompt") {
-				if apiClientSecret != "" {
-					candidate.SetApiClientSecret(apiClientSecret)
-				}
-			} else {
-				missing = append(missing, "--api-client-secret")
-			}
-			if changed(cmd, "verify-ssl") {
-				candidate.SetVerifySsl(verifySsl)
-			} else if v, ok := stored.GetVerifySslOk(); ok && v != nil {
-				candidate.SetVerifySsl(*v)
-			}
-			if len(missing) > 0 {
-				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
-			}
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateLookerCredentials(ctx).LookerCredentialsValidateIn(*candidate).Execute)
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateLookerCredentialsChange(ctx, credentialsId).LookerCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateLookerCredentials(ctx, credentialsId).LookerCredentialsPatch(*patch).Execute)
@@ -8251,93 +7454,60 @@ func buildConnectionsUpdateLookerGitClone(cmd *cobra.Command, api *sdk.APIClient
 		}
 	}
 	patch := sdk.NewLookerGitCloneCredentialsPatchWithDefaults()
+	check := sdk.NewLookerGitCloneCredentialsChangeValidateInWithDefaults()
 	if changed(cmd, "repo-url") {
 		if repoUrl == "" {
 			patch.SetRepoUrlNil()
+			check.SetRepoUrlNil()
 		} else {
 			patch.SetRepoUrl(repoUrl)
+			check.SetRepoUrl(repoUrl)
 		}
 	}
 	if changed(cmd, "ssh-key", "ssh-key-prompt") {
 		if sshKey == "" {
 			patch.SetSshKeyNil()
+			check.SetSshKeyNil()
 		} else {
 			patch.SetSshKey(sshKey)
+			check.SetSshKey(sshKey)
 		}
 	}
 	if changed(cmd, "ssl-ca-data") {
 		if sslCaData == "" {
 			patch.SetSslCaDataNil()
+			check.SetSslCaDataNil()
 		} else {
 			patch.SetSslCaData(sslCaData)
+			check.SetSslCaData(sslCaData)
 		}
 	}
 	if changed(cmd, "ssl-skip-cert-verification") {
 		patch.SetSslSkipCertVerification(sslSkipCertVerification)
+		check.SetSslSkipCertVerification(sslSkipCertVerification)
 	}
 	if changed(cmd, "token", "token-prompt") {
 		if token == "" {
 			patch.SetTokenNil()
+			check.SetTokenNil()
 		} else {
 			patch.SetToken(token)
+			check.SetToken(token)
 		}
 	}
 	if changed(cmd, "username") {
 		if username == "" {
 			patch.SetUsernameNil()
+			check.SetUsernameNil()
 		} else {
 			patch.SetUsername(username)
+			check.SetUsername(username)
 		}
 	}
 	return &connectionsUpdateCredentials{
-		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
-			stored, resp, err := api.CredentialsAPI.GetLookerGitCloneCredentials(ctx, credentialsId).Execute()
-			if err != nil {
-				return nil, resp, err
-			}
-			candidate := sdk.NewLookerGitCloneCredentialsValidateInWithDefaults()
-			var missing []string
-			candidate.SetDeploymentId(deploymentId)
-			if changed(cmd, "repo-url") {
-				if repoUrl != "" {
-					candidate.SetRepoUrl(repoUrl)
-				}
-			} else if v, ok := stored.GetRepoUrlOk(); ok && v != nil {
-				candidate.SetRepoUrl(*v)
-			}
-			if changed(cmd, "ssh-key", "ssh-key-prompt") {
-				if sshKey != "" {
-					candidate.SetSshKey(sshKey)
-				}
-			}
-			if changed(cmd, "ssl-ca-data") {
-				if sslCaData != "" {
-					candidate.SetSslCaData(sslCaData)
-				}
-			} else if v, ok := stored.GetSslCaDataOk(); ok && v != nil {
-				candidate.SetSslCaData(*v)
-			}
-			if changed(cmd, "ssl-skip-cert-verification") {
-				candidate.SetSslSkipCertVerification(sslSkipCertVerification)
-			} else if v, ok := stored.GetSslSkipCertVerificationOk(); ok && v != nil {
-				candidate.SetSslSkipCertVerification(*v)
-			}
-			if changed(cmd, "token", "token-prompt") {
-				if token != "" {
-					candidate.SetToken(token)
-				}
-			}
-			if changed(cmd, "username") {
-				if username != "" {
-					candidate.SetUsername(username)
-				}
-			} else if v, ok := stored.GetUsernameOk(); ok && v != nil {
-				candidate.SetUsername(*v)
-			}
-			if len(missing) > 0 {
-				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
-			}
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateLookerGitCloneCredentials(ctx).LookerGitCloneCredentialsValidateIn(*candidate).Execute)
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateLookerGitCloneCredentialsChange(ctx, credentialsId).LookerGitCloneCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateLookerGitCloneCredentials(ctx, credentialsId).LookerGitCloneCredentialsPatch(*patch).Execute)
@@ -8395,93 +7565,60 @@ func buildConnectionsUpdatePowerBi(cmd *cobra.Command, api *sdk.APIClient, crede
 		}
 	}
 	patch := sdk.NewPowerBiCredentialsPatchWithDefaults()
+	check := sdk.NewPowerBiCredentialsChangeValidateInWithDefaults()
 	if changed(cmd, "app-client-id") {
 		if appClientId == "" {
 			patch.SetAppClientIdNil()
+			check.SetAppClientIdNil()
 		} else {
 			patch.SetAppClientId(appClientId)
+			check.SetAppClientId(appClientId)
 		}
 	}
 	if changed(cmd, "app-client-secret", "app-client-secret-prompt") {
 		if appClientSecret == "" {
 			patch.SetAppClientSecretNil()
+			check.SetAppClientSecretNil()
 		} else {
 			patch.SetAppClientSecret(appClientSecret)
+			check.SetAppClientSecret(appClientSecret)
 		}
 	}
 	if changed(cmd, "auth-mode") {
 		patch.SetAuthMode(*authMode)
+		check.SetAuthMode(*authMode)
 	}
 	if changed(cmd, "password", "password-prompt") {
 		if password == "" {
 			patch.SetPasswordNil()
+			check.SetPasswordNil()
 		} else {
 			patch.SetPassword(password)
+			check.SetPassword(password)
 		}
 	}
 	if changed(cmd, "tenant-id") {
 		if tenantId == "" {
 			patch.SetTenantIdNil()
+			check.SetTenantIdNil()
 		} else {
 			patch.SetTenantId(tenantId)
+			check.SetTenantId(tenantId)
 		}
 	}
 	if changed(cmd, "username") {
 		if username == "" {
 			patch.SetUsernameNil()
+			check.SetUsernameNil()
 		} else {
 			patch.SetUsername(username)
+			check.SetUsername(username)
 		}
 	}
 	return &connectionsUpdateCredentials{
-		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
-			stored, resp, err := api.CredentialsAPI.GetPowerBiCredentials(ctx, credentialsId).Execute()
-			if err != nil {
-				return nil, resp, err
-			}
-			candidate := sdk.NewPowerBiCredentialsValidateInWithDefaults()
-			var missing []string
-			candidate.SetDeploymentId(deploymentId)
-			if changed(cmd, "tenant-id") {
-				if tenantId != "" {
-					candidate.SetTenantId(tenantId)
-				}
-			} else if v, ok := stored.GetTenantIdOk(); ok && v != nil {
-				candidate.SetTenantId(*v)
-			}
-			if changed(cmd, "app-client-id") {
-				if appClientId != "" {
-					candidate.SetAppClientId(appClientId)
-				}
-			} else if v, ok := stored.GetAppClientIdOk(); ok && v != nil {
-				candidate.SetAppClientId(*v)
-			}
-			if changed(cmd, "auth-mode") {
-				candidate.SetAuthMode(*authMode)
-			} else if v, ok := stored.GetAuthModeOk(); ok && v != nil {
-				candidate.SetAuthMode(*v)
-			}
-			if changed(cmd, "app-client-secret", "app-client-secret-prompt") {
-				if appClientSecret != "" {
-					candidate.SetAppClientSecret(appClientSecret)
-				}
-			}
-			if changed(cmd, "password", "password-prompt") {
-				if password != "" {
-					candidate.SetPassword(password)
-				}
-			}
-			if changed(cmd, "username") {
-				if username != "" {
-					candidate.SetUsername(username)
-				}
-			} else if v, ok := stored.GetUsernameOk(); ok && v != nil {
-				candidate.SetUsername(*v)
-			}
-			if len(missing) > 0 {
-				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
-			}
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidatePowerBiCredentials(ctx).PowerBiCredentialsValidateIn(*candidate).Execute)
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidatePowerBiCredentialsChange(ctx, credentialsId).PowerBiCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdatePowerBiCredentials(ctx, credentialsId).PowerBiCredentialsPatch(*patch).Execute)
@@ -8514,61 +7651,38 @@ func buildConnectionsUpdateFivetran(cmd *cobra.Command, api *sdk.APIClient, cred
 		}
 	}
 	patch := sdk.NewFivetranCredentialsPatchWithDefaults()
+	check := sdk.NewFivetranCredentialsChangeValidateInWithDefaults()
 	if changed(cmd, "api-key", "api-key-prompt") {
 		if apiKey == "" {
 			patch.SetApiKeyNil()
+			check.SetApiKeyNil()
 		} else {
 			patch.SetApiKey(apiKey)
+			check.SetApiKey(apiKey)
 		}
 	}
 	if changed(cmd, "api-password", "api-password-prompt") {
 		if apiPassword == "" {
 			patch.SetApiPasswordNil()
+			check.SetApiPasswordNil()
 		} else {
 			patch.SetApiPassword(apiPassword)
+			check.SetApiPassword(apiPassword)
 		}
 	}
 	if changed(cmd, "base-url") {
 		if baseUrl == "" {
 			patch.SetBaseUrlNil()
+			check.SetBaseUrlNil()
 		} else {
 			patch.SetBaseUrl(baseUrl)
+			check.SetBaseUrl(baseUrl)
 		}
 	}
 	return &connectionsUpdateCredentials{
-		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
-			stored, resp, err := api.CredentialsAPI.GetFivetranCredentials(ctx, credentialsId).Execute()
-			if err != nil {
-				return nil, resp, err
-			}
-			candidate := sdk.NewFivetranCredentialsValidateInWithDefaults()
-			var missing []string
-			candidate.SetDeploymentId(deploymentId)
-			if changed(cmd, "api-key", "api-key-prompt") {
-				if apiKey != "" {
-					candidate.SetApiKey(apiKey)
-				}
-			} else {
-				missing = append(missing, "--api-key")
-			}
-			if changed(cmd, "api-password", "api-password-prompt") {
-				if apiPassword != "" {
-					candidate.SetApiPassword(apiPassword)
-				}
-			} else {
-				missing = append(missing, "--api-password")
-			}
-			if changed(cmd, "base-url") {
-				if baseUrl != "" {
-					candidate.SetBaseUrl(baseUrl)
-				}
-			} else if v, ok := stored.GetBaseUrlOk(); ok && v != nil {
-				candidate.SetBaseUrl(*v)
-			}
-			if len(missing) > 0 {
-				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
-			}
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateFivetranCredentials(ctx).FivetranCredentialsValidateIn(*candidate).Execute)
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateFivetranCredentialsChange(ctx, credentialsId).FivetranCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateFivetranCredentials(ctx, credentialsId).FivetranCredentialsPatch(*patch).Execute)
@@ -8622,103 +7736,65 @@ func buildConnectionsUpdateAzureDataFactory(cmd *cobra.Command, api *sdk.APIClie
 		}
 	}
 	patch := sdk.NewAzureDataFactoryCredentialsPatchWithDefaults()
+	check := sdk.NewAzureDataFactoryCredentialsChangeValidateInWithDefaults()
 	if changed(cmd, "app-client-id") {
 		if appClientId == "" {
 			patch.SetAppClientIdNil()
+			check.SetAppClientIdNil()
 		} else {
 			patch.SetAppClientId(appClientId)
+			check.SetAppClientId(appClientId)
 		}
 	}
 	if changed(cmd, "app-client-secret", "app-client-secret-prompt") {
 		if appClientSecret == "" {
 			patch.SetAppClientSecretNil()
+			check.SetAppClientSecretNil()
 		} else {
 			patch.SetAppClientSecret(appClientSecret)
+			check.SetAppClientSecret(appClientSecret)
 		}
 	}
 	if changed(cmd, "factory-name") {
 		if factoryName == "" {
 			patch.SetFactoryNameNil()
+			check.SetFactoryNameNil()
 		} else {
 			patch.SetFactoryName(factoryName)
+			check.SetFactoryName(factoryName)
 		}
 	}
 	if changed(cmd, "resource-group-name") {
 		if resourceGroupName == "" {
 			patch.SetResourceGroupNameNil()
+			check.SetResourceGroupNameNil()
 		} else {
 			patch.SetResourceGroupName(resourceGroupName)
+			check.SetResourceGroupName(resourceGroupName)
 		}
 	}
 	if changed(cmd, "subscription-id") {
 		if subscriptionId == "" {
 			patch.SetSubscriptionIdNil()
+			check.SetSubscriptionIdNil()
 		} else {
 			patch.SetSubscriptionId(subscriptionId)
+			check.SetSubscriptionId(subscriptionId)
 		}
 	}
 	if changed(cmd, "tenant-id") {
 		if tenantId == "" {
 			patch.SetTenantIdNil()
+			check.SetTenantIdNil()
 		} else {
 			patch.SetTenantId(tenantId)
+			check.SetTenantId(tenantId)
 		}
 	}
 	return &connectionsUpdateCredentials{
-		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
-			stored, resp, err := api.CredentialsAPI.GetAzureDataFactoryCredentials(ctx, credentialsId).Execute()
-			if err != nil {
-				return nil, resp, err
-			}
-			candidate := sdk.NewAzureDataFactoryCredentialsValidateInWithDefaults()
-			var missing []string
-			candidate.SetDeploymentId(deploymentId)
-			if changed(cmd, "tenant-id") {
-				if tenantId != "" {
-					candidate.SetTenantId(tenantId)
-				}
-			} else if v, ok := stored.GetTenantIdOk(); ok && v != nil {
-				candidate.SetTenantId(*v)
-			}
-			if changed(cmd, "app-client-id") {
-				if appClientId != "" {
-					candidate.SetAppClientId(appClientId)
-				}
-			} else if v, ok := stored.GetAppClientIdOk(); ok && v != nil {
-				candidate.SetAppClientId(*v)
-			}
-			if changed(cmd, "app-client-secret", "app-client-secret-prompt") {
-				if appClientSecret != "" {
-					candidate.SetAppClientSecret(appClientSecret)
-				}
-			} else {
-				missing = append(missing, "--app-client-secret")
-			}
-			if changed(cmd, "subscription-id") {
-				if subscriptionId != "" {
-					candidate.SetSubscriptionId(subscriptionId)
-				}
-			} else if v, ok := stored.GetSubscriptionIdOk(); ok && v != nil {
-				candidate.SetSubscriptionId(*v)
-			}
-			if changed(cmd, "resource-group-name") {
-				if resourceGroupName != "" {
-					candidate.SetResourceGroupName(resourceGroupName)
-				}
-			} else if v, ok := stored.GetResourceGroupNameOk(); ok && v != nil {
-				candidate.SetResourceGroupName(*v)
-			}
-			if changed(cmd, "factory-name") {
-				if factoryName != "" {
-					candidate.SetFactoryName(factoryName)
-				}
-			} else if v, ok := stored.GetFactoryNameOk(); ok && v != nil {
-				candidate.SetFactoryName(*v)
-			}
-			if len(missing) > 0 {
-				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
-			}
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateAzureDataFactoryCredentials(ctx).AzureDataFactoryCredentialsValidateIn(*candidate).Execute)
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateAzureDataFactoryCredentialsChange(ctx, credentialsId).AzureDataFactoryCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateAzureDataFactoryCredentials(ctx, credentialsId).AzureDataFactoryCredentialsPatch(*patch).Execute)
@@ -8822,169 +7898,109 @@ func buildConnectionsUpdateInformaticaV2(cmd *cobra.Command, api *sdk.APIClient,
 		}
 	}
 	patch := sdk.NewInformaticaV2CredentialsPatchWithDefaults()
+	check := sdk.NewInformaticaV2CredentialsChangeValidateInWithDefaults()
 	if changed(cmd, "auth-mode") {
 		patch.SetAuthMode(*authMode)
+		check.SetAuthMode(*authMode)
 	}
 	if changed(cmd, "base-url") {
 		if baseUrl == "" {
 			patch.SetBaseUrlNil()
+			check.SetBaseUrlNil()
 		} else {
 			patch.SetBaseUrl(baseUrl)
+			check.SetBaseUrl(baseUrl)
 		}
 	}
 	if changed(cmd, "oauth-access-token-endpoint") {
 		if oauthAccessTokenEndpoint == "" {
 			patch.SetOauthAccessTokenEndpointNil()
+			check.SetOauthAccessTokenEndpointNil()
 		} else {
 			patch.SetOauthAccessTokenEndpoint(oauthAccessTokenEndpoint)
+			check.SetOauthAccessTokenEndpoint(oauthAccessTokenEndpoint)
 		}
 	}
 	if changed(cmd, "oauth-client-id") {
 		if oauthClientId == "" {
 			patch.SetOauthClientIdNil()
+			check.SetOauthClientIdNil()
 		} else {
 			patch.SetOauthClientId(oauthClientId)
+			check.SetOauthClientId(oauthClientId)
 		}
 	}
 	if changed(cmd, "oauth-client-secret", "oauth-client-secret-prompt") {
 		if oauthClientSecret == "" {
 			patch.SetOauthClientSecretNil()
+			check.SetOauthClientSecretNil()
 		} else {
 			patch.SetOauthClientSecret(oauthClientSecret)
+			check.SetOauthClientSecret(oauthClientSecret)
 		}
 	}
 	if changed(cmd, "oauth-grant-type") {
 		patch.SetOauthGrantType(*oauthGrantType)
+		check.SetOauthGrantType(*oauthGrantType)
 	}
 	if changed(cmd, "oauth-password", "oauth-password-prompt") {
 		if oauthPassword == "" {
 			patch.SetOauthPasswordNil()
+			check.SetOauthPasswordNil()
 		} else {
 			patch.SetOauthPassword(oauthPassword)
+			check.SetOauthPassword(oauthPassword)
 		}
 	}
 	if changed(cmd, "oauth-scope") {
 		if oauthScope == "" {
 			patch.SetOauthScopeNil()
+			check.SetOauthScopeNil()
 		} else {
 			patch.SetOauthScope(oauthScope)
+			check.SetOauthScope(oauthScope)
 		}
 	}
 	if changed(cmd, "oauth-username") {
 		if oauthUsername == "" {
 			patch.SetOauthUsernameNil()
+			check.SetOauthUsernameNil()
 		} else {
 			patch.SetOauthUsername(oauthUsername)
+			check.SetOauthUsername(oauthUsername)
 		}
 	}
 	if changed(cmd, "org-id") {
 		if orgId == "" {
 			patch.SetOrgIdNil()
+			check.SetOrgIdNil()
 		} else {
 			patch.SetOrgId(orgId)
+			check.SetOrgId(orgId)
 		}
 	}
 	if changed(cmd, "password", "password-prompt") {
 		if password == "" {
 			patch.SetPasswordNil()
+			check.SetPasswordNil()
 		} else {
 			patch.SetPassword(password)
+			check.SetPassword(password)
 		}
 	}
 	if changed(cmd, "username") {
 		if username == "" {
 			patch.SetUsernameNil()
+			check.SetUsernameNil()
 		} else {
 			patch.SetUsername(username)
+			check.SetUsername(username)
 		}
 	}
 	return &connectionsUpdateCredentials{
-		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
-			stored, resp, err := api.CredentialsAPI.GetInformaticaV2Credentials(ctx, credentialsId).Execute()
-			if err != nil {
-				return nil, resp, err
-			}
-			candidate := sdk.NewInformaticaV2CredentialsValidateInWithDefaults()
-			var missing []string
-			candidate.SetDeploymentId(deploymentId)
-			if changed(cmd, "auth-mode") {
-				candidate.SetAuthMode(*authMode)
-			} else if v, ok := stored.GetAuthModeOk(); ok && v != nil {
-				candidate.SetAuthMode(*v)
-			}
-			if changed(cmd, "base-url") {
-				if baseUrl != "" {
-					candidate.SetBaseUrl(baseUrl)
-				}
-			} else if v, ok := stored.GetBaseUrlOk(); ok && v != nil {
-				candidate.SetBaseUrl(*v)
-			}
-			if changed(cmd, "oauth-access-token-endpoint") {
-				if oauthAccessTokenEndpoint != "" {
-					candidate.SetOauthAccessTokenEndpoint(oauthAccessTokenEndpoint)
-				}
-			} else if v, ok := stored.GetOauthAccessTokenEndpointOk(); ok && v != nil {
-				candidate.SetOauthAccessTokenEndpoint(*v)
-			}
-			if changed(cmd, "oauth-client-id") {
-				if oauthClientId != "" {
-					candidate.SetOauthClientId(oauthClientId)
-				}
-			} else if v, ok := stored.GetOauthClientIdOk(); ok && v != nil {
-				candidate.SetOauthClientId(*v)
-			}
-			if changed(cmd, "oauth-client-secret", "oauth-client-secret-prompt") {
-				if oauthClientSecret != "" {
-					candidate.SetOauthClientSecret(oauthClientSecret)
-				}
-			}
-			if changed(cmd, "oauth-grant-type") {
-				candidate.SetOauthGrantType(*oauthGrantType)
-			} else if v, ok := stored.GetOauthGrantTypeOk(); ok && v != nil {
-				candidate.SetOauthGrantType(*v)
-			}
-			if changed(cmd, "oauth-password", "oauth-password-prompt") {
-				if oauthPassword != "" {
-					candidate.SetOauthPassword(oauthPassword)
-				}
-			}
-			if changed(cmd, "oauth-scope") {
-				if oauthScope != "" {
-					candidate.SetOauthScope(oauthScope)
-				}
-			} else if v, ok := stored.GetOauthScopeOk(); ok && v != nil {
-				candidate.SetOauthScope(*v)
-			}
-			if changed(cmd, "oauth-username") {
-				if oauthUsername != "" {
-					candidate.SetOauthUsername(oauthUsername)
-				}
-			} else if v, ok := stored.GetOauthUsernameOk(); ok && v != nil {
-				candidate.SetOauthUsername(*v)
-			}
-			if changed(cmd, "org-id") {
-				if orgId != "" {
-					candidate.SetOrgId(orgId)
-				}
-			} else if v, ok := stored.GetOrgIdOk(); ok && v != nil {
-				candidate.SetOrgId(*v)
-			}
-			if changed(cmd, "password", "password-prompt") {
-				if password != "" {
-					candidate.SetPassword(password)
-				}
-			}
-			if changed(cmd, "username") {
-				if username != "" {
-					candidate.SetUsername(username)
-				}
-			} else if v, ok := stored.GetUsernameOk(); ok && v != nil {
-				candidate.SetUsername(*v)
-			}
-			if len(missing) > 0 {
-				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
-			}
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateInformaticaV2Credentials(ctx).InformaticaV2CredentialsValidateIn(*candidate).Execute)
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateInformaticaV2CredentialsChange(ctx, credentialsId).InformaticaV2CredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateInformaticaV2Credentials(ctx, credentialsId).InformaticaV2CredentialsPatch(*patch).Execute)
@@ -9028,69 +8044,42 @@ func buildConnectionsUpdateMulesoft(cmd *cobra.Command, api *sdk.APIClient, cred
 		}
 	}
 	patch := sdk.NewMulesoftCredentialsPatchWithDefaults()
+	check := sdk.NewMulesoftCredentialsChangeValidateInWithDefaults()
 	if changed(cmd, "app-client-id") {
 		if appClientId == "" {
 			patch.SetAppClientIdNil()
+			check.SetAppClientIdNil()
 		} else {
 			patch.SetAppClientId(appClientId)
+			check.SetAppClientId(appClientId)
 		}
 	}
 	if changed(cmd, "app-client-secret", "app-client-secret-prompt") {
 		if appClientSecret == "" {
 			patch.SetAppClientSecretNil()
+			check.SetAppClientSecretNil()
 		} else {
 			patch.SetAppClientSecret(appClientSecret)
+			check.SetAppClientSecret(appClientSecret)
 		}
 	}
 	if changed(cmd, "org-id") {
 		if orgId == "" {
 			patch.SetOrgIdNil()
+			check.SetOrgIdNil()
 		} else {
 			patch.SetOrgId(orgId)
+			check.SetOrgId(orgId)
 		}
 	}
 	if changed(cmd, "region") {
 		patch.SetRegion(*region)
+		check.SetRegion(*region)
 	}
 	return &connectionsUpdateCredentials{
-		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
-			stored, resp, err := api.CredentialsAPI.GetMulesoftCredentials(ctx, credentialsId).Execute()
-			if err != nil {
-				return nil, resp, err
-			}
-			candidate := sdk.NewMulesoftCredentialsValidateInWithDefaults()
-			var missing []string
-			candidate.SetDeploymentId(deploymentId)
-			if changed(cmd, "app-client-id") {
-				if appClientId != "" {
-					candidate.SetAppClientId(appClientId)
-				}
-			} else if v, ok := stored.GetAppClientIdOk(); ok && v != nil {
-				candidate.SetAppClientId(*v)
-			}
-			if changed(cmd, "app-client-secret", "app-client-secret-prompt") {
-				if appClientSecret != "" {
-					candidate.SetAppClientSecret(appClientSecret)
-				}
-			} else {
-				missing = append(missing, "--app-client-secret")
-			}
-			if changed(cmd, "org-id") {
-				if orgId != "" {
-					candidate.SetOrgId(orgId)
-				}
-			} else if v, ok := stored.GetOrgIdOk(); ok && v != nil {
-				candidate.SetOrgId(*v)
-			}
-			if changed(cmd, "region") {
-				candidate.SetRegion(*region)
-			} else if v, ok := stored.GetRegionOk(); ok && v != nil {
-				candidate.SetRegion(*v)
-			}
-			if len(missing) > 0 {
-				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
-			}
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateMulesoftCredentials(ctx).MulesoftCredentialsValidateIn(*candidate).Execute)
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateMulesoftCredentialsChange(ctx, credentialsId).MulesoftCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateMulesoftCredentials(ctx, credentialsId).MulesoftCredentialsPatch(*patch).Execute)
@@ -9123,55 +8112,33 @@ func buildConnectionsUpdateGcpDataform(cmd *cobra.Command, api *sdk.APIClient, c
 		}
 	}
 	patch := sdk.NewGcpDataformCredentialsPatchWithDefaults()
+	check := sdk.NewGcpDataformCredentialsChangeValidateInWithDefaults()
 	if changed(cmd, "locations") {
 		patch.SetLocations(locations)
+		check.SetLocations(locations)
 	}
 	if changed(cmd, "project-id") {
 		if projectId == "" {
 			patch.SetProjectIdNil()
+			check.SetProjectIdNil()
 		} else {
 			patch.SetProjectId(projectId)
+			check.SetProjectId(projectId)
 		}
 	}
 	if changed(cmd, "service-account-key", "service-account-key-prompt") {
 		if serviceAccountKey == "" {
 			patch.SetServiceAccountKeyNil()
+			check.SetServiceAccountKeyNil()
 		} else {
 			patch.SetServiceAccountKey(serviceAccountKey)
+			check.SetServiceAccountKey(serviceAccountKey)
 		}
 	}
 	return &connectionsUpdateCredentials{
-		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
-			stored, resp, err := api.CredentialsAPI.GetGcpDataformCredentials(ctx, credentialsId).Execute()
-			if err != nil {
-				return nil, resp, err
-			}
-			candidate := sdk.NewGcpDataformCredentialsValidateInWithDefaults()
-			var missing []string
-			candidate.SetDeploymentId(deploymentId)
-			if changed(cmd, "project-id") {
-				if projectId != "" {
-					candidate.SetProjectId(projectId)
-				}
-			} else if v, ok := stored.GetProjectIdOk(); ok && v != nil {
-				candidate.SetProjectId(*v)
-			}
-			if changed(cmd, "locations") {
-				candidate.SetLocations(locations)
-			} else if v, ok := stored.GetLocationsOk(); ok && v != nil {
-				candidate.SetLocations(v)
-			}
-			if changed(cmd, "service-account-key", "service-account-key-prompt") {
-				if serviceAccountKey != "" {
-					candidate.SetServiceAccountKey(serviceAccountKey)
-				}
-			} else {
-				missing = append(missing, "--service-account-key")
-			}
-			if len(missing) > 0 {
-				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
-			}
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateGcpDataformCredentials(ctx).GcpDataformCredentialsValidateIn(*candidate).Execute)
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateGcpDataformCredentialsChange(ctx, credentialsId).GcpDataformCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateGcpDataformCredentials(ctx, credentialsId).GcpDataformCredentialsPatch(*patch).Execute)
@@ -9250,104 +8217,65 @@ func buildConnectionsUpdateSelfHostedAws(cmd *cobra.Command, api *sdk.APIClient,
 		}
 	}
 	patch := sdk.NewAwsSecretsManagerCredentialsPatchWithDefaults()
+	check := sdk.NewAwsSecretsManagerCredentialsChangeValidateInWithDefaults()
 	if changed(cmd, "self-hosted-aws-assumable-role") {
 		if selfHostedAwsAssumableRole == "" {
 			patch.SetAssumableRoleNil()
+			check.SetAssumableRoleNil()
 		} else {
 			patch.SetAssumableRole(selfHostedAwsAssumableRole)
+			check.SetAssumableRole(selfHostedAwsAssumableRole)
 		}
 	}
 	if changed(cmd, "self-hosted-aws-region") {
 		if selfHostedAwsAwsRegion == "" {
 			patch.SetAwsRegionNil()
+			check.SetAwsRegionNil()
 		} else {
 			patch.SetAwsRegion(selfHostedAwsAwsRegion)
+			check.SetAwsRegion(selfHostedAwsAwsRegion)
 		}
 	}
 	if changed(cmd, "self-hosted-aws-secret") {
 		if selfHostedAwsAwsSecret == "" {
 			patch.SetAwsSecretNil()
+			check.SetAwsSecretNil()
 		} else {
 			patch.SetAwsSecret(selfHostedAwsAwsSecret)
+			check.SetAwsSecret(selfHostedAwsAwsSecret)
 		}
 	}
 	if changed(cmd, "bq-project-id") {
 		if bqProjectId == "" {
 			patch.SetBqProjectIdNil()
+			check.SetBqProjectIdNil()
 		} else {
 			patch.SetBqProjectId(bqProjectId)
+			check.SetBqProjectId(bqProjectId)
 		}
 	}
 	if changed(cmd, "self-hosted-aws-external-id") {
 		if selfHostedAwsExternalId == "" {
 			patch.SetExternalIdNil()
+			check.SetExternalIdNil()
 		} else {
 			patch.SetExternalId(selfHostedAwsExternalId)
+			check.SetExternalId(selfHostedAwsExternalId)
 		}
 	}
 	if changed(cmd, "sql-warehouse-id") {
 		if sqlWarehouseId == "" {
 			patch.SetSqlWarehouseIdNil()
+			check.SetSqlWarehouseIdNil()
 		} else {
 			patch.SetSqlWarehouseId(sqlWarehouseId)
+			check.SetSqlWarehouseId(sqlWarehouseId)
 		}
 	}
 	return &connectionsUpdateCredentials{
-		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
-			stored, resp, err := api.CredentialsAPI.GetAwsSecretsManagerCredentials(ctx, credentialsId).Execute()
-			if err != nil {
-				return nil, resp, err
-			}
-			candidate := sdk.NewAwsSecretsManagerCredentialsValidateInWithDefaults()
-			var missing []string
-			candidate.SetDeploymentId(deploymentId)
-			candidate.SetConnectionType(connectionType)
-			if changed(cmd, "self-hosted-aws-secret") {
-				if selfHostedAwsAwsSecret != "" {
-					candidate.SetAwsSecret(selfHostedAwsAwsSecret)
-				}
-			} else if v, ok := stored.GetAwsSecretOk(); ok && v != nil {
-				candidate.SetAwsSecret(*v)
-			}
-			if changed(cmd, "self-hosted-aws-assumable-role") {
-				if selfHostedAwsAssumableRole != "" {
-					candidate.SetAssumableRole(selfHostedAwsAssumableRole)
-				}
-			} else if v, ok := stored.GetAssumableRoleOk(); ok && v != nil {
-				candidate.SetAssumableRole(*v)
-			}
-			if changed(cmd, "self-hosted-aws-region") {
-				if selfHostedAwsAwsRegion != "" {
-					candidate.SetAwsRegion(selfHostedAwsAwsRegion)
-				}
-			} else if v, ok := stored.GetAwsRegionOk(); ok && v != nil {
-				candidate.SetAwsRegion(*v)
-			}
-			if changed(cmd, "bq-project-id") {
-				if bqProjectId != "" {
-					candidate.SetBqProjectId(bqProjectId)
-				}
-			} else if v, ok := stored.GetBqProjectIdOk(); ok && v != nil {
-				candidate.SetBqProjectId(*v)
-			}
-			if changed(cmd, "self-hosted-aws-external-id") {
-				if selfHostedAwsExternalId != "" {
-					candidate.SetExternalId(selfHostedAwsExternalId)
-				}
-			} else if v, ok := stored.GetExternalIdOk(); ok && v != nil {
-				candidate.SetExternalId(*v)
-			}
-			if changed(cmd, "sql-warehouse-id") {
-				if sqlWarehouseId != "" {
-					candidate.SetSqlWarehouseId(sqlWarehouseId)
-				}
-			} else if v, ok := stored.GetSqlWarehouseIdOk(); ok && v != nil {
-				candidate.SetSqlWarehouseId(*v)
-			}
-			if len(missing) > 0 {
-				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
-			}
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateAwsSecretsManagerCredentials(ctx).AwsSecretsManagerCredentialsValidateIn(*candidate).Execute)
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateAwsSecretsManagerCredentialsChange(ctx, credentialsId).AwsSecretsManagerCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateAwsSecretsManagerCredentials(ctx, credentialsId).AwsSecretsManagerCredentialsPatch(*patch).Execute)
@@ -9380,62 +8308,38 @@ func buildConnectionsUpdateSelfHostedGcp(cmd *cobra.Command, api *sdk.APIClient,
 		}
 	}
 	patch := sdk.NewGcpSecretManagerCredentialsPatchWithDefaults()
+	check := sdk.NewGcpSecretManagerCredentialsChangeValidateInWithDefaults()
 	if changed(cmd, "bq-project-id") {
 		if bqProjectId == "" {
 			patch.SetBqProjectIdNil()
+			check.SetBqProjectIdNil()
 		} else {
 			patch.SetBqProjectId(bqProjectId)
+			check.SetBqProjectId(bqProjectId)
 		}
 	}
 	if changed(cmd, "self-hosted-gcp-secret") {
 		if selfHostedGcpGcpSecret == "" {
 			patch.SetGcpSecretNil()
+			check.SetGcpSecretNil()
 		} else {
 			patch.SetGcpSecret(selfHostedGcpGcpSecret)
+			check.SetGcpSecret(selfHostedGcpGcpSecret)
 		}
 	}
 	if changed(cmd, "sql-warehouse-id") {
 		if sqlWarehouseId == "" {
 			patch.SetSqlWarehouseIdNil()
+			check.SetSqlWarehouseIdNil()
 		} else {
 			patch.SetSqlWarehouseId(sqlWarehouseId)
+			check.SetSqlWarehouseId(sqlWarehouseId)
 		}
 	}
 	return &connectionsUpdateCredentials{
-		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
-			stored, resp, err := api.CredentialsAPI.GetGcpSecretManagerCredentials(ctx, credentialsId).Execute()
-			if err != nil {
-				return nil, resp, err
-			}
-			candidate := sdk.NewGcpSecretManagerCredentialsValidateInWithDefaults()
-			var missing []string
-			candidate.SetDeploymentId(deploymentId)
-			candidate.SetConnectionType(connectionType)
-			if changed(cmd, "self-hosted-gcp-secret") {
-				if selfHostedGcpGcpSecret != "" {
-					candidate.SetGcpSecret(selfHostedGcpGcpSecret)
-				}
-			} else if v, ok := stored.GetGcpSecretOk(); ok && v != nil {
-				candidate.SetGcpSecret(*v)
-			}
-			if changed(cmd, "bq-project-id") {
-				if bqProjectId != "" {
-					candidate.SetBqProjectId(bqProjectId)
-				}
-			} else if v, ok := stored.GetBqProjectIdOk(); ok && v != nil {
-				candidate.SetBqProjectId(*v)
-			}
-			if changed(cmd, "sql-warehouse-id") {
-				if sqlWarehouseId != "" {
-					candidate.SetSqlWarehouseId(sqlWarehouseId)
-				}
-			} else if v, ok := stored.GetSqlWarehouseIdOk(); ok && v != nil {
-				candidate.SetSqlWarehouseId(*v)
-			}
-			if len(missing) > 0 {
-				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
-			}
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateGcpSecretManagerCredentials(ctx).GcpSecretManagerCredentialsValidateIn(*candidate).Execute)
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateGcpSecretManagerCredentialsChange(ctx, credentialsId).GcpSecretManagerCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateGcpSecretManagerCredentials(ctx, credentialsId).GcpSecretManagerCredentialsPatch(*patch).Execute)
@@ -9482,90 +8386,56 @@ func buildConnectionsUpdateSelfHostedAzure(cmd *cobra.Command, api *sdk.APIClien
 		}
 	}
 	patch := sdk.NewAzureKeyVaultCredentialsPatchWithDefaults()
+	check := sdk.NewAzureKeyVaultCredentialsChangeValidateInWithDefaults()
 	if changed(cmd, "self-hosted-azure-akv-secret") {
 		if selfHostedAzureAkvSecret == "" {
 			patch.SetAkvSecretNil()
+			check.SetAkvSecretNil()
 		} else {
 			patch.SetAkvSecret(selfHostedAzureAkvSecret)
+			check.SetAkvSecret(selfHostedAzureAkvSecret)
 		}
 	}
 	if changed(cmd, "self-hosted-azure-akv-vault-name") {
 		if selfHostedAzureAkvVaultName == "" {
 			patch.SetAkvVaultNameNil()
+			check.SetAkvVaultNameNil()
 		} else {
 			patch.SetAkvVaultName(selfHostedAzureAkvVaultName)
+			check.SetAkvVaultName(selfHostedAzureAkvVaultName)
 		}
 	}
 	if changed(cmd, "self-hosted-azure-akv-vault-url") {
 		if selfHostedAzureAkvVaultUrl == "" {
 			patch.SetAkvVaultUrlNil()
+			check.SetAkvVaultUrlNil()
 		} else {
 			patch.SetAkvVaultUrl(selfHostedAzureAkvVaultUrl)
+			check.SetAkvVaultUrl(selfHostedAzureAkvVaultUrl)
 		}
 	}
 	if changed(cmd, "bq-project-id") {
 		if bqProjectId == "" {
 			patch.SetBqProjectIdNil()
+			check.SetBqProjectIdNil()
 		} else {
 			patch.SetBqProjectId(bqProjectId)
+			check.SetBqProjectId(bqProjectId)
 		}
 	}
 	if changed(cmd, "sql-warehouse-id") {
 		if sqlWarehouseId == "" {
 			patch.SetSqlWarehouseIdNil()
+			check.SetSqlWarehouseIdNil()
 		} else {
 			patch.SetSqlWarehouseId(sqlWarehouseId)
+			check.SetSqlWarehouseId(sqlWarehouseId)
 		}
 	}
 	return &connectionsUpdateCredentials{
-		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
-			stored, resp, err := api.CredentialsAPI.GetAzureKeyVaultCredentials(ctx, credentialsId).Execute()
-			if err != nil {
-				return nil, resp, err
-			}
-			candidate := sdk.NewAzureKeyVaultCredentialsValidateInWithDefaults()
-			var missing []string
-			candidate.SetDeploymentId(deploymentId)
-			candidate.SetConnectionType(connectionType)
-			if changed(cmd, "self-hosted-azure-akv-secret") {
-				if selfHostedAzureAkvSecret != "" {
-					candidate.SetAkvSecret(selfHostedAzureAkvSecret)
-				}
-			} else if v, ok := stored.GetAkvSecretOk(); ok && v != nil {
-				candidate.SetAkvSecret(*v)
-			}
-			if changed(cmd, "self-hosted-azure-akv-vault-name") {
-				if selfHostedAzureAkvVaultName != "" {
-					candidate.SetAkvVaultName(selfHostedAzureAkvVaultName)
-				}
-			} else if v, ok := stored.GetAkvVaultNameOk(); ok && v != nil {
-				candidate.SetAkvVaultName(*v)
-			}
-			if changed(cmd, "self-hosted-azure-akv-vault-url") {
-				if selfHostedAzureAkvVaultUrl != "" {
-					candidate.SetAkvVaultUrl(selfHostedAzureAkvVaultUrl)
-				}
-			} else if v, ok := stored.GetAkvVaultUrlOk(); ok && v != nil {
-				candidate.SetAkvVaultUrl(*v)
-			}
-			if changed(cmd, "bq-project-id") {
-				if bqProjectId != "" {
-					candidate.SetBqProjectId(bqProjectId)
-				}
-			} else if v, ok := stored.GetBqProjectIdOk(); ok && v != nil {
-				candidate.SetBqProjectId(*v)
-			}
-			if changed(cmd, "sql-warehouse-id") {
-				if sqlWarehouseId != "" {
-					candidate.SetSqlWarehouseId(sqlWarehouseId)
-				}
-			} else if v, ok := stored.GetSqlWarehouseIdOk(); ok && v != nil {
-				candidate.SetSqlWarehouseId(*v)
-			}
-			if len(missing) > 0 {
-				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
-			}
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateAzureKeyVaultCredentials(ctx).AzureKeyVaultCredentialsValidateIn(*candidate).Execute)
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateAzureKeyVaultCredentialsChange(ctx, credentialsId).AzureKeyVaultCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateAzureKeyVaultCredentials(ctx, credentialsId).AzureKeyVaultCredentialsPatch(*patch).Execute)
@@ -9605,76 +8475,47 @@ func buildConnectionsUpdateSelfHostedEnvVar(cmd *cobra.Command, api *sdk.APIClie
 		}
 	}
 	patch := sdk.NewEnvVarCredentialsPatchWithDefaults()
+	check := sdk.NewEnvVarCredentialsChangeValidateInWithDefaults()
 	if changed(cmd, "bq-project-id") {
 		if bqProjectId == "" {
 			patch.SetBqProjectIdNil()
+			check.SetBqProjectIdNil()
 		} else {
 			patch.SetBqProjectId(bqProjectId)
+			check.SetBqProjectId(bqProjectId)
 		}
 	}
 	if changed(cmd, "self-hosted-env-var-name") {
 		if selfHostedEnvVarEnvVarName == "" {
 			patch.SetEnvVarNameNil()
+			check.SetEnvVarNameNil()
 		} else {
 			patch.SetEnvVarName(selfHostedEnvVarEnvVarName)
+			check.SetEnvVarName(selfHostedEnvVarEnvVarName)
 		}
 	}
 	if changed(cmd, "self-hosted-env-var-kms-key-id") {
 		if selfHostedEnvVarKmsKeyId == "" {
 			patch.SetKmsKeyIdNil()
+			check.SetKmsKeyIdNil()
 		} else {
 			patch.SetKmsKeyId(selfHostedEnvVarKmsKeyId)
+			check.SetKmsKeyId(selfHostedEnvVarKmsKeyId)
 		}
 	}
 	if changed(cmd, "sql-warehouse-id") {
 		if sqlWarehouseId == "" {
 			patch.SetSqlWarehouseIdNil()
+			check.SetSqlWarehouseIdNil()
 		} else {
 			patch.SetSqlWarehouseId(sqlWarehouseId)
+			check.SetSqlWarehouseId(sqlWarehouseId)
 		}
 	}
 	return &connectionsUpdateCredentials{
-		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
-			stored, resp, err := api.CredentialsAPI.GetEnvVarCredentials(ctx, credentialsId).Execute()
-			if err != nil {
-				return nil, resp, err
-			}
-			candidate := sdk.NewEnvVarCredentialsValidateInWithDefaults()
-			var missing []string
-			candidate.SetDeploymentId(deploymentId)
-			candidate.SetConnectionType(connectionType)
-			if changed(cmd, "self-hosted-env-var-name") {
-				if selfHostedEnvVarEnvVarName != "" {
-					candidate.SetEnvVarName(selfHostedEnvVarEnvVarName)
-				}
-			} else if v, ok := stored.GetEnvVarNameOk(); ok && v != nil {
-				candidate.SetEnvVarName(*v)
-			}
-			if changed(cmd, "bq-project-id") {
-				if bqProjectId != "" {
-					candidate.SetBqProjectId(bqProjectId)
-				}
-			} else if v, ok := stored.GetBqProjectIdOk(); ok && v != nil {
-				candidate.SetBqProjectId(*v)
-			}
-			if changed(cmd, "self-hosted-env-var-kms-key-id") {
-				if selfHostedEnvVarKmsKeyId != "" {
-					candidate.SetKmsKeyId(selfHostedEnvVarKmsKeyId)
-				}
-			} else if v, ok := stored.GetKmsKeyIdOk(); ok && v != nil {
-				candidate.SetKmsKeyId(*v)
-			}
-			if changed(cmd, "sql-warehouse-id") {
-				if sqlWarehouseId != "" {
-					candidate.SetSqlWarehouseId(sqlWarehouseId)
-				}
-			} else if v, ok := stored.GetSqlWarehouseIdOk(); ok && v != nil {
-				candidate.SetSqlWarehouseId(*v)
-			}
-			if len(missing) > 0 {
-				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
-			}
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateEnvVarCredentials(ctx).EnvVarCredentialsValidateIn(*candidate).Execute)
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateEnvVarCredentialsChange(ctx, credentialsId).EnvVarCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateEnvVarCredentials(ctx, credentialsId).EnvVarCredentialsPatch(*patch).Execute)
@@ -9707,62 +8548,38 @@ func buildConnectionsUpdateSelfHostedFile(cmd *cobra.Command, api *sdk.APIClient
 		}
 	}
 	patch := sdk.NewFileCredentialsPatchWithDefaults()
+	check := sdk.NewFileCredentialsChangeValidateInWithDefaults()
 	if changed(cmd, "bq-project-id") {
 		if bqProjectId == "" {
 			patch.SetBqProjectIdNil()
+			check.SetBqProjectIdNil()
 		} else {
 			patch.SetBqProjectId(bqProjectId)
+			check.SetBqProjectId(bqProjectId)
 		}
 	}
 	if changed(cmd, "self-hosted-file-path") {
 		if selfHostedFileFilePath == "" {
 			patch.SetFilePathNil()
+			check.SetFilePathNil()
 		} else {
 			patch.SetFilePath(selfHostedFileFilePath)
+			check.SetFilePath(selfHostedFileFilePath)
 		}
 	}
 	if changed(cmd, "sql-warehouse-id") {
 		if sqlWarehouseId == "" {
 			patch.SetSqlWarehouseIdNil()
+			check.SetSqlWarehouseIdNil()
 		} else {
 			patch.SetSqlWarehouseId(sqlWarehouseId)
+			check.SetSqlWarehouseId(sqlWarehouseId)
 		}
 	}
 	return &connectionsUpdateCredentials{
-		validate: func(ctx context.Context, deploymentId, connectionType string) (*sdk.ValidationRunOut, *http.Response, error) {
-			stored, resp, err := api.CredentialsAPI.GetFileCredentials(ctx, credentialsId).Execute()
-			if err != nil {
-				return nil, resp, err
-			}
-			candidate := sdk.NewFileCredentialsValidateInWithDefaults()
-			var missing []string
-			candidate.SetDeploymentId(deploymentId)
-			candidate.SetConnectionType(connectionType)
-			if changed(cmd, "self-hosted-file-path") {
-				if selfHostedFileFilePath != "" {
-					candidate.SetFilePath(selfHostedFileFilePath)
-				}
-			} else if v, ok := stored.GetFilePathOk(); ok && v != nil {
-				candidate.SetFilePath(*v)
-			}
-			if changed(cmd, "bq-project-id") {
-				if bqProjectId != "" {
-					candidate.SetBqProjectId(bqProjectId)
-				}
-			} else if v, ok := stored.GetBqProjectIdOk(); ok && v != nil {
-				candidate.SetBqProjectId(*v)
-			}
-			if changed(cmd, "sql-warehouse-id") {
-				if sqlWarehouseId != "" {
-					candidate.SetSqlWarehouseId(sqlWarehouseId)
-				}
-			} else if v, ok := stored.GetSqlWarehouseIdOk(); ok && v != nil {
-				candidate.SetSqlWarehouseId(*v)
-			}
-			if len(missing) > 0 {
-				return nil, nil, usageError("validating the change needs %s, which cannot be read back: pass it, or --skip-validations", strings.Join(missing, ", "))
-			}
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateFileCredentials(ctx).FileCredentialsValidateIn(*candidate).Execute)
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateFileCredentialsChange(ctx, credentialsId).FileCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateFileCredentials(ctx, credentialsId).FileCredentialsPatch(*patch).Execute)
@@ -9895,7 +8712,7 @@ func runConnectionsUpdate(cmd *cobra.Command, connectionId string, native *conne
 		if !ok || deploymentId == nil {
 			return fmt.Errorf("connection %s has no deployment to validate from; pass --skip-validations", connectionId)
 		}
-		started, resp, err := credentials.validate(ctx, *deploymentId, connection.GetConnectionType())
+		started, resp, err := credentials.validate(ctx, *deploymentId)
 		if err != nil {
 			return apiErr(resp, err)
 		}

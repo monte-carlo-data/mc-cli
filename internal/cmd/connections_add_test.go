@@ -56,9 +56,7 @@ var readBodies = map[string]string{
 	"GET /api/v2/connections/cn-4":                   `{"id":"cn-4","credentials_id":"cr-3",` + biConnectionOut + `}`,
 	"GET /api/v2/bi-containers/bc-9":                 `{"id":"bc-9","type":"tableau","name":"b","deployment_id":"d9","deployment_name":"d9","created_time":"2026-09-23T00:00:00Z"}`,
 	"GET /api/v2/bi-containers/bc-0":                 `{"id":"bc-0","type":"tableau","name":"b","deployment_id":null,"deployment_name":null,"created_time":"2026-09-23T00:00:00Z"}`,
-	"GET /api/v2/credentials/snowflake/cr-1":         `{"id":"cr-1","connection_type":"snowflake","storage_type":"mc_managed","created_time":"2026-09-23T00:00:00Z","account":"a","user":"u","warehouse":"w"}`,
 	"PATCH /api/v2/credentials/snowflake/cr-1":       `{"id":"cr-1","connection_type":"snowflake","storage_type":"mc_managed","created_time":"2026-09-23T00:00:00Z","account":"a","user":"u","warehouse":"w"}`,
-	"GET /api/v2/credentials/self-hosted/aws/cr-2":   `{"id":"cr-2","connection_type":"bigquery","storage_type":"aws_secrets_manager","created_time":"2026-09-23T00:00:00Z","bq_project_id":"p","sql_warehouse_id":null,"aws_secret":"s","aws_region":null,"assumable_role":null,"external_id":null}`,
 	"PATCH /api/v2/credentials/self-hosted/aws/cr-2": `{"id":"cr-2","connection_type":"bigquery","storage_type":"aws_secrets_manager","created_time":"2026-09-23T00:00:00Z","bq_project_id":"p","sql_warehouse_id":null,"aws_secret":"s","aws_region":null,"assumable_role":null,"external_id":null}`,
 }
 
@@ -430,36 +428,38 @@ func updateArgs(srv *httptest.Server, t *testing.T, args ...string) []string {
 	}, args...)
 }
 
-func TestConnectionsUpdateValidatesARotatedKeyWithTheStoredFields(t *testing.T) {
+func TestConnectionsUpdateValidatesARotatedKeyAsTheChange(t *testing.T) {
 	fastPolling(t)
 	f, srv := newFakeConnectionsAPI(t, nil)
 	if _, _, err := executeStreams(t, updateArgs(srv, t, "snowflake", "cn-1", "--private-key", "k2", "--yes")...); err != nil {
 		t.Fatal(err)
 	}
 	assertCalls(t, f,
-		"GET /api/v2/connections/cn-1", "GET /api/v2/credentials/snowflake/cr-1",
-		"POST /api/v2/credentials/snowflake/validate", "GET /api/v2/validations/run-1",
+		"GET /api/v2/connections/cn-1",
+		"POST /api/v2/credentials/snowflake/cr-1/validate", "GET /api/v2/validations/run-1",
 		"PATCH /api/v2/credentials/snowflake/cr-1")
-	v := f.bodies["POST /api/v2/credentials/snowflake/validate"]
-	if v["account"] != "a" || v["user"] != "u" || v["warehouse"] != "w" || v["private_key"] != "k2" || v["deployment_id"] != "d" {
+	if v := f.bodies["POST /api/v2/credentials/snowflake/cr-1/validate"]; len(v) != 2 || v["private_key"] != "k2" || v["deployment_id"] != "d" {
 		t.Errorf("validate body = %v", v)
-	}
-	if _, has := v["private_key_passphrase"]; has {
-		t.Errorf("a new key without a passphrase validated with one: %v", v)
 	}
 	if patch := f.bodies["PATCH /api/v2/credentials/snowflake/cr-1"]; len(patch) != 1 || patch["private_key"] != "k2" {
 		t.Errorf("patch body = %v", patch)
 	}
 }
 
-func TestConnectionsUpdateNeedsTheSecretToValidateAChangeWithoutIt(t *testing.T) {
+func TestConnectionsUpdateValidatesANonSecretChangeWithoutTheKey(t *testing.T) {
 	fastPolling(t)
 	f, srv := newFakeConnectionsAPI(t, nil)
-	_, _, err := executeStreams(t, updateArgs(srv, t, "snowflake", "cn-1", "--user", "u2", "--yes")...)
-	if err == nil || !strings.Contains(err.Error(), "needs --private-key") || !strings.Contains(err.Error(), "--skip-validations") {
-		t.Fatalf("err = %v", err)
+	if _, _, err := executeStreams(t, updateArgs(srv, t, "snowflake", "cn-1", "--user", "u2", "--warehouse", "", "--yes")...); err != nil {
+		t.Fatal(err)
 	}
-	assertCalls(t, f, "GET /api/v2/connections/cn-1", "GET /api/v2/credentials/snowflake/cr-1")
+	assertCalls(t, f,
+		"GET /api/v2/connections/cn-1",
+		"POST /api/v2/credentials/snowflake/cr-1/validate", "GET /api/v2/validations/run-1",
+		"PATCH /api/v2/credentials/snowflake/cr-1")
+	v := f.bodies["POST /api/v2/credentials/snowflake/cr-1/validate"]
+	if w, has := v["warehouse"]; !has || w != nil || v["user"] != "u2" || v["deployment_id"] != "d" || len(v) != 3 {
+		t.Errorf("validate body = %v", v)
+	}
 }
 
 func TestConnectionsUpdateSkipsValidationAndClearsAFieldPassedEmpty(t *testing.T) {
@@ -486,17 +486,16 @@ func TestConnectionsUpdateRenamesWithoutValidating(t *testing.T) {
 	}
 }
 
-func TestConnectionsUpdateValidatesASelfHostedChangeFromTheStoredReference(t *testing.T) {
+func TestConnectionsUpdateValidatesASelfHostedChangeAtItsCredentials(t *testing.T) {
 	fastPolling(t)
 	f, srv := newFakeConnectionsAPI(t, nil)
 	if _, _, err := executeStreams(t, updateArgs(srv, t, "cn-2", "--self-hosted-aws-region", "us-east-2", "--validate-only")...); err != nil {
 		t.Fatal(err)
 	}
 	assertCalls(t, f,
-		"GET /api/v2/connections/cn-2", "GET /api/v2/credentials/self-hosted/aws/cr-2",
-		"POST /api/v2/credentials/self-hosted/aws/validate", "GET /api/v2/validations/run-1")
-	v := f.bodies["POST /api/v2/credentials/self-hosted/aws/validate"]
-	if v["aws_secret"] != "s" || v["aws_region"] != "us-east-2" || v["connection_type"] != "bigquery" || v["bq_project_id"] != "p" {
+		"GET /api/v2/connections/cn-2",
+		"POST /api/v2/credentials/self-hosted/aws/cr-2/validate", "GET /api/v2/validations/run-1")
+	if v := f.bodies["POST /api/v2/credentials/self-hosted/aws/cr-2/validate"]; len(v) != 2 || v["aws_region"] != "us-east-2" || v["deployment_id"] != "d" {
 		t.Errorf("validate body = %v", v)
 	}
 }
