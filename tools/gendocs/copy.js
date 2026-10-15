@@ -48,9 +48,11 @@
     button.type = "button";
     button.className = "copy-button";
     draw(button, "copy");
+    var timer;
     function show(state) {
       draw(button, state);
-      setTimeout(function () {
+      clearTimeout(timer);
+      timer = setTimeout(function () {
         draw(button, "copy");
       }, 1500);
     }

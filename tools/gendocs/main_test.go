@@ -13,6 +13,7 @@ import (
 
 	"github.com/monte-carlo-data/mc-cli/internal/cmd"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 func generate(t *testing.T, version string) string {
@@ -213,8 +214,7 @@ func TestIntroListsGettingStarted(t *testing.T) {
 	}
 }
 
-// TestIntroListsGuides checks the credential guides are listed under Getting started and the
-// task guides under Guides, which appears only when there are some.
+// TestIntroListsGuides checks each list of guides is under its own section and not the other.
 func TestIntroListsGuides(t *testing.T) {
 	intro := read(t, filepath.Join(generate(t, "v1.2.3"), "index.html"))
 	section := func(title string) string {
@@ -229,14 +229,17 @@ func TestIntroListsGuides(t *testing.T) {
 		if !strings.Contains(section("Getting started"), `href="`+g.File+`"`) {
 			t.Errorf("Getting started does not list %s", g.File)
 		}
+		if strings.Contains(section("Guides"), `href="`+g.File+`"`) {
+			t.Errorf("Guides lists %s", g.File)
+		}
 	}
 	for _, g := range taskGuides {
 		if !strings.Contains(section("Guides"), `href="`+g.File+`"`) {
 			t.Errorf("Guides does not list %s", g.File)
 		}
-	}
-	if len(taskGuides) == 0 && strings.Contains(intro, "<h2>Guides</h2>") {
-		t.Error("intro has an empty Guides section")
+		if strings.Contains(section("Getting started"), `href="`+g.File+`"`) {
+			t.Errorf("Getting started lists %s", g.File)
+		}
 	}
 }
 
@@ -295,6 +298,10 @@ func TestPagesLoadUnderCSP(t *testing.T) {
 			scripts = 2
 			if !strings.Contains(body, copyScript) {
 				t.Errorf("%s lacks %s", filepath.Base(f), copyScript)
+			}
+			// copy.js acts only on a <pre> inside a .runnable wrapper.
+			if _, after, ok := strings.Cut(body, `<div class="runnable">`); !ok || !strings.Contains(after, "<pre>") {
+				t.Errorf("%s has no command block for copy.js", filepath.Base(f))
 			}
 		}
 		if strings.Count(page, "<script") != scripts || !strings.Contains(head, themeScript) {
@@ -394,10 +401,29 @@ func TestVersionIsRequired(t *testing.T) {
 
 var preBlock = regexp.MustCompile(`(?s)<pre>(.*?)</pre>`)
 
+// allFlags returns the name of every flag of c and its descendants.
+func allFlags(c *cobra.Command) map[string]bool {
+	names := map[string]bool{}
+	add := func(f *pflag.Flag) { names[f.Name] = true }
+	c.Flags().VisitAll(add)
+	c.PersistentFlags().VisitAll(add)
+	for _, sub := range c.Commands() {
+		for name := range allFlags(sub) {
+			names[name] = true
+		}
+	}
+	return names
+}
+
+// proseFlag matches a flag named in text; one ending in "-" is a wildcard such as --self-hosted-*.
+var proseFlag = regexp.MustCompile(`--[a-z0-9][a-z0-9-]*`)
+
 // TestGuidesQuoteRealCommands checks every command line a guide quotes names a command and
-// flags it has, and every environment variable it names is one the root's flags read.
+// flags it has, every flag named in its text exists, and every environment variable it names
+// is one the root's flags read.
 func TestGuidesQuoteRealCommands(t *testing.T) {
 	root := cmd.DocsRoot()
+	known := allFlags(root)
 	envName := regexp.MustCompile(`MCD_DEFAULT_[A-Z_]+`)
 	readByFlags := map[string]bool{}
 	for _, name := range envName.FindAllString(root.PersistentFlags().FlagUsages(), -1) {
@@ -437,6 +463,11 @@ func TestGuidesQuoteRealCommands(t *testing.T) {
 		}
 		if lines == 0 {
 			t.Errorf("%s quotes no command line", g.File)
+		}
+		for _, m := range proseFlag.FindAllString(preBlock.ReplaceAllString(body, ""), -1) {
+			if !strings.HasSuffix(m, "-") && !known[strings.TrimPrefix(m, "--")] {
+				t.Errorf("%s: no command has a flag %s", g.File, m)
+			}
 		}
 		for _, name := range envName.FindAllString(body, -1) {
 			if !readByFlags[name] {
