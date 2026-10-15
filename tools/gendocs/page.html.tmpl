@@ -86,11 +86,19 @@
 <h2>Getting started</h2>
 <p>Set up your credentials with <a href="montecarlo_configure.html">montecarlo configure</a>, then check them with <a href="montecarlo_whoami.html">montecarlo whoami</a>. The guides cover each kind of credential, and setting them up in a script or CI:</p>
 <ul>
-{{- range .Guides}}
+{{- range .Credentials}}
 <li><a href="{{.File}}">{{.Name}}</a></li>
 {{- end}}
 </ul>
 {{template "links" .GettingStarted}}
+{{- if .Tasks}}
+<h2>Guides</h2>
+<ul>
+{{- range .Tasks}}
+<li><a href="{{.File}}">{{.Name}}</a></li>
+{{- end}}
+</ul>
+{{- end}}
 <h2>Commands</h2>
 <p><a href="{{.Root.File}}">montecarlo</a> lists the commands and the global flags every command takes.</p>
 {{template "links" .Commands}}

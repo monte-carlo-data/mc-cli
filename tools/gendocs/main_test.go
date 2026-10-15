@@ -50,7 +50,7 @@ func TestEveryCommandHasOnePage(t *testing.T) {
 	for _, name := range staticFiles {
 		want[name] = true
 	}
-	for _, g := range guides {
+	for _, g := range guides() {
 		want[g.File] = true
 	}
 	for _, c := range commands(cmd.DocsRoot()) {
@@ -213,6 +213,33 @@ func TestIntroListsGettingStarted(t *testing.T) {
 	}
 }
 
+// TestIntroListsGuides checks the credential guides are listed under Getting started and the
+// task guides under Guides, which appears only when there are some.
+func TestIntroListsGuides(t *testing.T) {
+	intro := read(t, filepath.Join(generate(t, "v1.2.3"), "index.html"))
+	section := func(title string) string {
+		_, rest, ok := strings.Cut(intro, "<h2>"+title+"</h2>")
+		if !ok {
+			return ""
+		}
+		s, _, _ := strings.Cut(rest, "<h2>")
+		return s
+	}
+	for _, g := range credentialGuides {
+		if !strings.Contains(section("Getting started"), `href="`+g.File+`"`) {
+			t.Errorf("Getting started does not list %s", g.File)
+		}
+	}
+	for _, g := range taskGuides {
+		if !strings.Contains(section("Guides"), `href="`+g.File+`"`) {
+			t.Errorf("Guides does not list %s", g.File)
+		}
+	}
+	if len(taskGuides) == 0 && strings.Contains(intro, "<h2>Guides</h2>") {
+		t.Error("intro has an empty Guides section")
+	}
+}
+
 // TestDocsRootOnFreshTree checks the site has the utility pages, the root's groups are found by
 // ID, and only the utilities are left outside them. Nothing here executes the tree, so this
 // checks what DocsRoot does alone.
@@ -343,7 +370,7 @@ func TestGuidesQuoteRealCommands(t *testing.T) {
 	for _, name := range envName.FindAllString(root.PersistentFlags().FlagUsages(), -1) {
 		readByFlags[name] = true
 	}
-	for _, g := range guides {
+	for _, g := range guides() {
 		body := read(t, filepath.Join("guides", g.File))
 		lines := 0
 		for _, block := range preBlock.FindAllStringSubmatch(body, -1) {
@@ -353,6 +380,10 @@ func TestGuidesQuoteRealCommands(t *testing.T) {
 					continue
 				}
 				lines++
+				// A continuation line isn't checked, so every command stays on one line.
+				if args[len(args)-1] == `\` {
+					t.Errorf("%s: %q continues on the next line", g.File, line)
+				}
 				c, _, err := root.Find(args[1:])
 				if err != nil || (c == root && len(args) > 1) {
 					t.Errorf("%s: %q names no command", g.File, line)

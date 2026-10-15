@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/monte-carlo-data/mc-cli/internal/cmd"
@@ -36,10 +37,18 @@ const (
 	installPinned = "curl -fsSL https://github.com/monte-carlo-data/mc-cli/releases/download/vX.Y.Z/install.sh | MONTECARLO_VERSION=vX.Y.Z sh"
 )
 
-// guides are written as they are, inside the shared layout, from guides/<File>.
-var guides = []link{
-	{Name: "Set up credentials with an OAuth client", File: "credentials-oauth.html"},
-	{Name: "Set up credentials with an API token", File: "credentials-api-token.html"},
+// The guides are written as they are, inside the shared layout, from guides/<File>. The intro
+// lists the credential guides under Getting started and the task guides under Guides.
+var (
+	credentialGuides = []link{
+		{Name: "Set up credentials with an OAuth client", File: "credentials-oauth.html"},
+		{Name: "Set up credentials with an API token", File: "credentials-api-token.html"},
+	}
+	taskGuides = []link{}
+)
+
+func guides() []link {
+	return append(slices.Clone(credentialGuides), taskGuides...)
 }
 
 // staticFiles are copied as they are. The icons are montecarlo.ai's, as the API reference uses.
@@ -93,7 +102,8 @@ type guidePage struct {
 type intro struct {
 	Version        string
 	Root           link
-	Guides         []link
+	Credentials    []link
+	Tasks          []link
 	GettingStarted []link
 	Commands       []link
 	Install        []string
@@ -127,7 +137,7 @@ func run(root *cobra.Command, dir, version string) error {
 			return err
 		}
 	}
-	for _, g := range guides {
+	for _, g := range guides() {
 		body, err := assets.ReadFile("guides/" + g.File)
 		if err != nil {
 			return err
@@ -137,7 +147,7 @@ func run(root *cobra.Command, dir, version string) error {
 			return err
 		}
 	}
-	in := intro{Version: version, Root: linkTo(root), Guides: guides, Install: []string{installSh, installPs1}, Pinned: installPinned}
+	in := intro{Version: version, Root: linkTo(root), Credentials: credentialGuides, Tasks: taskGuides, Install: []string{installSh, installPs1}, Pinned: installPinned}
 	if releaseTag.MatchString(version) {
 		in.Pinned = strings.ReplaceAll(installPinned, "vX.Y.Z", version)
 	}
