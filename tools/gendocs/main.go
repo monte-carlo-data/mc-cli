@@ -43,6 +43,7 @@ var (
 	credentialGuides = []link{
 		{Name: "Set up credentials with an OAuth client", File: "credentials-oauth.html"},
 		{Name: "Set up credentials with an API token", File: "credentials-api-token.html"},
+		{Name: "Use profiles to switch between accounts", File: "profiles.html"},
 	}
 	taskGuides = []link{}
 )

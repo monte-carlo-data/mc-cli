@@ -1,0 +1,25 @@
+<p>A profile is a named set of credentials in <code>~/.mcd/profiles.ini</code>, the file every Monte Carlo tool shares. With one profile per account or environment, you can switch between them without passing credentials each time.</p>
+
+<h2>Add a profile</h2>
+<p>Write each profile with <a href="montecarlo_configure.html">configure</a> or <a href="montecarlo_profile_set.html">profile set</a>, naming it with <code>--profile</code> or as the argument. The <a href="credentials-oauth.html">OAuth client</a> and <a href="credentials-api-token.html">API token</a> guides cover both commands.</p>
+<pre>montecarlo configure --profile staging
+montecarlo profile set prod --api-id &lt;id&gt; --api-token @&lt;path&gt;</pre>
+<p>The first profile you write becomes the active one.</p>
+
+<h2>Switch between profiles</h2>
+<p>List the profiles and see which one is active:</p>
+<pre>montecarlo profile list</pre>
+<p>Make another one active. The choice is stored in <code>~/.mcd/cli.ini</code>, and every command uses it from then on:</p>
+<pre>montecarlo profile use staging</pre>
+<p>Or use a profile for one command only:</p>
+<pre>montecarlo whoami --profile prod</pre>
+
+<h2>Which credentials a command uses</h2>
+<p>Credentials come from the first of these that has them:</p>
+<ol>
+<li>The credential flags, such as <code>--api-id</code> and <code>--api-token</code>.</li>
+<li>The <code>MCD_DEFAULT_*</code> environment variables, such as <code>MCD_DEFAULT_API_ID</code> and <code>MCD_DEFAULT_API_TOKEN</code>.</li>
+<li>A profile: the one <code>--profile</code> names, else <code>MCD_DEFAULT_PROFILE</code>, else the one chosen with <code>profile use</code>, else <code>default</code>.</li>
+</ol>
+<p>Credentials resolve as a set: pass a complete API token pair or OAuth client, or none. The Terraform provider reads <code>MCD_DEFAULT_PROFILE</code> but not the <code>profile use</code> choice, so set the variable when a script runs both.</p>
+<p><code>--config-dir</code> reads <code>profiles.ini</code> and <code>cli.ini</code> from another directory instead of <code>~/.mcd</code>, which keeps a script or a test away from your own profiles.</p>
