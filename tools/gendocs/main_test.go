@@ -269,8 +269,12 @@ func TestDocsRootOnFreshTree(t *testing.T) {
 	}
 }
 
-// themeScript is the one script a page may load: in <head>, blocking, with no inline body.
-const themeScript = `<script src="theme.js"></script>`
+// The scripts a page may load, with no inline body: themeScript in <head> on every page, so the
+// theme is set before the page paints, and copyScript after the body of a guide or the intro.
+const (
+	themeScript = `<script src="theme.js"></script>`
+	copyScript  = `<script src="copy.js"></script>`
+)
 
 var inlineHandler = regexp.MustCompile(`(?i)\son[a-z]+\s*=`)
 
@@ -278,12 +282,23 @@ var inlineHandler = regexp.MustCompile(`(?i)\son[a-z]+\s*=`)
 // scripts would block, and for links to a directory, which the host answers with 403.
 func TestPagesLoadUnderCSP(t *testing.T) {
 	dir := generate(t, "v1.2.3")
+	copies := map[string]bool{"index.html": true}
+	for _, g := range guides() {
+		copies[g.File] = true
+	}
 	files, _ := filepath.Glob(filepath.Join(dir, "*.html"))
 	for _, f := range files {
 		page := read(t, f)
-		head, _, _ := strings.Cut(page, "</head>")
-		if strings.Count(page, "<script") != 1 || !strings.Contains(head, themeScript) {
-			t.Errorf("%s: want exactly one script, %s in <head>", filepath.Base(f), themeScript)
+		head, body, _ := strings.Cut(page, "</head>")
+		scripts := 1
+		if copies[filepath.Base(f)] {
+			scripts = 2
+			if !strings.Contains(body, copyScript) {
+				t.Errorf("%s lacks %s", filepath.Base(f), copyScript)
+			}
+		}
+		if strings.Count(page, "<script") != scripts || !strings.Contains(head, themeScript) {
+			t.Errorf("%s: want %d scripts, %s in <head>", filepath.Base(f), scripts, themeScript)
 		}
 		if inlineHandler.MatchString(page) {
 			t.Errorf("%s has an inline event handler", filepath.Base(f))
@@ -312,6 +327,24 @@ func TestStylesheetHonoursThemeChoice(t *testing.T) {
   :root:not([data-theme="light"])`} {
 		if !strings.Contains(css, want) {
 			t.Errorf("style.css lacks %s", want)
+		}
+	}
+}
+
+var anchor = regexp.MustCompile(`<a\s[^>]*>`)
+
+// TestExternalLinksOpenInNewTab checks every link off the site opens in a new tab, which the
+// stylesheet marks, and every link within it stays in the same tab.
+func TestExternalLinksOpenInNewTab(t *testing.T) {
+	dir := generate(t, "v1.2.3")
+	files, _ := filepath.Glob(filepath.Join(dir, "*.html"))
+	for _, f := range files {
+		for _, a := range anchor.FindAllString(read(t, f), -1) {
+			offSite := strings.Contains(a, `href="https://`)
+			newTab := strings.Contains(a, `target="_blank"`) && strings.Contains(a, `rel="noopener"`)
+			if offSite != newTab {
+				t.Errorf("%s: %s", filepath.Base(f), a)
+			}
 		}
 	}
 }
@@ -374,12 +407,17 @@ func TestGuidesQuoteRealCommands(t *testing.T) {
 		body := read(t, filepath.Join("guides", g.File))
 		lines := 0
 		for _, block := range preBlock.FindAllStringSubmatch(body, -1) {
+			inBlock := 0
 			for _, line := range strings.Split(html.UnescapeString(block[1]), "\n") {
 				args := strings.Fields(line)
 				if len(args) == 0 || args[0] != root.Name() {
 					continue
 				}
 				lines++
+				// One command per block, so a reader copies one command at a time.
+				if inBlock++; inBlock == 2 {
+					t.Errorf("%s: a block holds more than one command, from %q", g.File, line)
+				}
 				// A continuation line isn't checked, so every command stays on one line.
 				if args[len(args)-1] == `\` {
 					t.Errorf("%s: %q continues on the next line", g.File, line)

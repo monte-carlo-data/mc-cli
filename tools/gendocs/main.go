@@ -26,7 +26,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-//go:embed page.html.tmpl style.css theme.js favicon.png apple-touch-icon.png guides
+//go:embed page.html.tmpl style.css theme.js copy.js favicon.png apple-touch-icon.png guides
 var assets embed.FS
 
 // The install commands, as README.md gives them; a test keeps the two in step. The pinned one
@@ -53,8 +53,9 @@ func guides() []link {
 }
 
 // staticFiles are copied as they are. The icons are montecarlo.ai's, as the API reference uses.
-// theme.js is the site's only script: the light/dark toggle.
-var staticFiles = []string{"style.css", "theme.js", "favicon.png", "apple-touch-icon.png"}
+// The scripts are theme.js, the light/dark toggle on every page, and copy.js, the copy buttons
+// on the guides and the intro.
+var staticFiles = []string{"style.css", "theme.js", "copy.js", "favicon.png", "apple-touch-icon.png"}
 
 var releaseTag = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
 

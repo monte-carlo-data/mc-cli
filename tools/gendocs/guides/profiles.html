@@ -1,9 +1,10 @@
 <p>A profile is a named set of credentials in <code>~/.mcd/profiles.ini</code>, the file every Monte Carlo tool shares. With one profile per account or environment, you can switch between them without passing credentials each time.</p>
 
 <h2>Add a profile</h2>
-<p>Write each profile with <a href="montecarlo_configure.html">configure</a> or <a href="montecarlo_profile_set.html">profile set</a>, naming it with <code>--profile</code> or as the argument. The <a href="credentials-oauth.html">OAuth client</a> and <a href="credentials-api-token.html">API token</a> guides cover both commands.</p>
-<pre>montecarlo configure --profile staging
-montecarlo profile set prod --api-id &lt;id&gt; --api-token @&lt;path&gt;</pre>
+<p>Write each profile with <a href="montecarlo_configure.html">configure</a> or <a href="montecarlo_profile_set.html">profile set</a>. The <a href="credentials-oauth.html">OAuth client</a> and <a href="credentials-api-token.html">API token</a> guides cover both commands. configure names the profile with <code>--profile</code>:</p>
+<pre>montecarlo configure --profile staging</pre>
+<p>profile set takes the name as its argument:</p>
+<pre>montecarlo profile set prod --api-id &lt;id&gt; --api-token @&lt;path&gt;</pre>
 <p>The first profile you write becomes the active one.</p>
 
 <h2>Switch between profiles</h2>
