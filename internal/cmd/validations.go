@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/spf13/cobra"
@@ -47,6 +48,9 @@ type validationRow struct {
 type validationProblem struct {
 	FriendlyMessage *string `json:"friendly_message"`
 	Resolution      *string `json:"resolution"`
+	// The underlying error, which the friendly message often leaves out. The stack trace stays
+	// in --output json only.
+	Cause *string `json:"cause"`
 }
 
 // runFetch reads a validation run. With since set, the read lists only the validations
@@ -310,7 +314,8 @@ func (v *validationView) paint(symbol string) string {
 	return "\x1b[" + code + "m" + symbol + "\x1b[0m"
 }
 
-// problems prints what each validation reported: its errors, then its warnings.
+// problems prints what each validation reported, its errors then its warnings, each with its
+// resolution and cause.
 func (v *validationView) problems(run validationRun) {
 	for _, row := range run.Validations {
 		if len(row.Errors)+len(row.Warnings) == 0 {
@@ -318,12 +323,42 @@ func (v *validationView) problems(run validationRun) {
 		}
 		fmt.Fprintf(v.w, "\n%s:\n", row.label())
 		for _, p := range append(append([]validationProblem{}, row.Errors...), row.Warnings...) {
-			if p.FriendlyMessage != nil && *p.FriendlyMessage != "" {
-				fmt.Fprintf(v.w, "  %s\n", *p.FriendlyMessage)
+			for _, line := range terminalLines(deref(p.FriendlyMessage)) {
+				fmt.Fprintf(v.w, "  %s\n", line)
 			}
-			if p.Resolution != nil && *p.Resolution != "" {
-				fmt.Fprintf(v.w, "    %s\n", *p.Resolution)
+			for _, line := range terminalLines(deref(p.Resolution)) {
+				fmt.Fprintf(v.w, "    %s\n", line)
+			}
+			for i, line := range terminalLines(deref(p.Cause)) {
+				if i == 0 {
+					fmt.Fprintf(v.w, "    Cause: %s\n", line)
+				} else {
+					fmt.Fprintf(v.w, "      %s\n", line)
+				}
 			}
 		}
 	}
+}
+
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+// terminalLines splits API text into lines safe to print: line endings normalised, surrounding
+// blank space trimmed, and control characters other than tab shown as '?'.
+func terminalLines(s string) []string {
+	s = strings.TrimSpace(strings.NewReplacer("\r\n", "\n", "\r", "\n").Replace(s))
+	if s == "" {
+		return nil
+	}
+	s = strings.Map(func(r rune) rune {
+		if r != '\n' && r != '\t' && unicode.IsControl(r) {
+			return '?'
+		}
+		return r
+	}, s)
+	return strings.Split(s, "\n")
 }
