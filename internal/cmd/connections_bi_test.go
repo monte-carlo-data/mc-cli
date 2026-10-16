@@ -115,10 +115,10 @@ func TestConnectionsAddRefusesTheWrongParentBeforeAnyRequest(t *testing.T) {
 	}{
 		{"a warehouse for a BI type", func(srv *httptest.Server, t *testing.T) []string {
 			return tableauArgs(srv, t, "--warehouse-id", "wh-9")
-		}, "a tableau connection goes on a BI container, so it takes no --warehouse-id"},
+		}, "connection type tableau goes on a BI container, so it takes no --warehouse-id"},
 		{"a warehouse for a BI type with self-hosted credentials", func(srv *httptest.Server, t *testing.T) []string {
 			return addArgs(srv, t, "tableau", "--name", "n", "--warehouse-id", "wh-9", "--self-hosted-aws-secret", "s")
-		}, "a tableau connection goes on a BI container, so it takes no --warehouse-id"},
+		}, "connection type tableau goes on a BI container, so it takes no --warehouse-id"},
 		{"neither BI container flag", func(srv *httptest.Server, t *testing.T) []string {
 			return tableauArgs(srv, t)
 		}, "pass --deployment-id to create a BI container"},
@@ -127,7 +127,7 @@ func TestConnectionsAddRefusesTheWrongParentBeforeAnyRequest(t *testing.T) {
 		}, "pass --deployment-id to create a BI container"},
 		{"a BI container for a warehouse type", func(srv *httptest.Server, t *testing.T) []string {
 			return snowflakeArgs(srv, t, "--bi-container-id", "bc-9")
-		}, "a snowflake connection goes on a warehouse, so it takes no --bi-container-id"},
+		}, "connection type snowflake goes on a warehouse, so it takes no --bi-container-id"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f, srv := newFakeConnectionsAPI(t, nil)
