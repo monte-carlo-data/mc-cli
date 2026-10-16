@@ -277,7 +277,7 @@ func newConnectionsAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add <connection-type>",
 		Short: "Add a connection, creating its warehouse, BI container or ETL container and credentials",
-		Long:  "Adds a connection in one step. It validates the credentials first and, once every validation passes, asks before creating a warehouse unless --warehouse-id names one, or for a BI connection type a BI container unless --bi-container-id names one, or for an ETL connection type an ETL container unless --etl-container-id names one, then the credentials, then the connection. --validate-only stops after validating; --skip-validations creates without validating or asking. If a step fails, or the command is interrupted, what it created is deleted again, and anything it could not delete is listed with the command that deletes it.\n\nThe argument is the connection type. This command takes self-hosted credentials, one set of --self-hosted-* flags; the subcommands take each connection type's own credentials.\n\nA type registered per account goes by its prefix: custom-bi-connector-<id> on a custom-bi-connector BI container, custom-etl-connector-<id> on a custom-etl-connector ETL container, custom-connector-<id> on a custom-integration warehouse and custom-integration-<id> on a custom-integration warehouse. The push-only custom-bi-connector and custom-etl-connector take no credentials, so they are refused: create the container, then the connection.",
+		Long:  "Adds a connection in one step. It validates the credentials first and, once every validation passes, asks before creating a warehouse unless --warehouse-id names one, or for a BI connection type a BI container unless --bi-container-id names one, or for an ETL connection type an ETL container unless --etl-container-id names one, then the credentials, then the connection. --validate-only stops after validating; --skip-validations creates without validating or asking. If a step fails, or the command is interrupted, what it created is deleted again, and anything it could not delete is listed with the command that deletes it.\n\nThe argument is the connection type. This command takes self-hosted credentials, one set of --self-hosted-* flags; the subcommands take each connection type's own credentials.\n\nA type registered per account goes by its prefix: custom-bi-connector-<id> on a BI container of type custom-bi-connector, custom-etl-connector-<id> on an ETL container of type custom-etl-connector, custom-connector-<id> on a warehouse of type custom-integration and custom-integration-<id> on a warehouse of type custom-integration. The push-only custom-bi-connector and custom-etl-connector take no credentials, so they are refused: create the container, then the connection.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, args[0], nil)
@@ -318,8 +318,8 @@ func newConnectionsAddCmd() *cobra.Command {
 func newConnectionsAddSnowflakeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "snowflake",
-		Short: "Add a snowflake connection, creating its warehouse and credentials",
-		Long:  "Adds a snowflake connection in one step, as the add command does. Pass snowflake credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Short: "Add a connection of type snowflake, creating its warehouse and credentials",
+		Long:  "Adds a connection of type snowflake in one step, as the add command does. Pass snowflake credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, "snowflake", &connectionsAddNative{
@@ -343,8 +343,8 @@ func newConnectionsAddSnowflakeCmd() *cobra.Command {
 func newConnectionsAddBigqueryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "bigquery",
-		Short: "Add a bigquery connection, creating its warehouse and credentials",
-		Long:  "Adds a bigquery connection in one step, as the add command does. Pass bigquery credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Short: "Add a connection of type bigquery, creating its warehouse and credentials",
+		Long:  "Adds a connection of type bigquery in one step, as the add command does. Pass bigquery credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, "bigquery", &connectionsAddNative{
@@ -363,8 +363,8 @@ func newConnectionsAddBigqueryCmd() *cobra.Command {
 func newConnectionsAddRedshiftCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "redshift",
-		Short: "Add a redshift connection, creating its warehouse and credentials",
-		Long:  "Adds a redshift connection in one step, as the add command does. Pass redshift credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Short: "Add a connection of type redshift, creating its warehouse and credentials",
+		Long:  "Adds a connection of type redshift in one step, as the add command does. Pass redshift credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, "redshift", &connectionsAddNative{
@@ -392,8 +392,8 @@ func newConnectionsAddRedshiftCmd() *cobra.Command {
 func newConnectionsAddDatabricksMetastoreSqlWarehouseCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "databricks-metastore-sql-warehouse",
-		Short: "Add a databricks-metastore-sql-warehouse connection, creating its warehouse and credentials",
-		Long:  "Adds a databricks-metastore-sql-warehouse connection in one step, as the add command does. Pass databricks-metastore-sql-warehouse credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Short: "Add a connection of type databricks-metastore-sql-warehouse, creating its warehouse and credentials",
+		Long:  "Adds a connection of type databricks-metastore-sql-warehouse in one step, as the add command does. Pass databricks-metastore-sql-warehouse credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, "databricks-metastore-sql-warehouse", &connectionsAddNative{
@@ -419,8 +419,8 @@ func newConnectionsAddDatabricksMetastoreSqlWarehouseCmd() *cobra.Command {
 func newConnectionsAddDatabricksSqlWarehouseCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "databricks-sql-warehouse",
-		Short: "Add a databricks-sql-warehouse connection, creating its warehouse and credentials",
-		Long:  "Adds a databricks-sql-warehouse connection in one step, as the add command does. Pass databricks-sql-warehouse credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Short: "Add a connection of type databricks-sql-warehouse, creating its warehouse and credentials",
+		Long:  "Adds a connection of type databricks-sql-warehouse in one step, as the add command does. Pass databricks-sql-warehouse credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, "databricks-sql-warehouse", &connectionsAddNative{
@@ -446,8 +446,8 @@ func newConnectionsAddDatabricksSqlWarehouseCmd() *cobra.Command {
 func newConnectionsAddPostgresCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "postgres",
-		Short: "Add a postgres connection, creating its warehouse and credentials",
-		Long:  "Adds a postgres connection in one step, as the add command does. Pass postgres credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Short: "Add a connection of type postgres, creating its warehouse and credentials",
+		Long:  "Adds a connection of type postgres in one step, as the add command does. Pass postgres credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, "postgres", &connectionsAddNative{
@@ -476,8 +476,8 @@ func newConnectionsAddPostgresCmd() *cobra.Command {
 func newConnectionsAddMysqlCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mysql",
-		Short: "Add a mysql connection, creating its warehouse and credentials",
-		Long:  "Adds a mysql connection in one step, as the add command does. Pass mysql credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Short: "Add a connection of type mysql, creating its warehouse and credentials",
+		Long:  "Adds a connection of type mysql in one step, as the add command does. Pass mysql credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, "mysql", &connectionsAddNative{
@@ -505,8 +505,8 @@ func newConnectionsAddMysqlCmd() *cobra.Command {
 func newConnectionsAddMariadbCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mariadb",
-		Short: "Add a mariadb connection, creating its warehouse and credentials",
-		Long:  "Adds a mariadb connection in one step, as the add command does. Pass mariadb credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Short: "Add a connection of type mariadb, creating its warehouse and credentials",
+		Long:  "Adds a connection of type mariadb in one step, as the add command does. Pass mariadb credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, "mariadb", &connectionsAddNative{
@@ -529,8 +529,8 @@ func newConnectionsAddMariadbCmd() *cobra.Command {
 func newConnectionsAddOracleCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "oracle",
-		Short: "Add a oracle connection, creating its warehouse and credentials",
-		Long:  "Adds a oracle connection in one step, as the add command does. Pass oracle credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Short: "Add a connection of type oracle, creating its warehouse and credentials",
+		Long:  "Adds a connection of type oracle in one step, as the add command does. Pass oracle credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, "oracle", &connectionsAddNative{
@@ -558,8 +558,8 @@ func newConnectionsAddOracleCmd() *cobra.Command {
 func newConnectionsAddDb2Cmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "db2",
-		Short: "Add a db2 connection, creating its warehouse and credentials",
-		Long:  "Adds a db2 connection in one step, as the add command does. Pass db2 credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Short: "Add a connection of type db2, creating its warehouse and credentials",
+		Long:  "Adds a connection of type db2 in one step, as the add command does. Pass db2 credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, "db2", &connectionsAddNative{
@@ -584,8 +584,8 @@ func newConnectionsAddDb2Cmd() *cobra.Command {
 func newConnectionsAddTeradataCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "teradata",
-		Short: "Add a teradata connection, creating its warehouse and credentials",
-		Long:  "Adds a teradata connection in one step, as the add command does. Pass teradata credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Short: "Add a connection of type teradata, creating its warehouse and credentials",
+		Long:  "Adds a connection of type teradata in one step, as the add command does. Pass teradata credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, "teradata", &connectionsAddNative{
@@ -614,8 +614,8 @@ func newConnectionsAddTeradataCmd() *cobra.Command {
 func newConnectionsAddClickhouseCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "clickhouse",
-		Short: "Add a clickhouse connection, creating its warehouse and credentials",
-		Long:  "Adds a clickhouse connection in one step, as the add command does. Pass clickhouse credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Short: "Add a connection of type clickhouse, creating its warehouse and credentials",
+		Long:  "Adds a connection of type clickhouse in one step, as the add command does. Pass clickhouse credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, "clickhouse", &connectionsAddNative{
@@ -638,8 +638,8 @@ func newConnectionsAddClickhouseCmd() *cobra.Command {
 func newConnectionsAddStarburstEnterpriseCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "starburst-enterprise",
-		Short: "Add a starburst-enterprise connection, creating its warehouse and credentials",
-		Long:  "Adds a starburst-enterprise connection in one step, as the add command does. Pass starburst-enterprise credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Short: "Add a connection of type starburst-enterprise, creating its warehouse and credentials",
+		Long:  "Adds a connection of type starburst-enterprise in one step, as the add command does. Pass starburst-enterprise credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, "starburst-enterprise", &connectionsAddNative{
@@ -664,8 +664,8 @@ func newConnectionsAddStarburstEnterpriseCmd() *cobra.Command {
 func newConnectionsAddStarburstGalaxyCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "starburst-galaxy",
-		Short: "Add a starburst-galaxy connection, creating its warehouse and credentials",
-		Long:  "Adds a starburst-galaxy connection in one step, as the add command does. Pass starburst-galaxy credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Short: "Add a connection of type starburst-galaxy, creating its warehouse and credentials",
+		Long:  "Adds a connection of type starburst-galaxy in one step, as the add command does. Pass starburst-galaxy credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, "starburst-galaxy", &connectionsAddNative{
@@ -688,8 +688,8 @@ func newConnectionsAddStarburstGalaxyCmd() *cobra.Command {
 func newConnectionsAddAzureSqlDatabaseCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "azure-sql-database",
-		Short: "Add a azure-sql-database connection, creating its warehouse and credentials",
-		Long:  "Adds a azure-sql-database connection in one step, as the add command does. Pass azure-sql-database credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Short: "Add a connection of type azure-sql-database, creating its warehouse and credentials",
+		Long:  "Adds a connection of type azure-sql-database in one step, as the add command does. Pass azure-sql-database credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, "azure-sql-database", &connectionsAddNative{
@@ -712,8 +712,8 @@ func newConnectionsAddAzureSqlDatabaseCmd() *cobra.Command {
 func newConnectionsAddAzureDedicatedSqlPoolCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "azure-dedicated-sql-pool",
-		Short: "Add a azure-dedicated-sql-pool connection, creating its warehouse and credentials",
-		Long:  "Adds a azure-dedicated-sql-pool connection in one step, as the add command does. Pass azure-dedicated-sql-pool credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Short: "Add a connection of type azure-dedicated-sql-pool, creating its warehouse and credentials",
+		Long:  "Adds a connection of type azure-dedicated-sql-pool in one step, as the add command does. Pass azure-dedicated-sql-pool credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, "azure-dedicated-sql-pool", &connectionsAddNative{
@@ -736,8 +736,8 @@ func newConnectionsAddAzureDedicatedSqlPoolCmd() *cobra.Command {
 func newConnectionsAddSapHanaCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sap-hana",
-		Short: "Add a sap-hana connection, creating its warehouse and credentials",
-		Long:  "Adds a sap-hana connection in one step, as the add command does. Pass sap-hana credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Short: "Add a connection of type sap-hana, creating its warehouse and credentials",
+		Long:  "Adds a connection of type sap-hana in one step, as the add command does. Pass sap-hana credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, "sap-hana", &connectionsAddNative{
@@ -760,8 +760,8 @@ func newConnectionsAddSapHanaCmd() *cobra.Command {
 func newConnectionsAddSqlServerCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sql-server",
-		Short: "Add a sql-server connection, creating its warehouse and credentials",
-		Long:  "Adds a sql-server connection in one step, as the add command does. Pass sql-server credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Short: "Add a connection of type sql-server, creating its warehouse and credentials",
+		Long:  "Adds a connection of type sql-server in one step, as the add command does. Pass sql-server credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, "sql-server", &connectionsAddNative{
@@ -791,8 +791,8 @@ func newConnectionsAddSqlServerCmd() *cobra.Command {
 func newConnectionsAddTableauCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "tableau",
-		Short: "Add a tableau connection, creating its BI container and credentials",
-		Long:  "Adds a tableau connection in one step, as the add command does. Pass tableau credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Short: "Add a connection of type tableau, creating its BI container and credentials",
+		Long:  "Adds a connection of type tableau in one step, as the add command does. Pass tableau credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, "tableau", &connectionsAddNative{
@@ -822,8 +822,8 @@ func newConnectionsAddTableauCmd() *cobra.Command {
 func newConnectionsAddLookerCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "looker",
-		Short: "Add a looker connection, creating its BI container and credentials",
-		Long:  "Adds a looker connection in one step, as the add command does. Pass looker credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Short: "Add a connection of type looker, creating its BI container and credentials",
+		Long:  "Adds a connection of type looker in one step, as the add command does. Pass looker credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, "looker", &connectionsAddNative{
@@ -845,8 +845,8 @@ func newConnectionsAddLookerCmd() *cobra.Command {
 func newConnectionsAddLookerGitCloneCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "looker-git-clone",
-		Short: "Add a looker-git-clone connection, creating its BI container and credentials",
-		Long:  "Adds a looker-git-clone connection in one step, as the add command does. Pass looker-git-clone credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Short: "Add a connection of type looker-git-clone, creating its BI container and credentials",
+		Long:  "Adds a connection of type looker-git-clone in one step, as the add command does. Pass looker-git-clone credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, "looker-git-clone", &connectionsAddNative{
@@ -871,8 +871,8 @@ func newConnectionsAddLookerGitCloneCmd() *cobra.Command {
 func newConnectionsAddPowerBiCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "power-bi",
-		Short: "Add a power-bi connection, creating its BI container and credentials",
-		Long:  "Adds a power-bi connection in one step, as the add command does. Pass power-bi credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Short: "Add a connection of type power-bi, creating its BI container and credentials",
+		Long:  "Adds a connection of type power-bi in one step, as the add command does. Pass power-bi credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, "power-bi", &connectionsAddNative{
@@ -898,8 +898,8 @@ func newConnectionsAddPowerBiCmd() *cobra.Command {
 func newConnectionsAddFivetranCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "fivetran",
-		Short: "Add a fivetran connection, creating its ETL container and credentials",
-		Long:  "Adds a fivetran connection in one step, as the add command does. Pass fivetran credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Short: "Add a connection of type fivetran, creating its ETL container and credentials",
+		Long:  "Adds a connection of type fivetran in one step, as the add command does. Pass fivetran credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, "fivetran", &connectionsAddNative{
@@ -921,8 +921,8 @@ func newConnectionsAddFivetranCmd() *cobra.Command {
 func newConnectionsAddAzureDataFactoryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "azure-data-factory",
-		Short: "Add a azure-data-factory connection, creating its ETL container and credentials",
-		Long:  "Adds a azure-data-factory connection in one step, as the add command does. Pass azure-data-factory credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Short: "Add a connection of type azure-data-factory, creating its ETL container and credentials",
+		Long:  "Adds a connection of type azure-data-factory in one step, as the add command does. Pass azure-data-factory credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, "azure-data-factory", &connectionsAddNative{
@@ -946,8 +946,8 @@ func newConnectionsAddAzureDataFactoryCmd() *cobra.Command {
 func newConnectionsAddInformaticaV2Cmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "informatica-v2",
-		Short: "Add a informatica-v2 connection, creating its ETL container and credentials",
-		Long:  "Adds a informatica-v2 connection in one step, as the add command does. Pass informatica-v2 credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Short: "Add a connection of type informatica-v2, creating its ETL container and credentials",
+		Long:  "Adds a connection of type informatica-v2 in one step, as the add command does. Pass informatica-v2 credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, "informatica-v2", &connectionsAddNative{
@@ -981,8 +981,8 @@ func newConnectionsAddInformaticaV2Cmd() *cobra.Command {
 func newConnectionsAddMulesoftCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mulesoft",
-		Short: "Add a mulesoft connection, creating its ETL container and credentials",
-		Long:  "Adds a mulesoft connection in one step, as the add command does. Pass mulesoft credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Short: "Add a connection of type mulesoft, creating its ETL container and credentials",
+		Long:  "Adds a connection of type mulesoft in one step, as the add command does. Pass mulesoft credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, "mulesoft", &connectionsAddNative{
@@ -1005,8 +1005,8 @@ func newConnectionsAddMulesoftCmd() *cobra.Command {
 func newConnectionsAddGcpDataformCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "gcp-dataform",
-		Short: "Add a gcp-dataform connection, creating its ETL container and credentials",
-		Long:  "Adds a gcp-dataform connection in one step, as the add command does. Pass gcp-dataform credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Short: "Add a connection of type gcp-dataform, creating its ETL container and credentials",
+		Long:  "Adds a connection of type gcp-dataform in one step, as the add command does. Pass gcp-dataform credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, "gcp-dataform", &connectionsAddNative{
@@ -1027,8 +1027,8 @@ func newConnectionsAddGcpDataformCmd() *cobra.Command {
 func newConnectionsAddAirflowCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "airflow",
-		Short: "Add a airflow connection, creating its ETL container and credentials",
-		Long:  "Adds a airflow connection in one step, as the add command does. Pass airflow credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Short: "Add a connection of type airflow, creating its ETL container and credentials",
+		Long:  "Adds a connection of type airflow in one step, as the add command does. Pass airflow credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, "airflow", &connectionsAddNative{
@@ -3902,9 +3902,9 @@ func runConnectionsAdd(cmd *cobra.Command, connectionType string, native *connec
 	// A push-only connection takes no credentials, which this command always creates.
 	switch connectionType {
 	case "custom-bi-connector":
-		return usageError("a %s connection is push-only and takes no credentials, so this command cannot add it. Create a BI container with no --deployment-id through `%s bi-containers create`, then the connection through `%s connections create`", connectionType, binaryName, binaryName)
+		return usageError("connection type %s is push-only and takes no credentials, so this command cannot add it. Create a BI container with no --deployment-id through `%s bi-containers create`, then the connection through `%s connections create`", connectionType, binaryName, binaryName)
 	case "custom-etl-connector":
-		return usageError("a %s connection is push-only and takes no credentials, so this command cannot add it. Create an ETL container with no --deployment-id through `%s etl-containers create`, then the connection through `%s connections create`", connectionType, binaryName, binaryName)
+		return usageError("connection type %s is push-only and takes no credentials, so this command cannot add it. Create an ETL container with no --deployment-id through `%s etl-containers create`, then the connection through `%s connections create`", connectionType, binaryName, binaryName)
 	}
 	groups := []flagGroup{
 		{"self-hosted-aws", []string{"self-hosted-aws-secret", "self-hosted-aws-assumable-role", "self-hosted-aws-region", "self-hosted-aws-external-id"}},
@@ -3987,7 +3987,7 @@ func runConnectionsAdd(cmd *cobra.Command, connectionType string, native *connec
 	var etlContainerType sdk.NewEtlContainerType
 	if onBi {
 		if changed(cmd, "warehouse-id", "etl-container-id") {
-			return usageError("a %s connection goes on a BI container, so it takes no --warehouse-id or --etl-container-id", connectionType)
+			return usageError("connection type %s goes on a BI container, so it takes no --warehouse-id or --etl-container-id", connectionType)
 		}
 		if changed(cmd, "bi-container-id") == changed(cmd, "deployment-id") {
 			return usageError("pass --deployment-id to create a BI container for the connection, or --bi-container-id to add it to an existing one")
@@ -3999,11 +3999,11 @@ func runConnectionsAdd(cmd *cobra.Command, connectionType string, native *connec
 		biContainerType = *value
 	} else if onEtl {
 		if changed(cmd, "warehouse-id", "bi-container-id") {
-			return usageError("a %s connection goes on an ETL container, so it takes no --warehouse-id or --bi-container-id", connectionType)
+			return usageError("connection type %s goes on an ETL container, so it takes no --warehouse-id or --bi-container-id", connectionType)
 		}
 		if etlWithoutDeployment[connectionType] {
 			if changed(cmd, "deployment-id") {
-				return usageError("a %s connection's ETL container runs through no deployment, so it takes no --deployment-id", connectionType)
+				return usageError("connection type %s runs its ETL container through no deployment, so it takes no --deployment-id", connectionType)
 			}
 		} else if changed(cmd, "etl-container-id") == changed(cmd, "deployment-id") {
 			return usageError("pass --deployment-id to create an ETL container for the connection, or --etl-container-id to add it to an existing one")
@@ -4015,7 +4015,7 @@ func runConnectionsAdd(cmd *cobra.Command, connectionType string, native *connec
 		etlContainerType = *value
 	} else {
 		if changed(cmd, "bi-container-id", "etl-container-id") {
-			return usageError("a %s connection goes on a warehouse, so it takes no --bi-container-id or --etl-container-id", connectionType)
+			return usageError("connection type %s goes on a warehouse, so it takes no --bi-container-id or --etl-container-id", connectionType)
 		}
 		for prefix, value := range warehouseTypePrefixes {
 			if strings.HasPrefix(connectionType, prefix) {
@@ -4296,8 +4296,8 @@ func newConnectionsUpdateCmd() *cobra.Command {
 func newConnectionsUpdateSnowflakeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "snowflake <connection_id>",
-		Short: "Update a snowflake connection, and change its credentials",
-		Long:  "Updates a snowflake connection, as the update command does, changing its snowflake credentials with the flags below.",
+		Short: "Update a connection of type snowflake, and change its credentials",
+		Long:  "Updates a connection of type snowflake, as the update command does, changing its snowflake credentials with the flags below.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -4321,8 +4321,8 @@ func newConnectionsUpdateSnowflakeCmd() *cobra.Command {
 func newConnectionsUpdateBigqueryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "bigquery <connection_id>",
-		Short: "Update a bigquery connection, and change its credentials",
-		Long:  "Updates a bigquery connection, as the update command does, changing its bigquery credentials with the flags below.",
+		Short: "Update a connection of type bigquery, and change its credentials",
+		Long:  "Updates a connection of type bigquery, as the update command does, changing its bigquery credentials with the flags below.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -4341,8 +4341,8 @@ func newConnectionsUpdateBigqueryCmd() *cobra.Command {
 func newConnectionsUpdateRedshiftCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "redshift <connection_id>",
-		Short: "Update a redshift connection, and change its credentials",
-		Long:  "Updates a redshift connection, as the update command does, changing its redshift credentials with the flags below.",
+		Short: "Update a connection of type redshift, and change its credentials",
+		Long:  "Updates a connection of type redshift, as the update command does, changing its redshift credentials with the flags below.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -4370,8 +4370,8 @@ func newConnectionsUpdateRedshiftCmd() *cobra.Command {
 func newConnectionsUpdateDatabricksMetastoreSqlWarehouseCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "databricks-metastore-sql-warehouse <connection_id>",
-		Short: "Update a databricks-metastore-sql-warehouse connection, and change its credentials",
-		Long:  "Updates a databricks-metastore-sql-warehouse connection, as the update command does, changing its databricks-metastore-sql-warehouse credentials with the flags below.",
+		Short: "Update a connection of type databricks-metastore-sql-warehouse, and change its credentials",
+		Long:  "Updates a connection of type databricks-metastore-sql-warehouse, as the update command does, changing its databricks-metastore-sql-warehouse credentials with the flags below.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -4398,8 +4398,8 @@ func newConnectionsUpdateDatabricksMetastoreSqlWarehouseCmd() *cobra.Command {
 func newConnectionsUpdateDatabricksSqlWarehouseCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "databricks-sql-warehouse <connection_id>",
-		Short: "Update a databricks-sql-warehouse connection, and change its credentials",
-		Long:  "Updates a databricks-sql-warehouse connection, as the update command does, changing its databricks-sql-warehouse credentials with the flags below.",
+		Short: "Update a connection of type databricks-sql-warehouse, and change its credentials",
+		Long:  "Updates a connection of type databricks-sql-warehouse, as the update command does, changing its databricks-sql-warehouse credentials with the flags below.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -4426,8 +4426,8 @@ func newConnectionsUpdateDatabricksSqlWarehouseCmd() *cobra.Command {
 func newConnectionsUpdatePostgresCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "postgres <connection_id>",
-		Short: "Update a postgres connection, and change its credentials",
-		Long:  "Updates a postgres connection, as the update command does, changing its postgres credentials with the flags below.",
+		Short: "Update a connection of type postgres, and change its credentials",
+		Long:  "Updates a connection of type postgres, as the update command does, changing its postgres credentials with the flags below.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -4456,8 +4456,8 @@ func newConnectionsUpdatePostgresCmd() *cobra.Command {
 func newConnectionsUpdateMysqlCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mysql <connection_id>",
-		Short: "Update a mysql connection, and change its credentials",
-		Long:  "Updates a mysql connection, as the update command does, changing its mysql credentials with the flags below.",
+		Short: "Update a connection of type mysql, and change its credentials",
+		Long:  "Updates a connection of type mysql, as the update command does, changing its mysql credentials with the flags below.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -4485,8 +4485,8 @@ func newConnectionsUpdateMysqlCmd() *cobra.Command {
 func newConnectionsUpdateMariadbCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mariadb <connection_id>",
-		Short: "Update a mariadb connection, and change its credentials",
-		Long:  "Updates a mariadb connection, as the update command does, changing its mariadb credentials with the flags below.",
+		Short: "Update a connection of type mariadb, and change its credentials",
+		Long:  "Updates a connection of type mariadb, as the update command does, changing its mariadb credentials with the flags below.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -4509,8 +4509,8 @@ func newConnectionsUpdateMariadbCmd() *cobra.Command {
 func newConnectionsUpdateOracleCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "oracle <connection_id>",
-		Short: "Update a oracle connection, and change its credentials",
-		Long:  "Updates a oracle connection, as the update command does, changing its oracle credentials with the flags below.",
+		Short: "Update a connection of type oracle, and change its credentials",
+		Long:  "Updates a connection of type oracle, as the update command does, changing its oracle credentials with the flags below.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -4538,8 +4538,8 @@ func newConnectionsUpdateOracleCmd() *cobra.Command {
 func newConnectionsUpdateDb2Cmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "db2 <connection_id>",
-		Short: "Update a db2 connection, and change its credentials",
-		Long:  "Updates a db2 connection, as the update command does, changing its db2 credentials with the flags below.",
+		Short: "Update a connection of type db2, and change its credentials",
+		Long:  "Updates a connection of type db2, as the update command does, changing its db2 credentials with the flags below.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -4564,8 +4564,8 @@ func newConnectionsUpdateDb2Cmd() *cobra.Command {
 func newConnectionsUpdateTeradataCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "teradata <connection_id>",
-		Short: "Update a teradata connection, and change its credentials",
-		Long:  "Updates a teradata connection, as the update command does, changing its teradata credentials with the flags below.",
+		Short: "Update a connection of type teradata, and change its credentials",
+		Long:  "Updates a connection of type teradata, as the update command does, changing its teradata credentials with the flags below.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -4594,8 +4594,8 @@ func newConnectionsUpdateTeradataCmd() *cobra.Command {
 func newConnectionsUpdateClickhouseCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "clickhouse <connection_id>",
-		Short: "Update a clickhouse connection, and change its credentials",
-		Long:  "Updates a clickhouse connection, as the update command does, changing its clickhouse credentials with the flags below.",
+		Short: "Update a connection of type clickhouse, and change its credentials",
+		Long:  "Updates a connection of type clickhouse, as the update command does, changing its clickhouse credentials with the flags below.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -4618,8 +4618,8 @@ func newConnectionsUpdateClickhouseCmd() *cobra.Command {
 func newConnectionsUpdateStarburstEnterpriseCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "starburst-enterprise <connection_id>",
-		Short: "Update a starburst-enterprise connection, and change its credentials",
-		Long:  "Updates a starburst-enterprise connection, as the update command does, changing its starburst-enterprise credentials with the flags below.",
+		Short: "Update a connection of type starburst-enterprise, and change its credentials",
+		Long:  "Updates a connection of type starburst-enterprise, as the update command does, changing its starburst-enterprise credentials with the flags below.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -4644,8 +4644,8 @@ func newConnectionsUpdateStarburstEnterpriseCmd() *cobra.Command {
 func newConnectionsUpdateStarburstGalaxyCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "starburst-galaxy <connection_id>",
-		Short: "Update a starburst-galaxy connection, and change its credentials",
-		Long:  "Updates a starburst-galaxy connection, as the update command does, changing its starburst-galaxy credentials with the flags below.",
+		Short: "Update a connection of type starburst-galaxy, and change its credentials",
+		Long:  "Updates a connection of type starburst-galaxy, as the update command does, changing its starburst-galaxy credentials with the flags below.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -4668,8 +4668,8 @@ func newConnectionsUpdateStarburstGalaxyCmd() *cobra.Command {
 func newConnectionsUpdateAzureSqlDatabaseCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "azure-sql-database <connection_id>",
-		Short: "Update a azure-sql-database connection, and change its credentials",
-		Long:  "Updates a azure-sql-database connection, as the update command does, changing its azure-sql-database credentials with the flags below.",
+		Short: "Update a connection of type azure-sql-database, and change its credentials",
+		Long:  "Updates a connection of type azure-sql-database, as the update command does, changing its azure-sql-database credentials with the flags below.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -4692,8 +4692,8 @@ func newConnectionsUpdateAzureSqlDatabaseCmd() *cobra.Command {
 func newConnectionsUpdateAzureDedicatedSqlPoolCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "azure-dedicated-sql-pool <connection_id>",
-		Short: "Update a azure-dedicated-sql-pool connection, and change its credentials",
-		Long:  "Updates a azure-dedicated-sql-pool connection, as the update command does, changing its azure-dedicated-sql-pool credentials with the flags below.",
+		Short: "Update a connection of type azure-dedicated-sql-pool, and change its credentials",
+		Long:  "Updates a connection of type azure-dedicated-sql-pool, as the update command does, changing its azure-dedicated-sql-pool credentials with the flags below.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -4716,8 +4716,8 @@ func newConnectionsUpdateAzureDedicatedSqlPoolCmd() *cobra.Command {
 func newConnectionsUpdateSapHanaCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sap-hana <connection_id>",
-		Short: "Update a sap-hana connection, and change its credentials",
-		Long:  "Updates a sap-hana connection, as the update command does, changing its sap-hana credentials with the flags below.",
+		Short: "Update a connection of type sap-hana, and change its credentials",
+		Long:  "Updates a connection of type sap-hana, as the update command does, changing its sap-hana credentials with the flags below.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -4740,8 +4740,8 @@ func newConnectionsUpdateSapHanaCmd() *cobra.Command {
 func newConnectionsUpdateSqlServerCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sql-server <connection_id>",
-		Short: "Update a sql-server connection, and change its credentials",
-		Long:  "Updates a sql-server connection, as the update command does, changing its sql-server credentials with the flags below.",
+		Short: "Update a connection of type sql-server, and change its credentials",
+		Long:  "Updates a connection of type sql-server, as the update command does, changing its sql-server credentials with the flags below.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -4771,8 +4771,8 @@ func newConnectionsUpdateSqlServerCmd() *cobra.Command {
 func newConnectionsUpdateTableauCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "tableau <connection_id>",
-		Short: "Update a tableau connection, and change its credentials",
-		Long:  "Updates a tableau connection, as the update command does, changing its tableau credentials with the flags below.",
+		Short: "Update a connection of type tableau, and change its credentials",
+		Long:  "Updates a connection of type tableau, as the update command does, changing its tableau credentials with the flags below.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -4802,8 +4802,8 @@ func newConnectionsUpdateTableauCmd() *cobra.Command {
 func newConnectionsUpdateLookerCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "looker <connection_id>",
-		Short: "Update a looker connection, and change its credentials",
-		Long:  "Updates a looker connection, as the update command does, changing its looker credentials with the flags below.",
+		Short: "Update a connection of type looker, and change its credentials",
+		Long:  "Updates a connection of type looker, as the update command does, changing its looker credentials with the flags below.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -4825,8 +4825,8 @@ func newConnectionsUpdateLookerCmd() *cobra.Command {
 func newConnectionsUpdateLookerGitCloneCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "looker-git-clone <connection_id>",
-		Short: "Update a looker-git-clone connection, and change its credentials",
-		Long:  "Updates a looker-git-clone connection, as the update command does, changing its looker-git-clone credentials with the flags below.",
+		Short: "Update a connection of type looker-git-clone, and change its credentials",
+		Long:  "Updates a connection of type looker-git-clone, as the update command does, changing its looker-git-clone credentials with the flags below.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -4851,8 +4851,8 @@ func newConnectionsUpdateLookerGitCloneCmd() *cobra.Command {
 func newConnectionsUpdatePowerBiCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "power-bi <connection_id>",
-		Short: "Update a power-bi connection, and change its credentials",
-		Long:  "Updates a power-bi connection, as the update command does, changing its power-bi credentials with the flags below.",
+		Short: "Update a connection of type power-bi, and change its credentials",
+		Long:  "Updates a connection of type power-bi, as the update command does, changing its power-bi credentials with the flags below.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -4878,8 +4878,8 @@ func newConnectionsUpdatePowerBiCmd() *cobra.Command {
 func newConnectionsUpdateFivetranCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "fivetran <connection_id>",
-		Short: "Update a fivetran connection, and change its credentials",
-		Long:  "Updates a fivetran connection, as the update command does, changing its fivetran credentials with the flags below.",
+		Short: "Update a connection of type fivetran, and change its credentials",
+		Long:  "Updates a connection of type fivetran, as the update command does, changing its fivetran credentials with the flags below.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -4901,8 +4901,8 @@ func newConnectionsUpdateFivetranCmd() *cobra.Command {
 func newConnectionsUpdateAzureDataFactoryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "azure-data-factory <connection_id>",
-		Short: "Update a azure-data-factory connection, and change its credentials",
-		Long:  "Updates a azure-data-factory connection, as the update command does, changing its azure-data-factory credentials with the flags below.",
+		Short: "Update a connection of type azure-data-factory, and change its credentials",
+		Long:  "Updates a connection of type azure-data-factory, as the update command does, changing its azure-data-factory credentials with the flags below.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -4926,8 +4926,8 @@ func newConnectionsUpdateAzureDataFactoryCmd() *cobra.Command {
 func newConnectionsUpdateInformaticaV2Cmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "informatica-v2 <connection_id>",
-		Short: "Update a informatica-v2 connection, and change its credentials",
-		Long:  "Updates a informatica-v2 connection, as the update command does, changing its informatica-v2 credentials with the flags below.",
+		Short: "Update a connection of type informatica-v2, and change its credentials",
+		Long:  "Updates a connection of type informatica-v2, as the update command does, changing its informatica-v2 credentials with the flags below.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -4961,8 +4961,8 @@ func newConnectionsUpdateInformaticaV2Cmd() *cobra.Command {
 func newConnectionsUpdateMulesoftCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mulesoft <connection_id>",
-		Short: "Update a mulesoft connection, and change its credentials",
-		Long:  "Updates a mulesoft connection, as the update command does, changing its mulesoft credentials with the flags below.",
+		Short: "Update a connection of type mulesoft, and change its credentials",
+		Long:  "Updates a connection of type mulesoft, as the update command does, changing its mulesoft credentials with the flags below.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -4985,8 +4985,8 @@ func newConnectionsUpdateMulesoftCmd() *cobra.Command {
 func newConnectionsUpdateGcpDataformCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "gcp-dataform <connection_id>",
-		Short: "Update a gcp-dataform connection, and change its credentials",
-		Long:  "Updates a gcp-dataform connection, as the update command does, changing its gcp-dataform credentials with the flags below.",
+		Short: "Update a connection of type gcp-dataform, and change its credentials",
+		Long:  "Updates a connection of type gcp-dataform, as the update command does, changing its gcp-dataform credentials with the flags below.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -5007,8 +5007,8 @@ func newConnectionsUpdateGcpDataformCmd() *cobra.Command {
 func newConnectionsUpdateAirflowCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "airflow <connection_id>",
-		Short: "Update a airflow connection, and change its credentials",
-		Long:  "Updates a airflow connection, as the update command does, changing its airflow credentials with the flags below.",
+		Short: "Update a connection of type airflow, and change its credentials",
+		Long:  "Updates a connection of type airflow, as the update command does, changing its airflow credentials with the flags below.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -8652,7 +8652,7 @@ func runConnectionsUpdate(cmd *cobra.Command, connectionId string, native *conne
 		connectionType := connection.GetConnectionType()
 		if native != nil {
 			if connectionType != native.group.name || stored != native.storage {
-				return fmt.Errorf("connection %s is a %s connection keeping its credentials in %s; this command changes %s credentials kept in %s", connectionId, connectionType, stored, native.group.name, native.storage)
+				return fmt.Errorf("connection %s is of type %s and keeps its credentials in %s; this command changes %s credentials kept in %s", connectionId, connectionType, stored, native.group.name, native.storage)
 			}
 		} else {
 			storages := map[string]string{
