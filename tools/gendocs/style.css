@@ -6,6 +6,7 @@
   --code-bg: #f6f8fa;
   --border: #d1d9e0;
   --link: #0969da;
+  --content-width: 60rem;
 }
 
 /* An explicit choice from theme.js wins over the OS preference. */
@@ -47,7 +48,8 @@ header {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.75rem 1.5rem;
+  /* Lines the title and toggle up with the edges of the centred content below. */
+  padding: 0.75rem max(1.5rem, (100% - var(--content-width)) / 2);
   border-bottom: 1px solid var(--border);
   font-weight: 600;
 }
@@ -71,7 +73,8 @@ header {
 }
 
 main {
-  max-width: 60rem;
+  max-width: var(--content-width);
+  margin: 0 auto;
   padding: 1rem 1.5rem 3rem;
 }
 
