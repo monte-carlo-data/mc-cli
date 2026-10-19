@@ -44,6 +44,7 @@ func newCredentialsCreateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsCreateDatabricksMetastoreSqlWarehouseCmd())
 	cmd.AddCommand(newCredentialsCreateDatabricksSqlWarehouseCmd())
 	cmd.AddCommand(newCredentialsCreateDb2Cmd())
+	cmd.AddCommand(newCredentialsCreateDbtCloudWebhookCmd())
 	cmd.AddCommand(newCredentialsCreateEnvVarCmd())
 	cmd.AddCommand(newCredentialsCreateFileCmd())
 	cmd.AddCommand(newCredentialsCreateFivetranCmd())
@@ -754,6 +755,68 @@ func newCredentialsCreateDb2Cmd() *cobra.Command {
 	cmd.Flags().String("db-name", "", "Database to connect to.")
 	cmd.Flags().String("ssl-ca-data", "", "PEM text of the CA certificate the server's certificate is checked against.")
 	cmd.Flags().Bool("ssl-disabled", false, "Connect without TLS.")
+	return cmd
+}
+
+func newCredentialsCreateDbtCloudWebhookCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "dbt-cloud-webhook",
+		Short: "Create dbt Cloud webhook credentials",
+		Long:  "Store dbt Cloud webhook credentials.\n\nMonte Carlo keeps the service token and the HMAC secret and returns everything else.\nNothing is checked against dbt Cloud here. An account holds a limited number of\ncredentials. Past that, the create is refused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "service-token", "service-token-prompt"); err != nil {
+				return err
+			}
+			if err := requireAny(cmd, "hmac-secret", "hmac-secret-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreateDbtCloudWebhookCredentials(ctx)
+			serviceToken, err := flagSecret(cmd, "service-token")
+			if err != nil {
+				return err
+			}
+			hmacSecret, err := flagSecret(cmd, "hmac-secret")
+			if err != nil {
+				return err
+			}
+			accountId, err := flagString(cmd, "account-id")
+			if err != nil {
+				return err
+			}
+			webhookId, err := flagString(cmd, "webhook-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewDbtCloudWebhookCredentialsIn(serviceToken, hmacSecret, accountId, webhookId)
+			if changed(cmd, "base-url") {
+				baseUrl, err := flagString(cmd, "base-url")
+				if err != nil {
+					return err
+				}
+				body.SetBaseUrl(baseUrl)
+			}
+			req = req.DbtCloudWebhookCredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "account_id", "webhook_id", "base_url")
+		},
+	}
+	cmd.Flags().String("service-token", "", "A dbt Cloud service token that can read the account. Stored by Monte Carlo and never returned. Visible in the process list; --service-token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("service-token-prompt", false, "Read --service-token from a hidden prompt instead of the command line.")
+	cmd.Flags().String("hmac-secret", "", "The webhook's HMAC secret, shown by dbt Cloud when the webhook is created. Monte Carlo checks each event's signature with it. Stored by Monte Carlo and never returned. Visible in the process list; --hmac-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("hmac-secret-prompt", false, "Read --hmac-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("account-id", "", "Your dbt Cloud account id, the number in the account's URLs.")
+	_ = cmd.MarkFlagRequired("account-id")
+	cmd.Flags().String("webhook-id", "", "Id of the dbt Cloud webhook that sends job.run.completed events to Monte Carlo.")
+	_ = cmd.MarkFlagRequired("webhook-id")
+	cmd.Flags().String("base-url", "", "Your dbt Cloud access URL followed by /api/v2, such as https://emea.dbt.com/api/v2. Leave it out for https://cloud.getdbt.com/api/v2.")
 	return cmd
 }
 
@@ -2460,6 +2523,7 @@ func newCredentialsDeleteCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsDeleteDatabricksMetastoreSqlWarehouseCmd())
 	cmd.AddCommand(newCredentialsDeleteDatabricksSqlWarehouseCmd())
 	cmd.AddCommand(newCredentialsDeleteDb2Cmd())
+	cmd.AddCommand(newCredentialsDeleteDbtCloudWebhookCmd())
 	cmd.AddCommand(newCredentialsDeleteEnvVarCmd())
 	cmd.AddCommand(newCredentialsDeleteFileCmd())
 	cmd.AddCommand(newCredentialsDeleteFivetranCmd())
@@ -2740,6 +2804,30 @@ func newCredentialsDeleteDb2Cmd() *cobra.Command {
 				return err
 			}
 			req := api.CredentialsAPI.DeleteDb2Credentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
+func newCredentialsDeleteDbtCloudWebhookCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "dbt-cloud-webhook <credentials_id>",
+		Short: "Delete dbt Cloud webhook credentials",
+		Long:  "Delete dbt Cloud webhook credentials.\n\nRefused while a connection still uses them. Delete the connection first. Monte Carlo stops\nusing the stored service token and HMAC secret. Delete the token and the webhook in dbt\nCloud if they must be retired.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete dbt-cloud-webhook credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeleteDbtCloudWebhookCredentials(ctx, args[0])
 			if resp, err := req.Execute(); err != nil {
 				return apiErr(resp, err)
 			}
@@ -3293,6 +3381,7 @@ func newCredentialsGetCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsGetDatabricksMetastoreSqlWarehouseCmd())
 	cmd.AddCommand(newCredentialsGetDatabricksSqlWarehouseCmd())
 	cmd.AddCommand(newCredentialsGetDb2Cmd())
+	cmd.AddCommand(newCredentialsGetDbtCloudWebhookCmd())
 	cmd.AddCommand(newCredentialsGetEnvVarCmd())
 	cmd.AddCommand(newCredentialsGetFileCmd())
 	cmd.AddCommand(newCredentialsGetFivetranCmd())
@@ -3555,6 +3644,28 @@ func newCredentialsGetDb2Cmd() *cobra.Command {
 				return apiErr(resp, err)
 			}
 			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user", "ssl_ca_data", "ssl_disabled")
+		},
+	}
+	return cmd
+}
+
+func newCredentialsGetDbtCloudWebhookCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "dbt-cloud-webhook <credentials_id>",
+		Short: "Get dbt Cloud webhook credentials",
+		Long:  "Get one set of dbt Cloud webhook credentials, without the service token and the HMAC\nsecret.\n\nAn id that does not exist, belongs to another account, or names credentials of another kind\nreturns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetDbtCloudWebhookCredentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "account_id", "webhook_id", "base_url")
 		},
 	}
 	return cmd
@@ -4115,6 +4226,7 @@ func newCredentialsUpdateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsUpdateDatabricksMetastoreSqlWarehouseCmd())
 	cmd.AddCommand(newCredentialsUpdateDatabricksSqlWarehouseCmd())
 	cmd.AddCommand(newCredentialsUpdateDb2Cmd())
+	cmd.AddCommand(newCredentialsUpdateDbtCloudWebhookCmd())
 	cmd.AddCommand(newCredentialsUpdateEnvVarCmd())
 	cmd.AddCommand(newCredentialsUpdateFileCmd())
 	cmd.AddCommand(newCredentialsUpdateFivetranCmd())
@@ -4867,6 +4979,72 @@ func newCredentialsUpdateDb2Cmd() *cobra.Command {
 	cmd.Flags().String("ssl-ca-data", "", "PEM text of the CA certificate the server's certificate is checked against.")
 	cmd.Flags().Bool("ssl-disabled", false, "Connect without TLS.")
 	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	return cmd
+}
+
+func newCredentialsUpdateDbtCloudWebhookCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "dbt-cloud-webhook <credentials_id>",
+		Short: "Update dbt Cloud webhook credentials",
+		Long:  "Change dbt Cloud webhook credentials in place.\n\nThe connection using the credentials picks up the change. Send only the fields to change.\nSending an empty body returns the credentials as they are.\n\nA new `account_id`, `webhook_id` or `hmac_secret` moves the connection to the new webhook\nor secret at once. A webhook another connection already receives is refused with 409.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdateDbtCloudWebhookCredentials(ctx, args[0])
+			body := sdk.NewDbtCloudWebhookCredentialsPatch()
+			if changed(cmd, "account-id") {
+				accountId, err := flagString(cmd, "account-id")
+				if err != nil {
+					return err
+				}
+				body.SetAccountId(accountId)
+			}
+			if changed(cmd, "base-url") {
+				baseUrl, err := flagString(cmd, "base-url")
+				if err != nil {
+					return err
+				}
+				body.SetBaseUrl(baseUrl)
+			}
+			if changed(cmd, "hmac-secret", "hmac-secret-prompt") {
+				hmacSecret, err := flagSecret(cmd, "hmac-secret")
+				if err != nil {
+					return err
+				}
+				body.SetHmacSecret(hmacSecret)
+			}
+			if changed(cmd, "service-token", "service-token-prompt") {
+				serviceToken, err := flagSecret(cmd, "service-token")
+				if err != nil {
+					return err
+				}
+				body.SetServiceToken(serviceToken)
+			}
+			if changed(cmd, "webhook-id") {
+				webhookId, err := flagString(cmd, "webhook-id")
+				if err != nil {
+					return err
+				}
+				body.SetWebhookId(webhookId)
+			}
+			req = req.DbtCloudWebhookCredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "account_id", "webhook_id", "base_url")
+		},
+	}
+	cmd.Flags().String("account-id", "", "Your dbt Cloud account id, the number in the account's URLs.")
+	cmd.Flags().String("base-url", "", "Your dbt Cloud access URL followed by /api/v2, such as https://emea.dbt.com/api/v2. Leave it out for https://cloud.getdbt.com/api/v2. Setting it to a new URL requires sending service_token again.")
+	cmd.Flags().String("hmac-secret", "", "The webhook's HMAC secret, shown by dbt Cloud when the webhook is created. Monte Carlo checks each event's signature with it. Stored by Monte Carlo and never returned. Visible in the process list; --hmac-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("hmac-secret-prompt", false, "Read --hmac-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("service-token", "", "A dbt Cloud service token that can read the account. Stored by Monte Carlo and never returned. Visible in the process list; --service-token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("service-token-prompt", false, "Read --service-token from a hidden prompt instead of the command line.")
+	cmd.Flags().String("webhook-id", "", "Id of the dbt Cloud webhook that sends job.run.completed events to Monte Carlo.")
 	return cmd
 }
 
@@ -6646,6 +6824,8 @@ func newCredentialsValidateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsValidateDatabricksSqlWarehouseChangeCmd())
 	cmd.AddCommand(newCredentialsValidateDb2Cmd())
 	cmd.AddCommand(newCredentialsValidateDb2ChangeCmd())
+	cmd.AddCommand(newCredentialsValidateDbtCloudWebhookCmd())
+	cmd.AddCommand(newCredentialsValidateDbtCloudWebhookChangeCmd())
 	cmd.AddCommand(newCredentialsValidateEnvVarCmd())
 	cmd.AddCommand(newCredentialsValidateEnvVarChangeCmd())
 	cmd.AddCommand(newCredentialsValidateFileCmd())
@@ -8785,6 +8965,208 @@ func newCredentialsValidateDb2ChangeCmd() *cobra.Command {
 	cmd.Flags().String("ssl-ca-data", "", "PEM text of the CA certificate the server's certificate is checked against.")
 	cmd.Flags().Bool("ssl-disabled", false, "Connect without TLS.")
 	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateDbtCloudWebhookCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "dbt-cloud-webhook",
+		Short: "Validate dbt Cloud webhook credentials",
+		Long:  "Check candidate dbt Cloud webhook credentials against dbt Cloud.\n\nNo credentials are created. Send the values you would create the credentials with, and a\ndeployment to run them from. The checks run against your dbt Cloud account.\n\nThe response is the run as it starts. `Location` names where to read it. Poll that until the\nrun's status is `completed`. Each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "service-token", "service-token-prompt"); err != nil {
+				return err
+			}
+			if err := requireAny(cmd, "hmac-secret", "hmac-secret-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateDbtCloudWebhookCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			serviceToken, err := flagSecret(cmd, "service-token")
+			if err != nil {
+				return err
+			}
+			hmacSecret, err := flagSecret(cmd, "hmac-secret")
+			if err != nil {
+				return err
+			}
+			accountId, err := flagString(cmd, "account-id")
+			if err != nil {
+				return err
+			}
+			webhookId, err := flagString(cmd, "webhook-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewDbtCloudWebhookCredentialsValidateIn(deploymentId, serviceToken, hmacSecret, accountId, webhookId)
+			if changed(cmd, "base-url") {
+				baseUrl, err := flagString(cmd, "base-url")
+				if err != nil {
+					return err
+				}
+				body.SetBaseUrl(baseUrl)
+			}
+			req = req.DbtCloudWebhookCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("service-token", "", "A dbt Cloud service token that can read the account. Used for this check and not kept. Visible in the process list; --service-token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("service-token-prompt", false, "Read --service-token from a hidden prompt instead of the command line.")
+	cmd.Flags().String("hmac-secret", "", "The webhook's HMAC secret, shown by dbt Cloud when the webhook is created. Monte Carlo checks each event's signature with it. Used for this check and not kept. Visible in the process list; --hmac-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("hmac-secret-prompt", false, "Read --hmac-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("account-id", "", "Your dbt Cloud account id, the number in the account's URLs.")
+	_ = cmd.MarkFlagRequired("account-id")
+	cmd.Flags().String("webhook-id", "", "Id of the dbt Cloud webhook that sends job.run.completed events to Monte Carlo.")
+	_ = cmd.MarkFlagRequired("webhook-id")
+	cmd.Flags().String("base-url", "", "Your dbt Cloud access URL followed by /api/v2, such as https://emea.dbt.com/api/v2. Leave it out for https://cloud.getdbt.com/api/v2.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateDbtCloudWebhookChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "dbt-cloud-webhook-change <credentials_id>",
+		Short: "Validate a change to dbt Cloud webhook credentials",
+		Long:  "Check a change to dbt Cloud webhook credentials before making it.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials. The checks run against that\ncopy. The credentials and the connection using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.\n\nThe response is the run as it starts. `Location` names where to read it. Poll that until the\nrun's status is `completed`. Each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateDbtCloudWebhookCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewDbtCloudWebhookCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "account-id") {
+				accountId, err := flagString(cmd, "account-id")
+				if err != nil {
+					return err
+				}
+				body.SetAccountId(accountId)
+			}
+			if changed(cmd, "base-url") {
+				baseUrl, err := flagString(cmd, "base-url")
+				if err != nil {
+					return err
+				}
+				body.SetBaseUrl(baseUrl)
+			}
+			if changed(cmd, "hmac-secret", "hmac-secret-prompt") {
+				hmacSecret, err := flagSecret(cmd, "hmac-secret")
+				if err != nil {
+					return err
+				}
+				body.SetHmacSecret(hmacSecret)
+			}
+			if changed(cmd, "service-token", "service-token-prompt") {
+				serviceToken, err := flagSecret(cmd, "service-token")
+				if err != nil {
+					return err
+				}
+				body.SetServiceToken(serviceToken)
+			}
+			if changed(cmd, "webhook-id") {
+				webhookId, err := flagString(cmd, "webhook-id")
+				if err != nil {
+					return err
+				}
+				body.SetWebhookId(webhookId)
+			}
+			req = req.DbtCloudWebhookCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("account-id", "", "Your dbt Cloud account id, the number in the account's URLs.")
+	cmd.Flags().String("base-url", "", "Your dbt Cloud access URL followed by /api/v2, such as https://emea.dbt.com/api/v2. Leave it out for https://cloud.getdbt.com/api/v2. Setting it to a new URL requires sending service_token again.")
+	cmd.Flags().String("hmac-secret", "", "The webhook's HMAC secret, shown by dbt Cloud when the webhook is created. Monte Carlo checks each event's signature with it. Stored by Monte Carlo and never returned. Visible in the process list; --hmac-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("hmac-secret-prompt", false, "Read --hmac-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("service-token", "", "A dbt Cloud service token that can read the account. Stored by Monte Carlo and never returned. Visible in the process list; --service-token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("service-token-prompt", false, "Read --service-token from a hidden prompt instead of the command line.")
+	cmd.Flags().String("webhook-id", "", "Id of the dbt Cloud webhook that sends job.run.completed events to Monte Carlo.")
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }
