@@ -24,7 +24,7 @@ repo() {
 # check <name> <dir> <want> : passes when the script prints exactly <want> in <dir>.
 check() {
   local got
-  got=$(cd "$2" && "$script")
+  got=$(cd "$2" && "$script" 2>/dev/null) || got="<failed>"
   if [ "$got" = "$3" ]; then
     echo "ok   $1"
   else
