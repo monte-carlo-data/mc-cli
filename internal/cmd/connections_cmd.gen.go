@@ -36,7 +36,7 @@ func newConnectionsCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create a connection",
-		Long:  "Add a connection to a warehouse, a BI container or an ETL container.\n\nCreate the credentials first, through one of the credentials endpoints, then name them\nhere. The connection's type comes from them, and has to be a type the parent accepts and\nits deployment supports. Send exactly one of `warehouse_id`, `bi_container_id` and\n`etl_container_id`.\n\nA type that depends on a metastore, such as `databricks-sql-warehouse`, goes on a data\nlake warehouse that already has a metastore connection. Tableau, Looker and Power BI\ncredentials go on a BI container of the same tool; a `looker` container takes both the\n`looker` and the `looker-git-clone` connection.\n\nETL tool credentials go on an empty ETL container of the same type, created through\n`/etl-containers`. A container takes one connection. A container of a type this API does\nnot create, such as Snowflake Tasks, takes none.\n\nA custom ETL or BI connector's credentials, of type `custom-etl-connector-<id>` or\n`custom-bi-connector-<id>`, go on a `custom-etl-connector` or `custom-bi-connector`\ncontainer on the deployment of the agent that registered the connector. Such a container\nwith no deployment holds a push-only connector: send no `credentials_id`, and the\nconnection takes the container's type and runs no jobs.\n\nA custom warehouse connector's credentials, of type `custom-connector-<id>`, go on a\nwarehouse on the deployment of the agent that registered the connector, usually a\n`custom-integration` one. Its job types are the ones its capabilities allow.\n\nOmit `job_types` to run what the type runs by default. `etl` on a Snowflake, Power BI or\nSalesforce Data Cloud connection also turns on its ETL, as adding it later through the\nupdate does. Snowflake takes `etl` alone, the other two only beside their other jobs.\n\nAn unknown warehouse, BI container, ETL container or credentials id returns 404.",
+		Long:  "Add a connection to a warehouse, a BI container or an ETL container.\n\nCreate the credentials first, through one of the credentials endpoints, then name them\nhere. The connection's type comes from them, and has to be a type the parent accepts and\nits deployment supports. Send exactly one of `warehouse_id`, `bi_container_id` and\n`etl_container_id`.\n\nA type that depends on a metastore, such as `databricks-sql-warehouse`, goes on a data\nlake warehouse that already has a metastore connection. Tableau, Looker and Power BI\ncredentials go on a BI container of the same tool; a `looker` container takes both the\n`looker` and the `looker-git-clone` connection.\n\nETL tool credentials go on an empty ETL container of the same type, created through\n`/etl-containers`. A container takes one connection. A container of a type this API does\nnot create, such as Snowflake Tasks, takes none.\n\nA custom ETL or BI connector's credentials, of type `custom-etl-connector-<id>` or\n`custom-bi-connector-<id>`, go on a `custom-etl-connector` or `custom-bi-connector`\ncontainer on the deployment of the agent that registered the connector. Such a container\nwith no deployment holds a push-only connector: send no `credentials_id`, and the\nconnection takes the container's type and runs no jobs.\n\nA custom warehouse connector's credentials, of type `custom-connector-<id>`, go on a\nwarehouse on the deployment of the agent that registered the connector, usually a\n`custom-integration` one. Its job types are the ones its capabilities allow.\n\ndbt Cloud webhook credentials go on the existing warehouse the dbt project builds into,\nof any type. A webhook takes one connection. Its `dbt_cloud` object sets which dbt Cloud\nruns Monte Carlo processes. Left out, every run is processed. No other type takes\n`dbt_cloud`.\n\nOmit `job_types` to run what the type runs by default. `etl` on a Snowflake, Power BI or\nSalesforce Data Cloud connection also turns on its ETL, as adding it later through the\nupdate does. Snowflake takes `etl` alone, the other two only beside their other jobs.\n\nAn unknown warehouse, BI container, ETL container or credentials id returns 404.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			api, ctx, err := apiClient(cmd)
@@ -84,12 +84,41 @@ func newConnectionsCreateCmd() *cobra.Command {
 				}
 				body.SetWarehouseId(warehouseId)
 			}
+			if changed(cmd, "dbt-cloud-connection-match", "dbt-cloud-allowed-connections", "dbt-cloud-allowed-environments") {
+				if err := requireAny(cmd, "dbt-cloud-connection-match"); err != nil {
+					return err
+				}
+				dbtCloudConnectionMatchValue, err := flagString(cmd, "dbt-cloud-connection-match")
+				if err != nil {
+					return err
+				}
+				dbtCloudConnectionMatch, err := sdk.NewConnectionMatchFromValue(dbtCloudConnectionMatchValue)
+				if err != nil {
+					return usageError("%w", err)
+				}
+				if err := requireAny(cmd, "dbt-cloud-allowed-connections"); err != nil {
+					return err
+				}
+				dbtCloudAllowedConnections, err := flagStringSlice(cmd, "dbt-cloud-allowed-connections")
+				if err != nil {
+					return err
+				}
+				if err := requireAny(cmd, "dbt-cloud-allowed-environments"); err != nil {
+					return err
+				}
+				dbtCloudAllowedEnvironments, err := flagStringSlice(cmd, "dbt-cloud-allowed-environments")
+				if err != nil {
+					return err
+				}
+				nested := sdk.NewDbtCloudSettingsIn(*dbtCloudConnectionMatch, dbtCloudAllowedConnections, dbtCloudAllowedEnvironments)
+				body.SetDbtCloud(*nested)
+			}
 			req = req.ConnectionIn(*body)
 			out, resp, err := retryOnTransient(cmd, req.Execute)
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "id", "connection_type", "name", "warehouse_id", "warehouse_name", "bi_container_id", "bi_container_name", "etl_container_id", "etl_container_name", "deployment_id", "deployment_name", "credentials_id", "credentials_storage_type", "job_types", "created_time")
+			return render(cmd, out, "id", "connection_type", "name", "warehouse_id", "warehouse_name", "bi_container_id", "bi_container_name", "etl_container_id", "etl_container_name", "deployment_id", "deployment_name", "credentials_id", "credentials_storage_type", "job_types", "created_time", "dbt_cloud")
 		},
 	}
 	cmd.Flags().String("name", "", "Display name for the connection. Unique among the connections of its warehouse or BI container. An ETL container holds one connection.")
@@ -99,6 +128,10 @@ func newConnectionsCreateCmd() *cobra.Command {
 	cmd.Flags().String("etl-container-id", "", "The ETL container to add the connection to, for ETL tool credentials such as Fivetran or Airflow. The container's type has to equal the credentials' type, and the container must not have a connection yet. A custom-etl-connector container takes a custom ETL connector's credentials, or none when it has no deployment. Send exactly one of this, warehouse_id and bi_container_id.")
 	cmd.Flags().StringSlice("job-types", nil, "The jobs to run on this connection. Omit it to run what the connection type runs by default, which is what the app does. Which values are accepted depends on the connection type. etl on a Snowflake, Power BI or Salesforce Data Cloud connection also creates its ETL container. An empty list is not accepted; omit the field to take the defaults.")
 	cmd.Flags().String("warehouse-id", "", "The warehouse to add the connection to. Its type has to match what the credentials are for. Send exactly one of this, bi_container_id and etl_container_id.")
+	cmd.Flags().String("dbt-cloud-connection-match", "", "How a run is matched to the connection's warehouse. off, the default, drops no run for its dbt connection.")
+	_ = cmd.RegisterFlagCompletionFunc("dbt-cloud-connection-match", enumCompletion(sdk.AllowedConnectionMatchEnumValues))
+	cmd.Flags().StringSlice("dbt-cloud-allowed-connections", nil, "The dbt connections, by id or name, whose runs are kept. At least one for allow_list. Empty otherwise.")
+	cmd.Flags().StringSlice("dbt-cloud-allowed-environments", nil, "The dbt environments, by name and ignoring case, whose runs are kept. Empty keeps runs from every environment.")
 	return cmd
 }
 
@@ -118,7 +151,7 @@ func newConnectionsGetCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "id", "connection_type", "name", "warehouse_id", "warehouse_name", "bi_container_id", "bi_container_name", "etl_container_id", "etl_container_name", "deployment_id", "deployment_name", "credentials_id", "credentials_storage_type", "job_types", "created_time")
+			return render(cmd, out, "id", "connection_type", "name", "warehouse_id", "warehouse_name", "bi_container_id", "bi_container_name", "etl_container_id", "etl_container_name", "deployment_id", "deployment_name", "credentials_id", "credentials_storage_type", "job_types", "created_time", "dbt_cloud")
 		},
 	}
 	return cmd
@@ -270,14 +303,16 @@ type connectionsAddNative struct {
 	group flagGroup
 	// The shared flags this type's credentials do not take.
 	selfHostedOnly []string
-	build          func(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error)
+	// Whether the command offers only this type's credentials group.
+	noSelfHosted bool
+	build        func(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error)
 }
 
 func newConnectionsAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add <connection-type>",
 		Short: "Add a connection, creating its warehouse, BI container or ETL container and credentials",
-		Long:  "Adds a connection in one step. It validates the credentials first and, once every validation passes, asks before creating a warehouse unless --warehouse-id names one, or for a BI connection type a BI container unless --bi-container-id names one, or for an ETL connection type an ETL container unless --etl-container-id names one, then the credentials, then the connection. --validate-only stops after validating; --skip-validations creates without validating or asking. If a step fails, or the command is interrupted, what it created is deleted again, and anything it could not delete is listed with the command that deletes it.\n\nThe argument is the connection type. This command takes self-hosted credentials, one set of --self-hosted-* flags; the subcommands take each connection type's own credentials.\n\nA type registered per account goes by its prefix: custom-bi-connector-<id> on a BI container of type custom-bi-connector, custom-etl-connector-<id> on an ETL container of type custom-etl-connector, custom-connector-<id> on a warehouse of type custom-integration and custom-integration-<id> on a warehouse of type custom-integration. The push-only custom-bi-connector and custom-etl-connector take no credentials, so they are refused: create the container, then the connection.",
+		Long:  "Adds a connection in one step. It validates the credentials first and, once every validation passes, asks before creating a warehouse unless --warehouse-id names one, or for a BI connection type a BI container unless --bi-container-id names one, or for an ETL connection type an ETL container unless --etl-container-id names one, then the credentials, then the connection. --validate-only stops after validating; --skip-validations creates without validating or asking. If a step fails, or the command is interrupted, what it created is deleted again, and anything it could not delete is listed with the command that deletes it.\n\nThe argument is the connection type. This command takes self-hosted credentials, one set of --self-hosted-* flags; the subcommands take each connection type's own credentials. airflow and dbt-cloud-webhook take no self-hosted credentials.\n\nA type registered per account goes by its prefix: custom-bi-connector-<id> on a BI container of type custom-bi-connector, custom-etl-connector-<id> on an ETL container of type custom-etl-connector, custom-connector-<id> on a warehouse of type custom-integration and custom-integration-<id> on a warehouse of type custom-integration. The push-only custom-bi-connector and custom-etl-connector take no credentials, so they are refused: create the container, then the connection.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, args[0], nil)
@@ -312,6 +347,7 @@ func newConnectionsAddCmd() *cobra.Command {
 	cmd.AddCommand(newConnectionsAddMulesoftCmd())
 	cmd.AddCommand(newConnectionsAddGcpDataformCmd())
 	cmd.AddCommand(newConnectionsAddAirflowCmd())
+	cmd.AddCommand(newConnectionsAddDbtCloudWebhookCmd())
 	return cmd
 }
 
@@ -1028,22 +1064,53 @@ func newConnectionsAddAirflowCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "airflow",
 		Short: "Add a connection of type airflow, creating its ETL container and credentials",
-		Long:  "Adds a connection of type airflow in one step, as the add command does. Pass airflow credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Long:  "Adds a connection of type airflow in one step, as the add command does. Pass airflow credentials with the flags below.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, "airflow", &connectionsAddNative{
 				group:          flagGroup{"airflow", []string{"host-name"}},
-				selfHostedOnly: []string{"bq-project-id", "sql-warehouse-id"},
+				selfHostedOnly: []string{},
+				noSelfHosted:   true,
 				build:          buildConnectionsAddAirflow,
 			})
 		},
 	}
 	cmd.Flags().String("host-name", "", "Host name of the Airflow web server, as Airflow reports it to Monte Carlo.")
-	registerConnectionsAddFlags(cmd)
+	registerConnectionsAddCommandFlags(cmd)
 	return cmd
 }
 
-// registerConnectionsAddFlags registers the flags every add command takes.
+func newConnectionsAddDbtCloudWebhookCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "dbt-cloud-webhook",
+		Short: "Add a connection of type dbt-cloud-webhook to an existing warehouse, creating its credentials",
+		Long:  "Adds a connection of type dbt-cloud-webhook in one step, as the add command does. It goes on the existing warehouse --warehouse-id names. Pass dbt-cloud-webhook credentials with the flags below. The --dbt-cloud-* flags set the dbt_cloud settings only a connection of type dbt-cloud-webhook has.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsAdd(cmd, "dbt-cloud-webhook", &connectionsAddNative{
+				group:          flagGroup{"dbt-cloud-webhook", []string{"service-token", "service-token-prompt", "hmac-secret", "hmac-secret-prompt", "account-id", "webhook-id", "base-url"}},
+				selfHostedOnly: []string{},
+				noSelfHosted:   true,
+				build:          buildConnectionsAddDbtCloudWebhook,
+			})
+		},
+	}
+	cmd.Flags().String("service-token", "", "A dbt Cloud service token that can read the account. Stored by Monte Carlo and never returned. Visible in the process list; --service-token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("service-token-prompt", false, "Read --service-token from a hidden prompt instead of the command line.")
+	cmd.Flags().String("hmac-secret", "", "The webhook's HMAC secret, shown by dbt Cloud when the webhook is created. Monte Carlo checks each event's signature with it. Stored by Monte Carlo and never returned. Visible in the process list; --hmac-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("hmac-secret-prompt", false, "Read --hmac-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("account-id", "", "Your dbt Cloud account id, the number in the account's URLs.")
+	cmd.Flags().String("webhook-id", "", "Id of the dbt Cloud webhook that sends job.run.completed events to Monte Carlo.")
+	cmd.Flags().String("base-url", "", "Your dbt Cloud access URL followed by /api/v2, such as https://emea.dbt.com/api/v2. Leave it out for https://cloud.getdbt.com/api/v2.")
+	cmd.Flags().String("dbt-cloud-connection-match", "", "How a run is matched to the connection's warehouse. off, the default, drops no run for its dbt connection.")
+	_ = cmd.RegisterFlagCompletionFunc("dbt-cloud-connection-match", enumCompletion(sdk.AllowedConnectionMatchEnumValues))
+	cmd.Flags().StringSlice("dbt-cloud-allowed-connections", nil, "The dbt connections, by id or name, whose runs are kept. At least one for allow_list. Empty otherwise.")
+	cmd.Flags().StringSlice("dbt-cloud-allowed-environments", nil, "The dbt environments, by name and ignoring case, whose runs are kept. Empty keeps runs from every environment.")
+	registerConnectionsAddCommandFlags(cmd)
+	return cmd
+}
+
+// registerConnectionsAddFlags registers the self-hosted and shared credentials flags, then the command's own.
 func registerConnectionsAddFlags(cmd *cobra.Command) {
 	cmd.Flags().String("self-hosted-aws-secret", "", "Name or ARN of the AWS Secrets Manager secret holding the connection's credentials.")
 	cmd.Flags().String("self-hosted-aws-assumable-role", "", "ARN of a role the deployment assumes to read the secret. Omit it to read as itself.")
@@ -1058,8 +1125,13 @@ func registerConnectionsAddFlags(cmd *cobra.Command) {
 	cmd.Flags().String("self-hosted-file-path", "", "Path of the file on the deployment that holds the connection's credentials.")
 	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
 	cmd.Flags().String("sql-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
+	registerConnectionsAddCommandFlags(cmd)
+}
+
+// registerConnectionsAddCommandFlags registers the flags every add command takes.
+func registerConnectionsAddCommandFlags(cmd *cobra.Command) {
 	cmd.Flags().String("name", "", "Name of the new connection, and of the warehouse, BI container or ETL container when one is created. Required unless --validate-only.")
-	cmd.Flags().String("warehouse-id", "", "Existing warehouse to add the connection to. Without it, a warehouse is created for the connection first. Connection types that attach to a warehouse another connection provides need it: without it the connection is refused and the created warehouse removed. A BI connection type takes --bi-container-id. An ETL connection type takes --etl-container-id.")
+	cmd.Flags().String("warehouse-id", "", "Existing warehouse to add the connection to. Without it, a warehouse is created for the connection first. Connection types that attach to a warehouse another connection provides need it: without it the connection is refused and the created warehouse removed. Required for dbt-cloud-webhook, which goes on an existing warehouse only. A BI connection type takes --bi-container-id. An ETL connection type takes --etl-container-id.")
 	cmd.Flags().String("bi-container-id", "", "Existing BI container to add a BI connection to. Without it, a BI container is created for the connection first.")
 	cmd.Flags().String("etl-container-id", "", "Existing ETL container to add an ETL connection to. Without it, an ETL container is created for the connection first.")
 	cmd.Flags().String("deployment-id", "", "The deployment the warehouse's connections will run through. Pick one from the deployments list. Only a deployment on Monte Carlo's current collection platform is accepted. A new BI container or ETL container runs through it too. Required when none of --warehouse-id, --bi-container-id and --etl-container-id is given, refused with any of them. Refused for airflow, whose ETL container runs through no deployment.")
@@ -3537,6 +3609,70 @@ func buildConnectionsAddAirflow(cmd *cobra.Command, api *sdk.APIClient, connecti
 	}, nil
 }
 
+func buildConnectionsAddDbtCloudWebhook(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
+	var err error
+	if err := requireAny(cmd, "service-token", "service-token-prompt"); err != nil {
+		return nil, err
+	}
+	serviceToken, err := flagSecret(cmd, "service-token")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "hmac-secret", "hmac-secret-prompt"); err != nil {
+		return nil, err
+	}
+	hmacSecret, err := flagSecret(cmd, "hmac-secret")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "account-id"); err != nil {
+		return nil, err
+	}
+	accountId, err := flagString(cmd, "account-id")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "webhook-id"); err != nil {
+		return nil, err
+	}
+	webhookId, err := flagString(cmd, "webhook-id")
+	if err != nil {
+		return nil, err
+	}
+	var baseUrl string
+	if changed(cmd, "base-url") {
+		baseUrl, err = flagString(cmd, "base-url")
+		if err != nil {
+			return nil, err
+		}
+	}
+	body := sdk.NewDbtCloudWebhookCredentialsIn(serviceToken, hmacSecret, accountId, webhookId)
+	if changed(cmd, "base-url") {
+		body.SetBaseUrl(baseUrl)
+	}
+	return &connectionsAddCredentials{
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			candidate := sdk.NewDbtCloudWebhookCredentialsValidateIn(deploymentId, serviceToken, hmacSecret, accountId, webhookId)
+			if changed(cmd, "base-url") {
+				candidate.SetBaseUrl(baseUrl)
+			}
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateDbtCloudWebhookCredentials(ctx).DbtCloudWebhookCredentialsValidateIn(*candidate).Execute)
+		},
+		create: func(ctx context.Context) (string, *http.Response, error) {
+			out, resp, err := retryOnTransient(cmd, api.CredentialsAPI.CreateDbtCloudWebhookCredentials(ctx).DbtCloudWebhookCredentialsIn(*body).Execute)
+			if err != nil {
+				return "", resp, err
+			}
+			return out.GetId(), resp, nil
+		},
+		del: func(ctx context.Context, id string) (*http.Response, error) {
+			return api.CredentialsAPI.DeleteDbtCloudWebhookCredentials(ctx, id).Execute()
+		},
+		deleteCmd: "credentials delete dbt-cloud-webhook",
+		listCmd:   "credentials list",
+	}, nil
+}
+
 func buildConnectionsAddSelfHostedAws(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
 	var err error
 	if err := requireAny(cmd, "self-hosted-aws-secret"); err != nil {
@@ -3913,7 +4049,9 @@ func runConnectionsAdd(cmd *cobra.Command, connectionType string, native *connec
 		{"self-hosted-env-var", []string{"self-hosted-env-var-name", "self-hosted-env-var-kms-key-id"}},
 		{"self-hosted-file", []string{"self-hosted-file-path"}},
 	}
-	if native != nil {
+	if native != nil && native.noSelfHosted {
+		groups = []flagGroup{native.group}
+	} else if native != nil {
 		groups = append([]flagGroup{native.group}, groups...)
 	}
 	selected, err := requireOneGroup(cmd, groups...)
@@ -4025,6 +4163,12 @@ func runConnectionsAdd(cmd *cobra.Command, connectionType string, native *connec
 				}
 			}
 		}
+		switch connectionType {
+		case "dbt-cloud-webhook":
+			if !changed(cmd, "warehouse-id") || changed(cmd, "deployment-id") {
+				return usageError("connection type %s goes on an existing warehouse: pass --warehouse-id, and no --deployment-id", connectionType)
+			}
+		}
 		if changed(cmd, "warehouse-id") == changed(cmd, "deployment-id") {
 			return usageError("pass --deployment-id to create a warehouse for the connection, or --warehouse-id to add it to an existing one")
 		}
@@ -4100,6 +4244,38 @@ func runConnectionsAdd(cmd *cobra.Command, connectionType string, native *connec
 			return err
 		}
 		connection.SetJobTypes(jobTypes)
+	}
+	// Settings only one connection type has. Only that type's subcommand registers their flags.
+	if connectionType == "dbt-cloud-webhook" && changed(cmd, "dbt-cloud-connection-match", "dbt-cloud-allowed-connections", "dbt-cloud-allowed-environments") {
+		if err := requireAny(cmd, "dbt-cloud-connection-match"); err != nil {
+			return err
+		}
+		dbtCloudConnectionMatchValue, err := flagString(cmd, "dbt-cloud-connection-match")
+		if err != nil {
+			return err
+		}
+		dbtCloudConnectionMatch, err := sdk.NewConnectionMatchFromValue(dbtCloudConnectionMatchValue)
+		if err != nil {
+			return usageError("%w", err)
+		}
+		dbtCloudAllowedConnections := []string{}
+		if changed(cmd, "dbt-cloud-allowed-connections") {
+			given, err := flagStringSlice(cmd, "dbt-cloud-allowed-connections")
+			if err != nil {
+				return err
+			}
+			dbtCloudAllowedConnections = given
+		}
+		dbtCloudAllowedEnvironments := []string{}
+		if changed(cmd, "dbt-cloud-allowed-environments") {
+			given, err := flagStringSlice(cmd, "dbt-cloud-allowed-environments")
+			if err != nil {
+				return err
+			}
+			dbtCloudAllowedEnvironments = given
+		}
+		nested := sdk.NewDbtCloudSettingsIn(*dbtCloudConnectionMatch, dbtCloudAllowedConnections, dbtCloudAllowedEnvironments)
+		connection.SetDbtCloud(*nested)
 	}
 	if !skipValidations {
 		if credentials.validate != nil {
@@ -4222,7 +4398,7 @@ func runConnectionsAdd(cmd *cobra.Command, connectionType string, native *connec
 	if err != nil {
 		return run.fail(resp, err, "The connection may have been created; check "+binaryName+" connections list.")
 	}
-	return render(cmd, out, "id", "connection_type", "name", "warehouse_id", "warehouse_name", "bi_container_id", "bi_container_name", "etl_container_id", "etl_container_name", "deployment_id", "deployment_name", "credentials_id", "credentials_storage_type", "job_types", "created_time")
+	return render(cmd, out, "id", "connection_type", "name", "warehouse_id", "warehouse_name", "bi_container_id", "bi_container_name", "etl_container_id", "etl_container_name", "deployment_id", "deployment_name", "credentials_id", "credentials_storage_type", "job_types", "created_time", "dbt_cloud")
 }
 
 // connectionsUpdateCredentials validates a change to a connection's credentials, and makes it.
@@ -4236,6 +4412,9 @@ type connectionsUpdateNative struct {
 	group   flagGroup
 	storage string
 	build   func(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error)
+	// The flags of the settings only this connection type has, and the func that sets them on the update.
+	settingsFlags []string
+	settings      func(cmd *cobra.Command, connection *sdk.ConnectionOut, update *sdk.ConnectionPatch) (bool, error)
 }
 
 func newConnectionsUpdateCmd() *cobra.Command {
@@ -4290,6 +4469,7 @@ func newConnectionsUpdateCmd() *cobra.Command {
 	cmd.AddCommand(newConnectionsUpdateMulesoftCmd())
 	cmd.AddCommand(newConnectionsUpdateGcpDataformCmd())
 	cmd.AddCommand(newConnectionsUpdateAirflowCmd())
+	cmd.AddCommand(newConnectionsUpdateDbtCloudWebhookCmd())
 	return cmd
 }
 
@@ -5019,6 +5199,37 @@ func newConnectionsUpdateAirflowCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("host-name", "", "Host name of the Airflow web server, as Airflow reports it to Monte Carlo.")
+	registerConnectionsUpdateFlags(cmd)
+	return cmd
+}
+
+func newConnectionsUpdateDbtCloudWebhookCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "dbt-cloud-webhook <connection_id>",
+		Short: "Update a connection of type dbt-cloud-webhook, and change its credentials",
+		Long:  "Updates a connection of type dbt-cloud-webhook, as the update command does, changing its dbt-cloud-webhook credentials with the flags below. The --dbt-cloud-* flags set the dbt_cloud settings only a connection of type dbt-cloud-webhook has. The current settings fill every one left out. Pass \"\" to a list flag to empty it.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
+				group:         flagGroup{"dbt-cloud-webhook", []string{"account-id", "base-url", "hmac-secret", "hmac-secret-prompt", "service-token", "service-token-prompt", "webhook-id"}},
+				storage:       "mc_managed",
+				build:         buildConnectionsUpdateDbtCloudWebhook,
+				settingsFlags: []string{"dbt-cloud-connection-match", "dbt-cloud-allowed-connections", "dbt-cloud-allowed-environments"},
+				settings:      buildConnectionsUpdateDbtCloudWebhookSettings,
+			})
+		},
+	}
+	cmd.Flags().String("account-id", "", "Your dbt Cloud account id, the number in the account's URLs.")
+	cmd.Flags().String("base-url", "", "Your dbt Cloud access URL followed by /api/v2, such as https://emea.dbt.com/api/v2. Leave it out for https://cloud.getdbt.com/api/v2. Setting it to a new URL requires sending service_token again.")
+	cmd.Flags().String("hmac-secret", "", "The webhook's HMAC secret, shown by dbt Cloud when the webhook is created. Monte Carlo checks each event's signature with it. Stored by Monte Carlo and never returned. Visible in the process list; --hmac-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("hmac-secret-prompt", false, "Read --hmac-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("service-token", "", "A dbt Cloud service token that can read the account. Stored by Monte Carlo and never returned. Visible in the process list; --service-token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("service-token-prompt", false, "Read --service-token from a hidden prompt instead of the command line.")
+	cmd.Flags().String("webhook-id", "", "Id of the dbt Cloud webhook that sends job.run.completed events to Monte Carlo.")
+	cmd.Flags().String("dbt-cloud-connection-match", "", "How a run is matched to the connection's warehouse. off, the default, drops no run for its dbt connection.")
+	_ = cmd.RegisterFlagCompletionFunc("dbt-cloud-connection-match", enumCompletion(sdk.AllowedConnectionMatchEnumValues))
+	cmd.Flags().StringSlice("dbt-cloud-allowed-connections", nil, "The dbt connections, by id or name, whose runs are kept. At least one for allow_list. Empty otherwise.")
+	cmd.Flags().StringSlice("dbt-cloud-allowed-environments", nil, "The dbt environments, by name and ignoring case, whose runs are kept. Empty keeps runs from every environment.")
 	registerConnectionsUpdateFlags(cmd)
 	return cmd
 }
@@ -8172,6 +8383,102 @@ func buildConnectionsUpdateAirflow(cmd *cobra.Command, api *sdk.APIClient, crede
 	}, nil
 }
 
+func buildConnectionsUpdateDbtCloudWebhook(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+	var err error
+	var accountId string
+	if changed(cmd, "account-id") {
+		accountId, err = flagString(cmd, "account-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var baseUrl string
+	if changed(cmd, "base-url") {
+		baseUrl, err = flagString(cmd, "base-url")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var hmacSecret string
+	if changed(cmd, "hmac-secret", "hmac-secret-prompt") {
+		hmacSecret, err = flagSecret(cmd, "hmac-secret")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var serviceToken string
+	if changed(cmd, "service-token", "service-token-prompt") {
+		serviceToken, err = flagSecret(cmd, "service-token")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var webhookId string
+	if changed(cmd, "webhook-id") {
+		webhookId, err = flagString(cmd, "webhook-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	patch := sdk.NewDbtCloudWebhookCredentialsPatchWithDefaults()
+	check := sdk.NewDbtCloudWebhookCredentialsChangeValidateInWithDefaults()
+	if changed(cmd, "account-id") {
+		if accountId == "" {
+			patch.SetAccountIdNil()
+			check.SetAccountIdNil()
+		} else {
+			patch.SetAccountId(accountId)
+			check.SetAccountId(accountId)
+		}
+	}
+	if changed(cmd, "base-url") {
+		if baseUrl == "" {
+			patch.SetBaseUrlNil()
+			check.SetBaseUrlNil()
+		} else {
+			patch.SetBaseUrl(baseUrl)
+			check.SetBaseUrl(baseUrl)
+		}
+	}
+	if changed(cmd, "hmac-secret", "hmac-secret-prompt") {
+		if hmacSecret == "" {
+			patch.SetHmacSecretNil()
+			check.SetHmacSecretNil()
+		} else {
+			patch.SetHmacSecret(hmacSecret)
+			check.SetHmacSecret(hmacSecret)
+		}
+	}
+	if changed(cmd, "service-token", "service-token-prompt") {
+		if serviceToken == "" {
+			patch.SetServiceTokenNil()
+			check.SetServiceTokenNil()
+		} else {
+			patch.SetServiceToken(serviceToken)
+			check.SetServiceToken(serviceToken)
+		}
+	}
+	if changed(cmd, "webhook-id") {
+		if webhookId == "" {
+			patch.SetWebhookIdNil()
+			check.SetWebhookIdNil()
+		} else {
+			patch.SetWebhookId(webhookId)
+			check.SetWebhookId(webhookId)
+		}
+	}
+	return &connectionsUpdateCredentials{
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateDbtCloudWebhookCredentialsChange(ctx, credentialsId).DbtCloudWebhookCredentialsChangeValidateIn(*check).Execute)
+		},
+		patch: func(ctx context.Context) (*http.Response, error) {
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateDbtCloudWebhookCredentials(ctx, credentialsId).DbtCloudWebhookCredentialsPatch(*patch).Execute)
+			return resp, err
+		},
+	}, nil
+}
+
 func buildConnectionsUpdateSelfHostedAws(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var selfHostedAwsAssumableRole string
@@ -8588,8 +8895,46 @@ func buildConnectionsUpdateSelfHostedFile(cmd *cobra.Command, api *sdk.APIClient
 	}, nil
 }
 
+// buildConnectionsUpdateDbtCloudWebhookSettings sets the dbt_cloud settings on the
+// update. The update replaces them whole, so the connection's current settings fill every flag
+// left out; false when it has none.
+func buildConnectionsUpdateDbtCloudWebhookSettings(cmd *cobra.Command, connection *sdk.ConnectionOut, update *sdk.ConnectionPatch) (bool, error) {
+	current, ok := connection.GetDbtCloudOk()
+	if !ok || current == nil {
+		return false, nil
+	}
+	settings := sdk.NewDbtCloudSettingsIn(current.GetConnectionMatch(), current.GetAllowedConnections(), current.GetAllowedEnvironments())
+	if changed(cmd, "dbt-cloud-connection-match") {
+		dbtCloudConnectionMatchValue, err := flagString(cmd, "dbt-cloud-connection-match")
+		if err != nil {
+			return false, err
+		}
+		dbtCloudConnectionMatch, err := sdk.NewConnectionMatchFromValue(dbtCloudConnectionMatchValue)
+		if err != nil {
+			return false, usageError("%w", err)
+		}
+		settings.SetConnectionMatch(*dbtCloudConnectionMatch)
+	}
+	if changed(cmd, "dbt-cloud-allowed-connections") {
+		dbtCloudAllowedConnections, err := flagStringSlice(cmd, "dbt-cloud-allowed-connections")
+		if err != nil {
+			return false, err
+		}
+		settings.SetAllowedConnections(dbtCloudAllowedConnections)
+	}
+	if changed(cmd, "dbt-cloud-allowed-environments") {
+		dbtCloudAllowedEnvironments, err := flagStringSlice(cmd, "dbt-cloud-allowed-environments")
+		if err != nil {
+			return false, err
+		}
+		settings.SetAllowedEnvironments(dbtCloudAllowedEnvironments)
+	}
+	update.SetDbtCloud(*settings)
+	return true, nil
+}
+
 // runConnectionsUpdate reads every flag, validates a credentials change unless told otherwise, then
-// changes the credentials and renames the connection.
+// changes the credentials, and renames the connection or sets its type's settings.
 func runConnectionsUpdate(cmd *cobra.Command, connectionId string, native *connectionsUpdateNative) error {
 	groups := []flagGroup{
 		{"self-hosted-aws", []string{"self-hosted-aws-assumable-role", "self-hosted-aws-region", "self-hosted-aws-secret", "self-hosted-aws-external-id"}},
@@ -8614,7 +8959,12 @@ func runConnectionsUpdate(cmd *cobra.Command, connectionId string, native *conne
 	}
 	changing := changed(cmd, credentialsFlags...)
 	renaming := changed(cmd, "job-types", "name")
-	if !changing && !renaming {
+	var settingsFlags []string
+	if native != nil {
+		settingsFlags = native.settingsFlags
+	}
+	updatingSettings := changed(cmd, settingsFlags...)
+	if !changing && !renaming && !updatingSettings {
 		return usageError("nothing to update: pass the flags of what changes")
 	}
 	validateOnly, err := flagBool(cmd, "validate-only")
@@ -8707,6 +9057,18 @@ func runConnectionsUpdate(cmd *cobra.Command, connectionId string, native *conne
 		}
 		rename.SetName(name)
 	}
+	if updatingSettings {
+		if connectionType := connection.GetConnectionType(); connectionType != native.group.name {
+			return fmt.Errorf("connection %s is of type %s; only a connection of type %s has the settings these flags set", connectionId, connectionType, native.group.name)
+		}
+		found, err := native.settings(cmd, connection, rename)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return fmt.Errorf("connection %s has no settings for these flags to change", connectionId)
+		}
+	}
 	if credentials != nil && credentials.validate != nil && !skipValidations {
 		deploymentId, ok := connection.GetDeploymentIdOk()
 		if !ok || deploymentId == nil {
@@ -8751,17 +9113,20 @@ func runConnectionsUpdate(cmd *cobra.Command, connectionId string, native *conne
 			return apiErr(resp, err)
 		}
 	}
-	if renaming {
+	if renaming || updatingSettings {
 		out, resp, err := retryOnTransient(cmd, api.ConnectionsAPI.UpdateConnection(ctx, connectionId).ConnectionPatch(*rename).Execute)
 		if err != nil {
 			if credentials != nil {
+				if updatingSettings {
+					return fmt.Errorf("%w\nThe credentials were changed; the connection was not updated.", apiErr(resp, err))
+				}
 				return fmt.Errorf("%w\nThe credentials were changed; the connection was not renamed.", apiErr(resp, err))
 			}
 			return apiErr(resp, err)
 		}
 		connection = out
 	}
-	return render(cmd, connection, "id", "connection_type", "name", "warehouse_id", "warehouse_name", "bi_container_id", "bi_container_name", "etl_container_id", "etl_container_name", "deployment_id", "deployment_name", "credentials_id", "credentials_storage_type", "job_types", "created_time")
+	return render(cmd, connection, "id", "connection_type", "name", "warehouse_id", "warehouse_name", "bi_container_id", "bi_container_name", "etl_container_id", "etl_container_name", "deployment_id", "deployment_name", "credentials_id", "credentials_storage_type", "job_types", "created_time", "dbt_cloud")
 }
 
 func newConnectionsDeleteCmd() *cobra.Command {
