@@ -52,7 +52,7 @@ pwsh .github/scripts/install_test.ps1 -Dist dist -Tag v0.1.0   # needs Windows f
 | `tools/notices/` | Writes `THIRD_PARTY_NOTICES`; `go generate ./...` runs it. |
 | `tools/gendocs/` | Writes the command reference site; see [Reference docs](#reference-docs). |
 | `install.sh`, `install.ps1` | The installers, attached to every release. |
-| `.github/scripts/` | The release-tag script, the installer tests and the release mirror they run against. |
+| `.github/scripts/` | The tag scripts, the installer tests and the release mirror they run against. |
 | `.github/actions/goreleaser/` | The pinned GoReleaser, shared by the snapshot and the release. |
 | `.github/workflows/publish-docs.yml`, `.github/actions/publish-docs/` | Build the reference on every pull request and publish it. |
 
@@ -140,7 +140,7 @@ Nothing keeps `dev` in step with `main`. When abandoned previews pile up, reset 
 
 ## Releasing
 
-Every merge to `main` is a release, and a published version can't be changed or withdrawn: releases are immutable, and the Go module proxy keeps every version it has served. `.github/scripts/next-tag.sh` works out the tag `v<base>.<n>`: `<base>` is the major.minor in `VERSION`, and `<n>` is one past the highest patch already tagged on that base. CI runs its test, and validates `VERSION`, on every pull request. The org App and the `apollo` team are the only actors allowed to create tags. The same script, its test and the `tag` job also live in mc-sdk-go and the Terraform provider; change them together.
+Every merge to `main` is a release, and a published version can't be changed or withdrawn: releases are immutable, and the Go module proxy keeps every version it has served. `.github/scripts/next-tag.sh` works out the tag `v<base>.<n>`: `<base>` is the major.minor in `VERSION`, and `<n>` is one past the highest patch already tagged on that base. CI runs its test, and validates `VERSION`, on every pull request. The org App and the `apollo` team are the only actors allowed to create tags. The same script, its test and the `tag` job also live in mc-sdk-go and the Terraform provider. `.github/scripts/release-tag.sh` and its test also live in the Terraform provider and mc-sdk-go, as does the `release-tag` job in the Terraform provider; mc-sdk-go's `github-release.sh` calls the script instead. Change them together.
 
 Only the patch is bumped automatically. A merge that breaks scripts written against the CLI, by removing or renaming a command or flag, changing an exit code, or changing the JSON output's shape, must bump the minor: change `VERSION` (`0.1` to `0.2`) in the same pull request, and its merge is tagged `v0.2.0`. A regeneration from api-codegen is a release too, and the same rule applies to what it changes. The bot may only pin a tagged mc-sdk-go release, which CI checks.
 
@@ -148,12 +148,12 @@ Only the patch is bumped automatically. A merge that breaks scripts written agai
 
 On a push to `main`, once the build, the checks, `release-snapshot` and every `install-test` leg pass:
 
-1. `tag` tags the merge commit through the org App.
+1. `tag` tags the merge commit through the org App, and `release-tag` reads the commit's version tag with `.github/scripts/release-tag.sh` for the jobs below.
 2. `release` runs GoReleaser (`.goreleaser.yml`) only in a push-to-main run, never on a tag push, which would run whichever commit was tagged; the tag is always that run's commit. Only the highest release is marked latest, since releases from back-to-back merges can publish out of order. It cross-compiles darwin, linux and windows on amd64 and arm64, packs each with `LICENSE`, `README.md` and `THIRD_PARTY_NOTICES`, writes the checksums file, and attaches it all, with both installers, to a GitHub release that is published once every asset is uploaded. The release targets and the `goos` list in `tools/notices` stay in step, so the notices cover every platform shipped.
 3. `attest` attests the archives, the checksums and the installers that `release` built, after checking that the published release holds exactly those files.
 4. `release-smoke` installs the release from its real URLs on Linux, macOS and Windows, verifies its provenance, and checks `go install` of the tag.
 
-Don't create a release in the GitHub UI. If `release` or `attest` fails, use "Re-run failed jobs": a rerun of `release` finishes the draft it left, and `attest` can be rerun alone. Re-running all jobs finds the commit already tagged and releases nothing. A commit older than an already-tagged one is never tagged.
+Don't create a release in the GitHub UI. If `tag` or `release` fails, re-run it: the release reads its tag from the commit, not from `tag`, so a rerun that finds the commit already tagged still releases it, and a rerun of `release` finishes the draft it left. Once the release is published, if `attest` or `release-smoke` fails, use "Re-run failed jobs": re-running all jobs reruns `release`, which fails because a published release is immutable. A commit older than an already-tagged one is never tagged.
 
 CI's `release-snapshot` builds the same release on every pull request, at the tag the merge would get, without publishing, and checks what it built; `install-test` then runs both installers against it, served the way GitHub serves a release. A change that would break a release fails there, before it merges. [Common Commands](#common-commands) shows how to run both locally.
 
