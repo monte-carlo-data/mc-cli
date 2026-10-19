@@ -79,6 +79,7 @@ jobs:
         run: |
           .github/scripts/next-tag.sh > /dev/null
           .github/scripts/next-tag_test.sh
+          .github/scripts/release-tag_test.sh
 
       - name: Lint the shell scripts
         run: shellcheck install.sh .github/scripts/*.sh
@@ -307,8 +308,6 @@ jobs:
     concurrency:
       group: tag
       cancel-in-progress: false
-    outputs:
-      tag: ${{ steps.next.outputs.tag }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -343,14 +342,34 @@ jobs:
             -f ref="refs/tags/$TAG" -f sha="$GITHUB_SHA" > /dev/null
           echo "Tagged $GITHUB_SHA as $TAG."
 
+  # Reads the tag from the commit, so a rerun that finds the commit already tagged still releases
+  # it. Kept out of the release job so an untagged commit never enters the release environment.
+  release-tag:
+    name: Find the commit's release tag
+    needs: tag
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.find.outputs.tag }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Find the tag
+        id: find
+        run: |
+          tag=$(.github/scripts/release-tag.sh)
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
   # Publishes only from a push to main, never on a tag push, which would run whichever commit was
   # tagged; the tag is always this run's commit. The `release` environment accepts only main, which
   # the prod docs role relies on; it holds the reference docs' secrets and records each release as
   # a deployment.
   release:
     name: Build and publish the release
-    needs: tag
-    if: needs.tag.outputs.tag != ''
+    needs: release-tag
+    if: needs.release-tag.outputs.tag != ''
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -358,7 +377,7 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
-          ref: ${{ needs.tag.outputs.tag }}
+          ref: ${{ needs.release-tag.outputs.tag }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -372,7 +391,7 @@ jobs:
       # Read fresh, so a release that finishes after a newer one does not take "latest" back.
       - name: Work out whether this is the highest release
         env:
-          TAG: ${{ needs.tag.outputs.tag }}
+          TAG: ${{ needs.release-tag.outputs.tag }}
         run: |
           highest=$(git ls-remote --tags --refs origin 'v*' | sed 's#.*refs/tags/##' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
           if [ "$highest" = "$TAG" ]; then
@@ -405,8 +424,8 @@ jobs:
   # job breaks verification for every published installer.
   attest:
     name: Attest the release's provenance
-    needs: [tag, release]
-    if: needs.tag.outputs.tag != ''
+    needs: [release-tag, release]
+    if: needs.release-tag.outputs.tag != ''
     runs-on: ubuntu-latest
     permissions:
       contents: read # downloads the release
@@ -421,7 +440,7 @@ jobs:
       - name: Download the published release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ needs.tag.outputs.tag }}
+          TAG: ${{ needs.release-tag.outputs.tag }}
         run: gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir published
 
       - name: The published release holds exactly the built files
@@ -446,8 +465,8 @@ jobs:
   # the provenance too; it is set per step so the fetched installers see it only where they run.
   release-smoke:
     name: Install the release on ${{ matrix.os }} with ${{ matrix.shell }}
-    needs: [tag, attest]
-    if: needs.tag.outputs.tag != ''
+    needs: [release-tag, attest]
+    if: needs.release-tag.outputs.tag != ''
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -458,7 +477,7 @@ jobs:
           - { os: windows-latest, shell: pwsh }
           - { os: windows-latest, shell: powershell }
     env:
-      TAG: ${{ needs.tag.outputs.tag }}
+      TAG: ${{ needs.release-tag.outputs.tag }}
       RELEASES: https://github.com/${{ github.repository }}/releases
     steps:
       # A later merge may already have released again, so the install passes if it got the latest

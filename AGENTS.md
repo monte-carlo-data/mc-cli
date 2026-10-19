@@ -52,7 +52,7 @@ pwsh .github/scripts/install_test.ps1 -Dist dist -Tag v0.1.0   # needs Windows f
 | `tools/notices/` | Writes `THIRD_PARTY_NOTICES`; `go generate ./...` runs it. |
 | `tools/gendocs/` | Writes the command reference site; see [Reference docs](#reference-docs). |
 | `install.sh`, `install.ps1` | The installers, attached to every release. |
-| `.github/scripts/` | The release-tag script, the installer tests and the release mirror they run against. |
+| `.github/scripts/` | The tag scripts, the installer tests and the release mirror they run against. |
 | `.github/actions/goreleaser/` | The pinned GoReleaser, shared by the snapshot and the release. |
 | `.github/workflows/publish-docs.yml`, `.github/actions/publish-docs/` | Build the reference on every pull request and publish it. |
 
@@ -148,12 +148,12 @@ Only the patch is bumped automatically. A merge that breaks scripts written agai
 
 On a push to `main`, once the build, the checks, `release-snapshot` and every `install-test` leg pass:
 
-1. `tag` tags the merge commit through the org App.
+1. `tag` tags the merge commit through the org App, and `release-tag` reads the commit's version tag with `.github/scripts/release-tag.sh` for the jobs below.
 2. `release` runs GoReleaser (`.goreleaser.yml`) only in a push-to-main run, never on a tag push, which would run whichever commit was tagged; the tag is always that run's commit. Only the highest release is marked latest, since releases from back-to-back merges can publish out of order. It cross-compiles darwin, linux and windows on amd64 and arm64, packs each with `LICENSE`, `README.md` and `THIRD_PARTY_NOTICES`, writes the checksums file, and attaches it all, with both installers, to a GitHub release that is published once every asset is uploaded. The release targets and the `goos` list in `tools/notices` stay in step, so the notices cover every platform shipped.
 3. `attest` attests the archives, the checksums and the installers that `release` built, after checking that the published release holds exactly those files.
 4. `release-smoke` installs the release from its real URLs on Linux, macOS and Windows, verifies its provenance, and checks `go install` of the tag.
 
-Don't create a release in the GitHub UI. If `release` or `attest` fails, use "Re-run failed jobs": a rerun of `release` finishes the draft it left, and `attest` can be rerun alone. Re-running all jobs finds the commit already tagged and releases nothing. A commit older than an already-tagged one is never tagged.
+Don't create a release in the GitHub UI. If `tag`, `release` or `attest` fails, re-run it: the release reads its tag from the commit, not from `tag`, so a rerun that finds the commit already tagged still releases it. A rerun of `release` finishes the draft it left, and "Re-run failed jobs" reruns `attest` alone. A commit older than an already-tagged one is never tagged.
 
 CI's `release-snapshot` builds the same release on every pull request, at the tag the merge would get, without publishing, and checks what it built; `install-test` then runs both installers against it, served the way GitHub serves a release. A change that would break a release fails there, before it merges. [Common Commands](#common-commands) shows how to run both locally.
 
