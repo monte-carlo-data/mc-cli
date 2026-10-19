@@ -405,6 +405,8 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Publish the tag this job gated on, not whichever GoReleaser picks from HEAD.
+          GORELEASER_CURRENT_TAG: ${{ needs.release-tag.outputs.tag }}
 
       # GoReleaser uploads the installers from their source paths, so they are copied into dist/
       # beside the archives, as the attestation expects.
