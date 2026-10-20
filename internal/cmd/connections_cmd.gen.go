@@ -96,19 +96,21 @@ func newConnectionsCreateCmd() *cobra.Command {
 				if err != nil {
 					return usageError("%w", err)
 				}
-				if err := requireAny(cmd, "dbt-cloud-allowed-connections"); err != nil {
-					return err
+				dbtCloudAllowedConnections := []string{}
+				if changed(cmd, "dbt-cloud-allowed-connections") {
+					given, err := flagStringSlice(cmd, "dbt-cloud-allowed-connections")
+					if err != nil {
+						return err
+					}
+					dbtCloudAllowedConnections = given
 				}
-				dbtCloudAllowedConnections, err := flagStringSlice(cmd, "dbt-cloud-allowed-connections")
-				if err != nil {
-					return err
-				}
-				if err := requireAny(cmd, "dbt-cloud-allowed-environments"); err != nil {
-					return err
-				}
-				dbtCloudAllowedEnvironments, err := flagStringSlice(cmd, "dbt-cloud-allowed-environments")
-				if err != nil {
-					return err
+				dbtCloudAllowedEnvironments := []string{}
+				if changed(cmd, "dbt-cloud-allowed-environments") {
+					given, err := flagStringSlice(cmd, "dbt-cloud-allowed-environments")
+					if err != nil {
+						return err
+					}
+					dbtCloudAllowedEnvironments = given
 				}
 				nested := sdk.NewDbtCloudSettingsIn(*dbtCloudConnectionMatch, dbtCloudAllowedConnections, dbtCloudAllowedEnvironments)
 				body.SetDbtCloud(*nested)
