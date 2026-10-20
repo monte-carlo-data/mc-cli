@@ -4,6 +4,8 @@ package cmd
 
 import (
 	"github.com/spf13/cobra"
+
+	sdk "github.com/monte-carlo-data/mc-sdk-go/montecarlo"
 )
 
 func init() {
@@ -25,6 +27,8 @@ func newHostingGetCmd() *cobra.Command {
 		Short: "Get hosting",
 	}
 	cmd.AddCommand(newHostingGetDomainsCmd())
+	cmd.AddCommand(newHostingGetNetworkCmd())
+	cmd.AddCommand(newHostingGetPrivateLinkCmd())
 	return cmd
 }
 
@@ -32,7 +36,7 @@ func newHostingGetDomainsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "domains",
 		Short: "Get the hosting domains",
-		Long:  "Get the URLs your Monte Carlo deployment serves.\n\nSome integrations need one of these URLs before they can be set up. dbt Cloud, for\nexample, issues a webhook secret only after you give it `dbt_cloud_webhook_url`.\n\nEvery caller in a deployment gets the same values.",
+		Long:  "Get the URLs your Monte Carlo instance serves.\n\nSome integrations need one of these URLs before they can be set up. dbt Cloud, for\nexample, issues a webhook secret only after you give it `dbt_cloud_webhook_url`.\n\nEvery caller in an instance gets the same values.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			api, ctx, err := apiClient(cmd)
@@ -47,5 +51,75 @@ func newHostingGetDomainsCmd() *cobra.Command {
 			return render(cmd, out, "ui_url", "integrations_url", "graphql_api_url", "graphql_oauth_api_url", "m2m_token_url", "m2m_instance_scope", "dbt_cloud_webhook_url")
 		},
 	}
+	return cmd
+}
+
+func newHostingGetNetworkCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "network",
+		Short: "Get the hosting network",
+		Long:  "Get the public IP addresses one region of your Monte Carlo instance connects from.\n\nAllowlist them where Monte Carlo reaches your resources over the internet. Asking for the\nsecondary region of an instance without disaster recovery returns 404.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.HostingAPI.GetHostingNetwork(ctx)
+			if changed(cmd, "instance-region") {
+				instanceRegionValue, err := flagString(cmd, "instance-region")
+				if err != nil {
+					return err
+				}
+				instanceRegion, err := sdk.NewInstanceRegionFromValue(instanceRegionValue)
+				if err != nil {
+					return usageError("%w", err)
+				}
+				req = req.InstanceRegion(*instanceRegion)
+			}
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "collection_ip_addresses", "saas_ip_addresses", "webhook_ip_addresses", "data_platform_ip_addresses")
+		},
+	}
+	cmd.Flags().String("instance-region", "", "The region of your Monte Carlo instance to read. primary, the default, is the region serving your instance, which is the recovery region during a failover. secondary is the disaster recovery region, and only an instance with disaster recovery has one. With disaster recovery, read both and allow both, so access keeps working after a failover. During a failover both read the recovery region, so applying your policies then drops the original primary region until you apply them again after failing back.")
+	_ = cmd.RegisterFlagCompletionFunc("instance-region", enumCompletion(sdk.AllowedInstanceRegionEnumValues))
+	return cmd
+}
+
+func newHostingGetPrivateLinkCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "private-link",
+		Short: "Get the hosting private link details",
+		Long:  "Get how one region of your Monte Carlo instance reaches your AWS resources privately.\n\nUse the VPC endpoint of the region you deploy to in an `aws:SourceVpce` condition, and the\nprivate subnet CIDRs in an allowlist. Asking for the secondary region of an instance\nwithout disaster recovery returns 404.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.HostingAPI.GetHostingPrivateLink(ctx)
+			if changed(cmd, "instance-region") {
+				instanceRegionValue, err := flagString(cmd, "instance-region")
+				if err != nil {
+					return err
+				}
+				instanceRegion, err := sdk.NewInstanceRegionFromValue(instanceRegionValue)
+				if err != nil {
+					return usageError("%w", err)
+				}
+				req = req.InstanceRegion(*instanceRegion)
+			}
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "aws")
+		},
+	}
+	cmd.Flags().String("instance-region", "", "The region of your Monte Carlo instance to read. primary, the default, is the region serving your instance, which is the recovery region during a failover. secondary is the disaster recovery region, and only an instance with disaster recovery has one. With disaster recovery, read both and allow both, so access keeps working after a failover. During a failover both read the recovery region, so applying your policies then drops the original primary region until you apply them again after failing back.")
+	_ = cmd.RegisterFlagCompletionFunc("instance-region", enumCompletion(sdk.AllowedInstanceRegionEnumValues))
 	return cmd
 }
