@@ -34,6 +34,7 @@ func newCredentialsCreateCmd() *cobra.Command {
 		Short: "Create credential",
 	}
 	cmd.AddCommand(newCredentialsCreateAirflowCmd())
+	cmd.AddCommand(newCredentialsCreateAthenaCmd())
 	cmd.AddCommand(newCredentialsCreateAwsSecretsManagerCmd())
 	cmd.AddCommand(newCredentialsCreateAzureDataFactoryCmd())
 	cmd.AddCommand(newCredentialsCreateAzureDedicatedSqlPoolCmd())
@@ -50,6 +51,7 @@ func newCredentialsCreateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsCreateFivetranCmd())
 	cmd.AddCommand(newCredentialsCreateGcpDataformCmd())
 	cmd.AddCommand(newCredentialsCreateGcpSecretManagerCmd())
+	cmd.AddCommand(newCredentialsCreateGlueCmd())
 	cmd.AddCommand(newCredentialsCreateInformaticaV2Cmd())
 	cmd.AddCommand(newCredentialsCreateLookerCmd())
 	cmd.AddCommand(newCredentialsCreateLookerGitCloneCmd())
@@ -97,6 +99,68 @@ func newCredentialsCreateAirflowCmd() *cobra.Command {
 	}
 	cmd.Flags().String("host-name", "", "Host name of the Airflow web server, as Airflow reports it to Monte Carlo.")
 	_ = cmd.MarkFlagRequired("host-name")
+	return cmd
+}
+
+func newCredentialsCreateAthenaCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "athena",
+		Short: "Create Athena credentials",
+		Long:  "Store the IAM role Monte Carlo assumes to run Athena queries.\n\nAthena needs no secret. Create the credentials first, then create a connection that\nreferences them on a `data-lake` warehouse. Nothing is checked against AWS here.\n\nAn account holds a limited number of credentials. Past that, the create is refused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreateAthenaCredentials(ctx)
+			assumableRole, err := flagString(cmd, "assumable-role")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewAthenaCredentialsIn(assumableRole)
+			if changed(cmd, "aws-region") {
+				awsRegion, err := flagString(cmd, "aws-region")
+				if err != nil {
+					return err
+				}
+				body.SetAwsRegion(awsRegion)
+			}
+			if changed(cmd, "catalog") {
+				catalog, err := flagString(cmd, "catalog")
+				if err != nil {
+					return err
+				}
+				body.SetCatalog(catalog)
+			}
+			if changed(cmd, "external-id") {
+				externalId, err := flagString(cmd, "external-id")
+				if err != nil {
+					return err
+				}
+				body.SetExternalId(externalId)
+			}
+			if changed(cmd, "workgroup") {
+				workgroup, err := flagString(cmd, "workgroup")
+				if err != nil {
+					return err
+				}
+				body.SetWorkgroup(workgroup)
+			}
+			req = req.AthenaCredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "assumable_role", "external_id", "aws_region", "catalog", "workgroup")
+		},
+	}
+	cmd.Flags().String("assumable-role", "", "ARN of the IAM role in your AWS account that the deployment assumes.")
+	_ = cmd.MarkFlagRequired("assumable-role")
+	cmd.Flags().String("aws-region", "", "AWS region to call. Omit it to use the deployment's own region.")
+	cmd.Flags().String("catalog", "", "Athena data catalog to query. Omit it to use AwsDataCatalog.")
+	cmd.Flags().String("external-id", "", "External id your role's trust policy requires, if it requires one. It is not the deployment's aws_external_id.")
+	cmd.Flags().String("workgroup", "", "Athena workgroup to run queries in. Omit it to use the primary workgroup. The role needs permission to start queries in it.")
 	return cmd
 }
 
@@ -1076,6 +1140,60 @@ func newCredentialsCreateGcpSecretManagerCmd() *cobra.Command {
 	_ = cmd.MarkFlagRequired("gcp-secret")
 	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
 	cmd.Flags().String("sql-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
+	return cmd
+}
+
+func newCredentialsCreateGlueCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "glue",
+		Short: "Create Glue credentials",
+		Long:  "Store the IAM role Monte Carlo assumes to read your Glue catalog.\n\nGlue needs no secret. Create the credentials first, then create a connection that\nreferences them on a `data-lake` warehouse. Nothing is checked against AWS here.\n\nAn account holds a limited number of credentials. Past that, the create is refused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreateGlueCredentials(ctx)
+			assumableRole, err := flagString(cmd, "assumable-role")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewGlueCredentialsIn(assumableRole)
+			if changed(cmd, "aws-region") {
+				awsRegion, err := flagString(cmd, "aws-region")
+				if err != nil {
+					return err
+				}
+				body.SetAwsRegion(awsRegion)
+			}
+			if changed(cmd, "external-id") {
+				externalId, err := flagString(cmd, "external-id")
+				if err != nil {
+					return err
+				}
+				body.SetExternalId(externalId)
+			}
+			if changed(cmd, "ssl-ca-data") {
+				sslCaData, err := flagString(cmd, "ssl-ca-data")
+				if err != nil {
+					return err
+				}
+				body.SetSslCaData(sslCaData)
+			}
+			req = req.GlueCredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "assumable_role", "external_id", "aws_region", "ssl_ca_data")
+		},
+	}
+	cmd.Flags().String("assumable-role", "", "ARN of the IAM role in your AWS account that the deployment assumes.")
+	_ = cmd.MarkFlagRequired("assumable-role")
+	cmd.Flags().String("aws-region", "", "AWS region to call. Omit it to use the deployment's own region.")
+	cmd.Flags().String("external-id", "", "External id your role's trust policy requires, if it requires one. It is not the deployment's aws_external_id.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM text of a CA certificate to check the AWS endpoint's certificate against.")
 	return cmd
 }
 
@@ -2513,6 +2631,7 @@ func newCredentialsDeleteCmd() *cobra.Command {
 		},
 	}
 	cmd.AddCommand(newCredentialsDeleteAirflowCmd())
+	cmd.AddCommand(newCredentialsDeleteAthenaCmd())
 	cmd.AddCommand(newCredentialsDeleteAwsSecretsManagerCmd())
 	cmd.AddCommand(newCredentialsDeleteAzureDataFactoryCmd())
 	cmd.AddCommand(newCredentialsDeleteAzureDedicatedSqlPoolCmd())
@@ -2529,6 +2648,7 @@ func newCredentialsDeleteCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsDeleteFivetranCmd())
 	cmd.AddCommand(newCredentialsDeleteGcpDataformCmd())
 	cmd.AddCommand(newCredentialsDeleteGcpSecretManagerCmd())
+	cmd.AddCommand(newCredentialsDeleteGlueCmd())
 	cmd.AddCommand(newCredentialsDeleteInformaticaV2Cmd())
 	cmd.AddCommand(newCredentialsDeleteLookerCmd())
 	cmd.AddCommand(newCredentialsDeleteLookerGitCloneCmd())
@@ -2564,6 +2684,30 @@ func newCredentialsDeleteAirflowCmd() *cobra.Command {
 				return err
 			}
 			req := api.CredentialsAPI.DeleteAirflowCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
+func newCredentialsDeleteAthenaCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "athena <credentials_id>",
+		Short: "Delete Athena credentials",
+		Long:  "Delete Athena credentials.\n\nRefused while a connection still uses them. Delete the connection first. The role in your\nAWS account is left as it is.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete athena credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeleteAthenaCredentials(ctx, args[0])
 			if resp, err := req.Execute(); err != nil {
 				return apiErr(resp, err)
 			}
@@ -2948,6 +3092,30 @@ func newCredentialsDeleteGcpSecretManagerCmd() *cobra.Command {
 				return err
 			}
 			req := api.CredentialsAPI.DeleteGcpSecretManagerCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
+func newCredentialsDeleteGlueCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "glue <credentials_id>",
+		Short: "Delete Glue credentials",
+		Long:  "Delete Glue credentials.\n\nRefused while a connection still uses them. Delete the connection first. The role in your\nAWS account is left as it is.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete glue credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeleteGlueCredentials(ctx, args[0])
 			if resp, err := req.Execute(); err != nil {
 				return apiErr(resp, err)
 			}
@@ -3371,6 +3539,7 @@ func newCredentialsGetCmd() *cobra.Command {
 		Short: "Get credential",
 	}
 	cmd.AddCommand(newCredentialsGetAirflowCmd())
+	cmd.AddCommand(newCredentialsGetAthenaCmd())
 	cmd.AddCommand(newCredentialsGetAwsSecretsManagerCmd())
 	cmd.AddCommand(newCredentialsGetAzureDataFactoryCmd())
 	cmd.AddCommand(newCredentialsGetAzureDedicatedSqlPoolCmd())
@@ -3387,6 +3556,7 @@ func newCredentialsGetCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsGetFivetranCmd())
 	cmd.AddCommand(newCredentialsGetGcpDataformCmd())
 	cmd.AddCommand(newCredentialsGetGcpSecretManagerCmd())
+	cmd.AddCommand(newCredentialsGetGlueCmd())
 	cmd.AddCommand(newCredentialsGetInformaticaV2Cmd())
 	cmd.AddCommand(newCredentialsGetLookerCmd())
 	cmd.AddCommand(newCredentialsGetLookerGitCloneCmd())
@@ -3424,6 +3594,28 @@ func newCredentialsGetAirflowCmd() *cobra.Command {
 				return apiErr(resp, err)
 			}
 			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host_name")
+		},
+	}
+	return cmd
+}
+
+func newCredentialsGetAthenaCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "athena <credentials_id>",
+		Short: "Get Athena credentials",
+		Long:  "Get one set of Athena credentials.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetAthenaCredentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "assumable_role", "external_id", "aws_region", "catalog", "workgroup")
 		},
 	}
 	return cmd
@@ -3776,6 +3968,28 @@ func newCredentialsGetGcpSecretManagerCmd() *cobra.Command {
 				return apiErr(resp, err)
 			}
 			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "bq_project_id", "sql_warehouse_id", "gcp_secret")
+		},
+	}
+	return cmd
+}
+
+func newCredentialsGetGlueCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "glue <credentials_id>",
+		Short: "Get Glue credentials",
+		Long:  "Get one set of Glue credentials.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetGlueCredentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "assumable_role", "external_id", "aws_region", "ssl_ca_data")
 		},
 	}
 	return cmd
@@ -4216,6 +4430,7 @@ func newCredentialsUpdateCmd() *cobra.Command {
 		Short: "Update credential",
 	}
 	cmd.AddCommand(newCredentialsUpdateAirflowCmd())
+	cmd.AddCommand(newCredentialsUpdateAthenaCmd())
 	cmd.AddCommand(newCredentialsUpdateAwsSecretsManagerCmd())
 	cmd.AddCommand(newCredentialsUpdateAzureDataFactoryCmd())
 	cmd.AddCommand(newCredentialsUpdateAzureDedicatedSqlPoolCmd())
@@ -4232,6 +4447,7 @@ func newCredentialsUpdateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsUpdateFivetranCmd())
 	cmd.AddCommand(newCredentialsUpdateGcpDataformCmd())
 	cmd.AddCommand(newCredentialsUpdateGcpSecretManagerCmd())
+	cmd.AddCommand(newCredentialsUpdateGlueCmd())
 	cmd.AddCommand(newCredentialsUpdateInformaticaV2Cmd())
 	cmd.AddCommand(newCredentialsUpdateLookerCmd())
 	cmd.AddCommand(newCredentialsUpdateLookerGitCloneCmd())
@@ -4281,6 +4497,70 @@ func newCredentialsUpdateAirflowCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("host-name", "", "Host name of the Airflow web server, as Airflow reports it to Monte Carlo.")
+	return cmd
+}
+
+func newCredentialsUpdateAthenaCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "athena <credentials_id>",
+		Short: "Update Athena credentials",
+		Long:  "Change Athena credentials in place.\n\nEvery connection using the credentials picks up the change. Sending an empty body returns\nthe credentials as they are.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdateAthenaCredentials(ctx, args[0])
+			body := sdk.NewAthenaCredentialsPatch()
+			if changed(cmd, "assumable-role") {
+				assumableRole, err := flagString(cmd, "assumable-role")
+				if err != nil {
+					return err
+				}
+				body.SetAssumableRole(assumableRole)
+			}
+			if changed(cmd, "aws-region") {
+				awsRegion, err := flagString(cmd, "aws-region")
+				if err != nil {
+					return err
+				}
+				body.SetAwsRegion(awsRegion)
+			}
+			if changed(cmd, "catalog") {
+				catalog, err := flagString(cmd, "catalog")
+				if err != nil {
+					return err
+				}
+				body.SetCatalog(catalog)
+			}
+			if changed(cmd, "external-id") {
+				externalId, err := flagString(cmd, "external-id")
+				if err != nil {
+					return err
+				}
+				body.SetExternalId(externalId)
+			}
+			if changed(cmd, "workgroup") {
+				workgroup, err := flagString(cmd, "workgroup")
+				if err != nil {
+					return err
+				}
+				body.SetWorkgroup(workgroup)
+			}
+			req = req.AthenaCredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "assumable_role", "external_id", "aws_region", "catalog", "workgroup")
+		},
+	}
+	cmd.Flags().String("assumable-role", "", "ARN of the IAM role in your AWS account that the deployment assumes.")
+	cmd.Flags().String("aws-region", "", "AWS region to call. Omit it to use the deployment's own region.")
+	cmd.Flags().String("catalog", "", "Athena data catalog to query. Omit it to use AwsDataCatalog.")
+	cmd.Flags().String("external-id", "", "External id your role's trust policy requires, if it requires one. It is not the deployment's aws_external_id.")
+	cmd.Flags().String("workgroup", "", "Athena workgroup to run queries in. Omit it to use the primary workgroup. The role needs permission to start queries in it.")
 	return cmd
 }
 
@@ -5296,6 +5576,62 @@ func newCredentialsUpdateGcpSecretManagerCmd() *cobra.Command {
 	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
 	cmd.Flags().String("gcp-secret", "", "Name of the GCP Secret Manager secret holding the connection's credentials.")
 	cmd.Flags().String("sql-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
+	return cmd
+}
+
+func newCredentialsUpdateGlueCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "glue <credentials_id>",
+		Short: "Update Glue credentials",
+		Long:  "Change Glue credentials in place.\n\nEvery connection using the credentials picks up the change. Sending an empty body returns\nthe credentials as they are.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdateGlueCredentials(ctx, args[0])
+			body := sdk.NewGlueCredentialsPatch()
+			if changed(cmd, "assumable-role") {
+				assumableRole, err := flagString(cmd, "assumable-role")
+				if err != nil {
+					return err
+				}
+				body.SetAssumableRole(assumableRole)
+			}
+			if changed(cmd, "aws-region") {
+				awsRegion, err := flagString(cmd, "aws-region")
+				if err != nil {
+					return err
+				}
+				body.SetAwsRegion(awsRegion)
+			}
+			if changed(cmd, "external-id") {
+				externalId, err := flagString(cmd, "external-id")
+				if err != nil {
+					return err
+				}
+				body.SetExternalId(externalId)
+			}
+			if changed(cmd, "ssl-ca-data") {
+				sslCaData, err := flagString(cmd, "ssl-ca-data")
+				if err != nil {
+					return err
+				}
+				body.SetSslCaData(sslCaData)
+			}
+			req = req.GlueCredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "assumable_role", "external_id", "aws_region", "ssl_ca_data")
+		},
+	}
+	cmd.Flags().String("assumable-role", "", "ARN of the IAM role in your AWS account that the deployment assumes.")
+	cmd.Flags().String("aws-region", "", "AWS region to call. Omit it to use the deployment's own region.")
+	cmd.Flags().String("external-id", "", "External id your role's trust policy requires, if it requires one. It is not the deployment's aws_external_id.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM text of a CA certificate to check the AWS endpoint's certificate against.")
 	return cmd
 }
 
@@ -6804,6 +7140,8 @@ func newCredentialsValidateCmd() *cobra.Command {
 		Use:   "validate",
 		Short: "Validate credential",
 	}
+	cmd.AddCommand(newCredentialsValidateAthenaCmd())
+	cmd.AddCommand(newCredentialsValidateAthenaChangeCmd())
 	cmd.AddCommand(newCredentialsValidateAwsSecretsManagerCmd())
 	cmd.AddCommand(newCredentialsValidateAwsSecretsManagerChangeCmd())
 	cmd.AddCommand(newCredentialsValidateAzureDataFactoryCmd())
@@ -6836,6 +7174,8 @@ func newCredentialsValidateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsValidateGcpDataformChangeCmd())
 	cmd.AddCommand(newCredentialsValidateGcpSecretManagerCmd())
 	cmd.AddCommand(newCredentialsValidateGcpSecretManagerChangeCmd())
+	cmd.AddCommand(newCredentialsValidateGlueCmd())
+	cmd.AddCommand(newCredentialsValidateGlueChangeCmd())
 	cmd.AddCommand(newCredentialsValidateInformaticaV2Cmd())
 	cmd.AddCommand(newCredentialsValidateInformaticaV2ChangeCmd())
 	cmd.AddCommand(newCredentialsValidateLookerCmd())
@@ -6870,6 +7210,206 @@ func newCredentialsValidateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsValidateTableauChangeCmd())
 	cmd.AddCommand(newCredentialsValidateTeradataCmd())
 	cmd.AddCommand(newCredentialsValidateTeradataChangeCmd())
+	return cmd
+}
+
+func newCredentialsValidateAthenaCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "athena",
+		Short: "Validate Athena credentials",
+		Long:  "Check candidate Athena credentials against your AWS account.\n\nNo credentials are created. Send the fields you would create the credentials with, and a\ndeployment to run them from, and the checks run against Athena.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`. Each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateAthenaCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			assumableRole, err := flagString(cmd, "assumable-role")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewAthenaCredentialsValidateIn(deploymentId, assumableRole)
+			if changed(cmd, "aws-region") {
+				awsRegion, err := flagString(cmd, "aws-region")
+				if err != nil {
+					return err
+				}
+				body.SetAwsRegion(awsRegion)
+			}
+			if changed(cmd, "catalog") {
+				catalog, err := flagString(cmd, "catalog")
+				if err != nil {
+					return err
+				}
+				body.SetCatalog(catalog)
+			}
+			if changed(cmd, "external-id") {
+				externalId, err := flagString(cmd, "external-id")
+				if err != nil {
+					return err
+				}
+				body.SetExternalId(externalId)
+			}
+			if changed(cmd, "workgroup") {
+				workgroup, err := flagString(cmd, "workgroup")
+				if err != nil {
+					return err
+				}
+				body.SetWorkgroup(workgroup)
+			}
+			req = req.AthenaCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("assumable-role", "", "ARN of the IAM role in your AWS account that the deployment assumes.")
+	_ = cmd.MarkFlagRequired("assumable-role")
+	cmd.Flags().String("aws-region", "", "AWS region to call. Omit it to use the deployment's own region.")
+	cmd.Flags().String("catalog", "", "Athena data catalog to query. Omit it to use AwsDataCatalog.")
+	cmd.Flags().String("external-id", "", "External id your role's trust policy requires, if it requires one. It is not the deployment's aws_external_id.")
+	cmd.Flags().String("workgroup", "", "Athena workgroup to run queries in. Omit it to use the primary workgroup. The role needs permission to start queries in it.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateAthenaChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "athena-change <credentials_id>",
+		Short: "Validate a change to Athena credentials",
+		Long:  "Check a change to Athena credentials before making it.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`. Each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateAthenaCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewAthenaCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "assumable-role") {
+				assumableRole, err := flagString(cmd, "assumable-role")
+				if err != nil {
+					return err
+				}
+				body.SetAssumableRole(assumableRole)
+			}
+			if changed(cmd, "aws-region") {
+				awsRegion, err := flagString(cmd, "aws-region")
+				if err != nil {
+					return err
+				}
+				body.SetAwsRegion(awsRegion)
+			}
+			if changed(cmd, "catalog") {
+				catalog, err := flagString(cmd, "catalog")
+				if err != nil {
+					return err
+				}
+				body.SetCatalog(catalog)
+			}
+			if changed(cmd, "external-id") {
+				externalId, err := flagString(cmd, "external-id")
+				if err != nil {
+					return err
+				}
+				body.SetExternalId(externalId)
+			}
+			if changed(cmd, "workgroup") {
+				workgroup, err := flagString(cmd, "workgroup")
+				if err != nil {
+					return err
+				}
+				body.SetWorkgroup(workgroup)
+			}
+			req = req.AthenaCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("assumable-role", "", "ARN of the IAM role in your AWS account that the deployment assumes.")
+	cmd.Flags().String("aws-region", "", "AWS region to call. Omit it to use the deployment's own region.")
+	cmd.Flags().String("catalog", "", "Athena data catalog to query. Omit it to use AwsDataCatalog.")
+	cmd.Flags().String("external-id", "", "External id your role's trust policy requires, if it requires one. It is not the deployment's aws_external_id.")
+	cmd.Flags().String("workgroup", "", "Athena workgroup to run queries in. Omit it to use the primary workgroup. The role needs permission to start queries in it.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }
 
@@ -10047,6 +10587,190 @@ func newCredentialsValidateGcpSecretManagerChangeCmd() *cobra.Command {
 	cmd.Flags().String("bq-project-id", "", "BigQuery project the connection reads from. Only for a BigQuery connection.")
 	cmd.Flags().String("gcp-secret", "", "Name of the GCP Secret Manager secret holding the connection's credentials.")
 	cmd.Flags().String("sql-warehouse-id", "", "Databricks SQL warehouse the connection runs queries on. Required for a databricks-sql-warehouse or databricks-metastore-sql-warehouse connection.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateGlueCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "glue",
+		Short: "Validate Glue credentials",
+		Long:  "Check candidate Glue credentials against your AWS account.\n\nNo credentials are created. Send the fields you would create the credentials with, and a\ndeployment to run them from, and the checks run against your Glue catalog.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`. Each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateGlueCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			assumableRole, err := flagString(cmd, "assumable-role")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewGlueCredentialsValidateIn(deploymentId, assumableRole)
+			if changed(cmd, "aws-region") {
+				awsRegion, err := flagString(cmd, "aws-region")
+				if err != nil {
+					return err
+				}
+				body.SetAwsRegion(awsRegion)
+			}
+			if changed(cmd, "external-id") {
+				externalId, err := flagString(cmd, "external-id")
+				if err != nil {
+					return err
+				}
+				body.SetExternalId(externalId)
+			}
+			if changed(cmd, "ssl-ca-data") {
+				sslCaData, err := flagString(cmd, "ssl-ca-data")
+				if err != nil {
+					return err
+				}
+				body.SetSslCaData(sslCaData)
+			}
+			req = req.GlueCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("assumable-role", "", "ARN of the IAM role in your AWS account that the deployment assumes.")
+	_ = cmd.MarkFlagRequired("assumable-role")
+	cmd.Flags().String("aws-region", "", "AWS region to call. Omit it to use the deployment's own region.")
+	cmd.Flags().String("external-id", "", "External id your role's trust policy requires, if it requires one. It is not the deployment's aws_external_id.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM text of a CA certificate to check the AWS endpoint's certificate against.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateGlueChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "glue-change <credentials_id>",
+		Short: "Validate a change to Glue credentials",
+		Long:  "Check a change to Glue credentials before making it.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`. Each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateGlueCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewGlueCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "assumable-role") {
+				assumableRole, err := flagString(cmd, "assumable-role")
+				if err != nil {
+					return err
+				}
+				body.SetAssumableRole(assumableRole)
+			}
+			if changed(cmd, "aws-region") {
+				awsRegion, err := flagString(cmd, "aws-region")
+				if err != nil {
+					return err
+				}
+				body.SetAwsRegion(awsRegion)
+			}
+			if changed(cmd, "external-id") {
+				externalId, err := flagString(cmd, "external-id")
+				if err != nil {
+					return err
+				}
+				body.SetExternalId(externalId)
+			}
+			if changed(cmd, "ssl-ca-data") {
+				sslCaData, err := flagString(cmd, "ssl-ca-data")
+				if err != nil {
+					return err
+				}
+				body.SetSslCaData(sslCaData)
+			}
+			req = req.GlueCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("assumable-role", "", "ARN of the IAM role in your AWS account that the deployment assumes.")
+	cmd.Flags().String("aws-region", "", "AWS region to call. Omit it to use the deployment's own region.")
+	cmd.Flags().String("external-id", "", "External id your role's trust policy requires, if it requires one. It is not the deployment's aws_external_id.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM text of a CA certificate to check the AWS endpoint's certificate against.")
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }

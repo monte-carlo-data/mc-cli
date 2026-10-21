@@ -350,6 +350,8 @@ func newConnectionsAddCmd() *cobra.Command {
 	cmd.AddCommand(newConnectionsAddGcpDataformCmd())
 	cmd.AddCommand(newConnectionsAddAirflowCmd())
 	cmd.AddCommand(newConnectionsAddDbtCloudWebhookCmd())
+	cmd.AddCommand(newConnectionsAddGlueCmd())
+	cmd.AddCommand(newConnectionsAddAthenaCmd())
 	return cmd
 }
 
@@ -1109,6 +1111,51 @@ func newConnectionsAddDbtCloudWebhookCmd() *cobra.Command {
 	cmd.Flags().StringSlice("dbt-cloud-allowed-connections", nil, "The dbt connections, by id or name, whose runs are kept. At least one for allow_list. Empty otherwise.")
 	cmd.Flags().StringSlice("dbt-cloud-allowed-environments", nil, "The dbt environments, by name and ignoring case, whose runs are kept. Empty keeps runs from every environment.")
 	registerConnectionsAddCommandFlags(cmd)
+	return cmd
+}
+
+func newConnectionsAddGlueCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "glue",
+		Short: "Add a connection of type glue, creating its warehouse and credentials",
+		Long:  "Adds a connection of type glue in one step, as the add command does. Pass glue credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsAdd(cmd, "glue", &connectionsAddNative{
+				group:          flagGroup{"glue", []string{"assumable-role", "aws-region", "external-id", "ssl-ca-data"}},
+				selfHostedOnly: []string{"bq-project-id", "sql-warehouse-id"},
+				build:          buildConnectionsAddGlue,
+			})
+		},
+	}
+	cmd.Flags().String("assumable-role", "", "ARN of the IAM role in your AWS account that the deployment assumes.")
+	cmd.Flags().String("aws-region", "", "AWS region to call. Omit it to use the deployment's own region.")
+	cmd.Flags().String("external-id", "", "External id your role's trust policy requires, if it requires one. It is not the deployment's aws_external_id.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM text of a CA certificate to check the AWS endpoint's certificate against.")
+	registerConnectionsAddFlags(cmd)
+	return cmd
+}
+
+func newConnectionsAddAthenaCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "athena",
+		Short: "Add a connection of type athena, creating its warehouse and credentials",
+		Long:  "Adds a connection of type athena in one step, as the add command does. Pass athena credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsAdd(cmd, "athena", &connectionsAddNative{
+				group:          flagGroup{"athena", []string{"assumable-role", "aws-region", "catalog", "external-id", "workgroup"}},
+				selfHostedOnly: []string{"bq-project-id", "sql-warehouse-id"},
+				build:          buildConnectionsAddAthena,
+			})
+		},
+	}
+	cmd.Flags().String("assumable-role", "", "ARN of the IAM role in your AWS account that the deployment assumes.")
+	cmd.Flags().String("aws-region", "", "AWS region to call. Omit it to use the deployment's own region.")
+	cmd.Flags().String("catalog", "", "Athena data catalog to query. Omit it to use AwsDataCatalog.")
+	cmd.Flags().String("external-id", "", "External id your role's trust policy requires, if it requires one. It is not the deployment's aws_external_id.")
+	cmd.Flags().String("workgroup", "", "Athena workgroup to run queries in. Omit it to use the primary workgroup. The role needs permission to start queries in it.")
+	registerConnectionsAddFlags(cmd)
 	return cmd
 }
 
@@ -3675,6 +3722,157 @@ func buildConnectionsAddDbtCloudWebhook(cmd *cobra.Command, api *sdk.APIClient, 
 	}, nil
 }
 
+func buildConnectionsAddGlue(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
+	var err error
+	if err := requireAny(cmd, "assumable-role"); err != nil {
+		return nil, err
+	}
+	assumableRole, err := flagString(cmd, "assumable-role")
+	if err != nil {
+		return nil, err
+	}
+	var awsRegion string
+	if changed(cmd, "aws-region") {
+		awsRegion, err = flagString(cmd, "aws-region")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var externalId string
+	if changed(cmd, "external-id") {
+		externalId, err = flagString(cmd, "external-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var sslCaData string
+	if changed(cmd, "ssl-ca-data") {
+		sslCaData, err = flagString(cmd, "ssl-ca-data")
+		if err != nil {
+			return nil, err
+		}
+	}
+	body := sdk.NewGlueCredentialsIn(assumableRole)
+	if changed(cmd, "aws-region") {
+		body.SetAwsRegion(awsRegion)
+	}
+	if changed(cmd, "external-id") {
+		body.SetExternalId(externalId)
+	}
+	if changed(cmd, "ssl-ca-data") {
+		body.SetSslCaData(sslCaData)
+	}
+	return &connectionsAddCredentials{
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			candidate := sdk.NewGlueCredentialsValidateIn(deploymentId, assumableRole)
+			if changed(cmd, "aws-region") {
+				candidate.SetAwsRegion(awsRegion)
+			}
+			if changed(cmd, "external-id") {
+				candidate.SetExternalId(externalId)
+			}
+			if changed(cmd, "ssl-ca-data") {
+				candidate.SetSslCaData(sslCaData)
+			}
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateGlueCredentials(ctx).GlueCredentialsValidateIn(*candidate).Execute)
+		},
+		create: func(ctx context.Context) (string, *http.Response, error) {
+			out, resp, err := retryOnTransient(cmd, api.CredentialsAPI.CreateGlueCredentials(ctx).GlueCredentialsIn(*body).Execute)
+			if err != nil {
+				return "", resp, err
+			}
+			return out.GetId(), resp, nil
+		},
+		del: func(ctx context.Context, id string) (*http.Response, error) {
+			return api.CredentialsAPI.DeleteGlueCredentials(ctx, id).Execute()
+		},
+		deleteCmd: "credentials delete glue",
+		listCmd:   "credentials list",
+	}, nil
+}
+
+func buildConnectionsAddAthena(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
+	var err error
+	if err := requireAny(cmd, "assumable-role"); err != nil {
+		return nil, err
+	}
+	assumableRole, err := flagString(cmd, "assumable-role")
+	if err != nil {
+		return nil, err
+	}
+	var awsRegion string
+	if changed(cmd, "aws-region") {
+		awsRegion, err = flagString(cmd, "aws-region")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var catalog string
+	if changed(cmd, "catalog") {
+		catalog, err = flagString(cmd, "catalog")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var externalId string
+	if changed(cmd, "external-id") {
+		externalId, err = flagString(cmd, "external-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var workgroup string
+	if changed(cmd, "workgroup") {
+		workgroup, err = flagString(cmd, "workgroup")
+		if err != nil {
+			return nil, err
+		}
+	}
+	body := sdk.NewAthenaCredentialsIn(assumableRole)
+	if changed(cmd, "aws-region") {
+		body.SetAwsRegion(awsRegion)
+	}
+	if changed(cmd, "catalog") {
+		body.SetCatalog(catalog)
+	}
+	if changed(cmd, "external-id") {
+		body.SetExternalId(externalId)
+	}
+	if changed(cmd, "workgroup") {
+		body.SetWorkgroup(workgroup)
+	}
+	return &connectionsAddCredentials{
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			candidate := sdk.NewAthenaCredentialsValidateIn(deploymentId, assumableRole)
+			if changed(cmd, "aws-region") {
+				candidate.SetAwsRegion(awsRegion)
+			}
+			if changed(cmd, "catalog") {
+				candidate.SetCatalog(catalog)
+			}
+			if changed(cmd, "external-id") {
+				candidate.SetExternalId(externalId)
+			}
+			if changed(cmd, "workgroup") {
+				candidate.SetWorkgroup(workgroup)
+			}
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateAthenaCredentials(ctx).AthenaCredentialsValidateIn(*candidate).Execute)
+		},
+		create: func(ctx context.Context) (string, *http.Response, error) {
+			out, resp, err := retryOnTransient(cmd, api.CredentialsAPI.CreateAthenaCredentials(ctx).AthenaCredentialsIn(*body).Execute)
+			if err != nil {
+				return "", resp, err
+			}
+			return out.GetId(), resp, nil
+		},
+		del: func(ctx context.Context, id string) (*http.Response, error) {
+			return api.CredentialsAPI.DeleteAthenaCredentials(ctx, id).Execute()
+		},
+		deleteCmd: "credentials delete athena",
+		listCmd:   "credentials list",
+	}, nil
+}
+
 func buildConnectionsAddSelfHostedAws(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
 	var err error
 	if err := requireAny(cmd, "self-hosted-aws-secret"); err != nil {
@@ -4472,6 +4670,8 @@ func newConnectionsUpdateCmd() *cobra.Command {
 	cmd.AddCommand(newConnectionsUpdateGcpDataformCmd())
 	cmd.AddCommand(newConnectionsUpdateAirflowCmd())
 	cmd.AddCommand(newConnectionsUpdateDbtCloudWebhookCmd())
+	cmd.AddCommand(newConnectionsUpdateGlueCmd())
+	cmd.AddCommand(newConnectionsUpdateAthenaCmd())
 	return cmd
 }
 
@@ -5232,6 +5432,51 @@ func newConnectionsUpdateDbtCloudWebhookCmd() *cobra.Command {
 	_ = cmd.RegisterFlagCompletionFunc("dbt-cloud-connection-match", enumCompletion(sdk.AllowedConnectionMatchEnumValues))
 	cmd.Flags().StringSlice("dbt-cloud-allowed-connections", nil, "The dbt connections, by id or name, whose runs are kept. At least one for allow_list. Empty otherwise.")
 	cmd.Flags().StringSlice("dbt-cloud-allowed-environments", nil, "The dbt environments, by name and ignoring case, whose runs are kept. Empty keeps runs from every environment.")
+	registerConnectionsUpdateFlags(cmd)
+	return cmd
+}
+
+func newConnectionsUpdateGlueCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "glue <connection_id>",
+		Short: "Update a connection of type glue, and change its credentials",
+		Long:  "Updates a connection of type glue, as the update command does, changing its glue credentials with the flags below.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
+				group:   flagGroup{"glue", []string{"assumable-role", "aws-region", "external-id", "ssl-ca-data"}},
+				storage: "mc_managed",
+				build:   buildConnectionsUpdateGlue,
+			})
+		},
+	}
+	cmd.Flags().String("assumable-role", "", "ARN of the IAM role in your AWS account that the deployment assumes.")
+	cmd.Flags().String("aws-region", "", "AWS region to call. Omit it to use the deployment's own region.")
+	cmd.Flags().String("external-id", "", "External id your role's trust policy requires, if it requires one. It is not the deployment's aws_external_id.")
+	cmd.Flags().String("ssl-ca-data", "", "PEM text of a CA certificate to check the AWS endpoint's certificate against.")
+	registerConnectionsUpdateFlags(cmd)
+	return cmd
+}
+
+func newConnectionsUpdateAthenaCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "athena <connection_id>",
+		Short: "Update a connection of type athena, and change its credentials",
+		Long:  "Updates a connection of type athena, as the update command does, changing its athena credentials with the flags below.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
+				group:   flagGroup{"athena", []string{"assumable-role", "aws-region", "catalog", "external-id", "workgroup"}},
+				storage: "mc_managed",
+				build:   buildConnectionsUpdateAthena,
+			})
+		},
+	}
+	cmd.Flags().String("assumable-role", "", "ARN of the IAM role in your AWS account that the deployment assumes.")
+	cmd.Flags().String("aws-region", "", "AWS region to call. Omit it to use the deployment's own region.")
+	cmd.Flags().String("catalog", "", "Athena data catalog to query. Omit it to use AwsDataCatalog.")
+	cmd.Flags().String("external-id", "", "External id your role's trust policy requires, if it requires one. It is not the deployment's aws_external_id.")
+	cmd.Flags().String("workgroup", "", "Athena workgroup to run queries in. Omit it to use the primary workgroup. The role needs permission to start queries in it.")
 	registerConnectionsUpdateFlags(cmd)
 	return cmd
 }
@@ -8476,6 +8721,182 @@ func buildConnectionsUpdateDbtCloudWebhook(cmd *cobra.Command, api *sdk.APIClien
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateDbtCloudWebhookCredentials(ctx, credentialsId).DbtCloudWebhookCredentialsPatch(*patch).Execute)
+			return resp, err
+		},
+	}, nil
+}
+
+func buildConnectionsUpdateGlue(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+	var err error
+	var assumableRole string
+	if changed(cmd, "assumable-role") {
+		assumableRole, err = flagString(cmd, "assumable-role")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var awsRegion string
+	if changed(cmd, "aws-region") {
+		awsRegion, err = flagString(cmd, "aws-region")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var externalId string
+	if changed(cmd, "external-id") {
+		externalId, err = flagString(cmd, "external-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var sslCaData string
+	if changed(cmd, "ssl-ca-data") {
+		sslCaData, err = flagString(cmd, "ssl-ca-data")
+		if err != nil {
+			return nil, err
+		}
+	}
+	patch := sdk.NewGlueCredentialsPatchWithDefaults()
+	check := sdk.NewGlueCredentialsChangeValidateInWithDefaults()
+	if changed(cmd, "assumable-role") {
+		if assumableRole == "" {
+			patch.SetAssumableRoleNil()
+			check.SetAssumableRoleNil()
+		} else {
+			patch.SetAssumableRole(assumableRole)
+			check.SetAssumableRole(assumableRole)
+		}
+	}
+	if changed(cmd, "aws-region") {
+		if awsRegion == "" {
+			patch.SetAwsRegionNil()
+			check.SetAwsRegionNil()
+		} else {
+			patch.SetAwsRegion(awsRegion)
+			check.SetAwsRegion(awsRegion)
+		}
+	}
+	if changed(cmd, "external-id") {
+		if externalId == "" {
+			patch.SetExternalIdNil()
+			check.SetExternalIdNil()
+		} else {
+			patch.SetExternalId(externalId)
+			check.SetExternalId(externalId)
+		}
+	}
+	if changed(cmd, "ssl-ca-data") {
+		if sslCaData == "" {
+			patch.SetSslCaDataNil()
+			check.SetSslCaDataNil()
+		} else {
+			patch.SetSslCaData(sslCaData)
+			check.SetSslCaData(sslCaData)
+		}
+	}
+	return &connectionsUpdateCredentials{
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateGlueCredentialsChange(ctx, credentialsId).GlueCredentialsChangeValidateIn(*check).Execute)
+		},
+		patch: func(ctx context.Context) (*http.Response, error) {
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateGlueCredentials(ctx, credentialsId).GlueCredentialsPatch(*patch).Execute)
+			return resp, err
+		},
+	}, nil
+}
+
+func buildConnectionsUpdateAthena(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+	var err error
+	var assumableRole string
+	if changed(cmd, "assumable-role") {
+		assumableRole, err = flagString(cmd, "assumable-role")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var awsRegion string
+	if changed(cmd, "aws-region") {
+		awsRegion, err = flagString(cmd, "aws-region")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var catalog string
+	if changed(cmd, "catalog") {
+		catalog, err = flagString(cmd, "catalog")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var externalId string
+	if changed(cmd, "external-id") {
+		externalId, err = flagString(cmd, "external-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var workgroup string
+	if changed(cmd, "workgroup") {
+		workgroup, err = flagString(cmd, "workgroup")
+		if err != nil {
+			return nil, err
+		}
+	}
+	patch := sdk.NewAthenaCredentialsPatchWithDefaults()
+	check := sdk.NewAthenaCredentialsChangeValidateInWithDefaults()
+	if changed(cmd, "assumable-role") {
+		if assumableRole == "" {
+			patch.SetAssumableRoleNil()
+			check.SetAssumableRoleNil()
+		} else {
+			patch.SetAssumableRole(assumableRole)
+			check.SetAssumableRole(assumableRole)
+		}
+	}
+	if changed(cmd, "aws-region") {
+		if awsRegion == "" {
+			patch.SetAwsRegionNil()
+			check.SetAwsRegionNil()
+		} else {
+			patch.SetAwsRegion(awsRegion)
+			check.SetAwsRegion(awsRegion)
+		}
+	}
+	if changed(cmd, "catalog") {
+		if catalog == "" {
+			patch.SetCatalogNil()
+			check.SetCatalogNil()
+		} else {
+			patch.SetCatalog(catalog)
+			check.SetCatalog(catalog)
+		}
+	}
+	if changed(cmd, "external-id") {
+		if externalId == "" {
+			patch.SetExternalIdNil()
+			check.SetExternalIdNil()
+		} else {
+			patch.SetExternalId(externalId)
+			check.SetExternalId(externalId)
+		}
+	}
+	if changed(cmd, "workgroup") {
+		if workgroup == "" {
+			patch.SetWorkgroupNil()
+			check.SetWorkgroupNil()
+		} else {
+			patch.SetWorkgroup(workgroup)
+			check.SetWorkgroup(workgroup)
+		}
+	}
+	return &connectionsUpdateCredentials{
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateAthenaCredentialsChange(ctx, credentialsId).AthenaCredentialsChangeValidateIn(*check).Execute)
+		},
+		patch: func(ctx context.Context) (*http.Response, error) {
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateAthenaCredentials(ctx, credentialsId).AthenaCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
