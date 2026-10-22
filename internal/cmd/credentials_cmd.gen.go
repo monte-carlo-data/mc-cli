@@ -62,6 +62,7 @@ func newCredentialsCreateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsCreatePostgresCmd())
 	cmd.AddCommand(newCredentialsCreatePowerBiCmd())
 	cmd.AddCommand(newCredentialsCreateRedshiftCmd())
+	cmd.AddCommand(newCredentialsCreateSalesforceCrmCmd())
 	cmd.AddCommand(newCredentialsCreateSapHanaCmd())
 	cmd.AddCommand(newCredentialsCreateSnowflakeCmd())
 	cmd.AddCommand(newCredentialsCreateSqlServerCmd())
@@ -2043,6 +2044,92 @@ func newCredentialsCreateRedshiftCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsCreateSalesforceCrmCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "salesforce-crm",
+		Short: "Create Salesforce CRM credentials",
+		Long:  "Store a Salesforce sign-in for connections to use.\n\nMonte Carlo keeps the password, the security token or the consumer secret and returns\neverything else. Create the credentials first, then create a connection that references\nthem. Nothing is checked against Salesforce here.\n\n`auth_mode` decides what else to send: `username`, `password` and `security_token` for\n`password`, or `consumer_key`, `consumer_secret` and `domain` for\n`oauth_client_credentials`. An account holds a limited number of credentials. Past that, the\ncreate is refused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreateSalesforceCrmCredentials(ctx)
+			authModeValue, err := flagString(cmd, "auth-mode")
+			if err != nil {
+				return err
+			}
+			authMode, err := sdk.NewSalesforceCrmAuthModeFromValue(authModeValue)
+			if err != nil {
+				return usageError("%w", err)
+			}
+			body := sdk.NewSalesforceCrmCredentialsIn(*authMode)
+			if changed(cmd, "consumer-key") {
+				consumerKey, err := flagString(cmd, "consumer-key")
+				if err != nil {
+					return err
+				}
+				body.SetConsumerKey(consumerKey)
+			}
+			if changed(cmd, "consumer-secret", "consumer-secret-prompt") {
+				consumerSecret, err := flagSecret(cmd, "consumer-secret")
+				if err != nil {
+					return err
+				}
+				body.SetConsumerSecret(consumerSecret)
+			}
+			if changed(cmd, "domain") {
+				domain, err := flagString(cmd, "domain")
+				if err != nil {
+					return err
+				}
+				body.SetDomain(domain)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "security-token", "security-token-prompt") {
+				securityToken, err := flagSecret(cmd, "security-token")
+				if err != nil {
+					return err
+				}
+				body.SetSecurityToken(securityToken)
+			}
+			if changed(cmd, "username") {
+				username, err := flagString(cmd, "username")
+				if err != nil {
+					return err
+				}
+				body.SetUsername(username)
+			}
+			req = req.SalesforceCrmCredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "auth_mode", "username", "consumer_key", "domain")
+		},
+	}
+	cmd.Flags().String("auth-mode", "", "How Monte Carlo signs in. password takes username, password and security_token. oauth_client_credentials takes consumer_key, consumer_secret and domain.")
+	_ = cmd.RegisterFlagCompletionFunc("auth-mode", enumCompletion(sdk.AllowedSalesforceCrmAuthModeEnumValues))
+	_ = cmd.MarkFlagRequired("auth-mode")
+	cmd.Flags().String("consumer-key", "", "Consumer key of the connected app Monte Carlo signs in as, for oauth_client_credentials.")
+	cmd.Flags().String("consumer-secret", "", "Consumer secret of the connected app, for oauth_client_credentials. Stored by Monte Carlo and never returned. Visible in the process list; --consumer-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("consumer-secret-prompt", false, "Read --consumer-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("domain", "", "My Domain of your org, such as acme.my.salesforce.com, for oauth_client_credentials. The .salesforce.com suffix is optional.")
+	cmd.Flags().String("password", "", "Password of username, for password. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("security-token", "", "Security token of username, for password. Stored by Monte Carlo and never returned. Visible in the process list; --security-token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("security-token-prompt", false, "Read --security-token from a hidden prompt instead of the command line.")
+	cmd.Flags().String("username", "", "Salesforce user Monte Carlo signs in as, for password.")
+	return cmd
+}
+
 func newCredentialsCreateSapHanaCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sap-hana",
@@ -2659,6 +2746,7 @@ func newCredentialsDeleteCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsDeletePostgresCmd())
 	cmd.AddCommand(newCredentialsDeletePowerBiCmd())
 	cmd.AddCommand(newCredentialsDeleteRedshiftCmd())
+	cmd.AddCommand(newCredentialsDeleteSalesforceCrmCmd())
 	cmd.AddCommand(newCredentialsDeleteSapHanaCmd())
 	cmd.AddCommand(newCredentialsDeleteSnowflakeCmd())
 	cmd.AddCommand(newCredentialsDeleteSqlServerCmd())
@@ -3365,6 +3453,30 @@ func newCredentialsDeleteRedshiftCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsDeleteSalesforceCrmCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "salesforce-crm <credentials_id>",
+		Short: "Delete Salesforce CRM credentials",
+		Long:  "Delete Salesforce CRM credentials.\n\nRefused while a connection still uses them. Delete the connection first. Monte Carlo stops\nusing the stored password, security token or consumer secret. Reset them in Salesforce if\nthey must be retired.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete salesforce-crm credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeleteSalesforceCrmCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
 func newCredentialsDeleteSapHanaCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sap-hana <credentials_id>",
@@ -3567,6 +3679,7 @@ func newCredentialsGetCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsGetPostgresCmd())
 	cmd.AddCommand(newCredentialsGetPowerBiCmd())
 	cmd.AddCommand(newCredentialsGetRedshiftCmd())
+	cmd.AddCommand(newCredentialsGetSalesforceCrmCmd())
 	cmd.AddCommand(newCredentialsGetSapHanaCmd())
 	cmd.AddCommand(newCredentialsGetSnowflakeCmd())
 	cmd.AddCommand(newCredentialsGetSqlServerCmd())
@@ -4215,6 +4328,28 @@ func newCredentialsGetRedshiftCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsGetSalesforceCrmCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "salesforce-crm <credentials_id>",
+		Short: "Get Salesforce CRM credentials",
+		Long:  "Get one set of Salesforce CRM credentials, without the password, the security token or\nthe consumer secret.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetSalesforceCrmCredentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "auth_mode", "username", "consumer_key", "domain")
+		},
+	}
+	return cmd
+}
+
 func newCredentialsGetSapHanaCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sap-hana <credentials_id>",
@@ -4458,6 +4593,7 @@ func newCredentialsUpdateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsUpdatePostgresCmd())
 	cmd.AddCommand(newCredentialsUpdatePowerBiCmd())
 	cmd.AddCommand(newCredentialsUpdateRedshiftCmd())
+	cmd.AddCommand(newCredentialsUpdateSalesforceCrmCmd())
 	cmd.AddCommand(newCredentialsUpdateSapHanaCmd())
 	cmd.AddCommand(newCredentialsUpdateSnowflakeCmd())
 	cmd.AddCommand(newCredentialsUpdateSqlServerCmd())
@@ -6533,6 +6669,94 @@ func newCredentialsUpdateRedshiftCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsUpdateSalesforceCrmCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "salesforce-crm <credentials_id>",
+		Short: "Update Salesforce CRM credentials",
+		Long:  "Change Salesforce CRM credentials in place.\n\nEvery connection using the credentials picks up the change. Send only the fields to change.\nA new `auth_mode` drops the fields and the secrets of the old one, so send all of the new\nmode's fields with it. Sending an empty body returns the credentials as they are.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdateSalesforceCrmCredentials(ctx, args[0])
+			body := sdk.NewSalesforceCrmCredentialsPatch()
+			if changed(cmd, "auth-mode") {
+				authModeValue, err := flagString(cmd, "auth-mode")
+				if err != nil {
+					return err
+				}
+				authMode, err := sdk.NewSalesforceCrmAuthModeFromValue(authModeValue)
+				if err != nil {
+					return usageError("%w", err)
+				}
+				body.SetAuthMode(*authMode)
+			}
+			if changed(cmd, "consumer-key") {
+				consumerKey, err := flagString(cmd, "consumer-key")
+				if err != nil {
+					return err
+				}
+				body.SetConsumerKey(consumerKey)
+			}
+			if changed(cmd, "consumer-secret", "consumer-secret-prompt") {
+				consumerSecret, err := flagSecret(cmd, "consumer-secret")
+				if err != nil {
+					return err
+				}
+				body.SetConsumerSecret(consumerSecret)
+			}
+			if changed(cmd, "domain") {
+				domain, err := flagString(cmd, "domain")
+				if err != nil {
+					return err
+				}
+				body.SetDomain(domain)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "security-token", "security-token-prompt") {
+				securityToken, err := flagSecret(cmd, "security-token")
+				if err != nil {
+					return err
+				}
+				body.SetSecurityToken(securityToken)
+			}
+			if changed(cmd, "username") {
+				username, err := flagString(cmd, "username")
+				if err != nil {
+					return err
+				}
+				body.SetUsername(username)
+			}
+			req = req.SalesforceCrmCredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "auth_mode", "username", "consumer_key", "domain")
+		},
+	}
+	cmd.Flags().String("auth-mode", "", "How Monte Carlo signs in. password takes username, password and security_token. oauth_client_credentials takes consumer_key, consumer_secret and domain.")
+	_ = cmd.RegisterFlagCompletionFunc("auth-mode", enumCompletion(sdk.AllowedSalesforceCrmAuthModeEnumValues))
+	cmd.Flags().String("consumer-key", "", "Consumer key of the connected app Monte Carlo signs in as, for oauth_client_credentials.")
+	cmd.Flags().String("consumer-secret", "", "Consumer secret of the connected app, for oauth_client_credentials. Stored by Monte Carlo and never returned. Visible in the process list; --consumer-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("consumer-secret-prompt", false, "Read --consumer-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("domain", "", "My Domain of your org, such as acme.my.salesforce.com, for oauth_client_credentials. The .salesforce.com suffix is optional. Changing it requires sending the credentials' secrets again.")
+	cmd.Flags().String("password", "", "Password of username, for password. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("security-token", "", "Security token of username, for password. Stored by Monte Carlo and never returned. Visible in the process list; --security-token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("security-token-prompt", false, "Read --security-token from a hidden prompt instead of the command line.")
+	cmd.Flags().String("username", "", "Salesforce user Monte Carlo signs in as, for password.")
+	return cmd
+}
+
 func newCredentialsUpdateSapHanaCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sap-hana <credentials_id>",
@@ -7196,6 +7420,8 @@ func newCredentialsValidateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsValidatePowerBiChangeCmd())
 	cmd.AddCommand(newCredentialsValidateRedshiftCmd())
 	cmd.AddCommand(newCredentialsValidateRedshiftChangeCmd())
+	cmd.AddCommand(newCredentialsValidateSalesforceCrmCmd())
+	cmd.AddCommand(newCredentialsValidateSalesforceCrmChangeCmd())
 	cmd.AddCommand(newCredentialsValidateSapHanaCmd())
 	cmd.AddCommand(newCredentialsValidateSapHanaChangeCmd())
 	cmd.AddCommand(newCredentialsValidateSnowflakeCmd())
@@ -13255,6 +13481,254 @@ func newCredentialsValidateRedshiftChangeCmd() *cobra.Command {
 	cmd.Flags().Bool("ssl-verify-cert", false, "Check the server's certificate against the CA.")
 	cmd.Flags().Bool("ssl-verify-identity", false, "Check the certificate and that it names the host.")
 	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateSalesforceCrmCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "salesforce-crm",
+		Short: "Validate Salesforce CRM credentials",
+		Long:  "Check a candidate Salesforce sign-in against Salesforce.\n\nNo credentials are created. Send the values you would create the credentials with, and a\ndeployment to run them from, and the checks run against your Salesforce org.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`. Each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateSalesforceCrmCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			authModeValue, err := flagString(cmd, "auth-mode")
+			if err != nil {
+				return err
+			}
+			authMode, err := sdk.NewSalesforceCrmAuthModeFromValue(authModeValue)
+			if err != nil {
+				return usageError("%w", err)
+			}
+			body := sdk.NewSalesforceCrmCredentialsValidateIn(deploymentId, *authMode)
+			if changed(cmd, "consumer-key") {
+				consumerKey, err := flagString(cmd, "consumer-key")
+				if err != nil {
+					return err
+				}
+				body.SetConsumerKey(consumerKey)
+			}
+			if changed(cmd, "consumer-secret", "consumer-secret-prompt") {
+				consumerSecret, err := flagSecret(cmd, "consumer-secret")
+				if err != nil {
+					return err
+				}
+				body.SetConsumerSecret(consumerSecret)
+			}
+			if changed(cmd, "domain") {
+				domain, err := flagString(cmd, "domain")
+				if err != nil {
+					return err
+				}
+				body.SetDomain(domain)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "security-token", "security-token-prompt") {
+				securityToken, err := flagSecret(cmd, "security-token")
+				if err != nil {
+					return err
+				}
+				body.SetSecurityToken(securityToken)
+			}
+			if changed(cmd, "username") {
+				username, err := flagString(cmd, "username")
+				if err != nil {
+					return err
+				}
+				body.SetUsername(username)
+			}
+			req = req.SalesforceCrmCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("auth-mode", "", "How Monte Carlo signs in. password takes username, password and security_token. oauth_client_credentials takes consumer_key, consumer_secret and domain.")
+	_ = cmd.RegisterFlagCompletionFunc("auth-mode", enumCompletion(sdk.AllowedSalesforceCrmAuthModeEnumValues))
+	_ = cmd.MarkFlagRequired("auth-mode")
+	cmd.Flags().String("consumer-key", "", "Consumer key of the connected app Monte Carlo signs in as, for oauth_client_credentials.")
+	cmd.Flags().String("consumer-secret", "", "Consumer secret of the connected app, for oauth_client_credentials. Used for this check and not kept. Visible in the process list; --consumer-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("consumer-secret-prompt", false, "Read --consumer-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("domain", "", "My Domain of your org, such as acme.my.salesforce.com, for oauth_client_credentials. The .salesforce.com suffix is optional.")
+	cmd.Flags().String("password", "", "Password of username, for password. Used for this check and not kept. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("security-token", "", "Security token of username, for password. Used for this check and not kept. Visible in the process list; --security-token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("security-token-prompt", false, "Read --security-token from a hidden prompt instead of the command line.")
+	cmd.Flags().String("username", "", "Salesforce user Monte Carlo signs in as, for password.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateSalesforceCrmChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "salesforce-crm-change <credentials_id>",
+		Short: "Validate a change to Salesforce CRM credentials",
+		Long:  "Check a change to Salesforce CRM credentials before making it.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`. Each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateSalesforceCrmCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewSalesforceCrmCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "auth-mode") {
+				authModeValue, err := flagString(cmd, "auth-mode")
+				if err != nil {
+					return err
+				}
+				authMode, err := sdk.NewSalesforceCrmAuthModeFromValue(authModeValue)
+				if err != nil {
+					return usageError("%w", err)
+				}
+				body.SetAuthMode(*authMode)
+			}
+			if changed(cmd, "consumer-key") {
+				consumerKey, err := flagString(cmd, "consumer-key")
+				if err != nil {
+					return err
+				}
+				body.SetConsumerKey(consumerKey)
+			}
+			if changed(cmd, "consumer-secret", "consumer-secret-prompt") {
+				consumerSecret, err := flagSecret(cmd, "consumer-secret")
+				if err != nil {
+					return err
+				}
+				body.SetConsumerSecret(consumerSecret)
+			}
+			if changed(cmd, "domain") {
+				domain, err := flagString(cmd, "domain")
+				if err != nil {
+					return err
+				}
+				body.SetDomain(domain)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "security-token", "security-token-prompt") {
+				securityToken, err := flagSecret(cmd, "security-token")
+				if err != nil {
+					return err
+				}
+				body.SetSecurityToken(securityToken)
+			}
+			if changed(cmd, "username") {
+				username, err := flagString(cmd, "username")
+				if err != nil {
+					return err
+				}
+				body.SetUsername(username)
+			}
+			req = req.SalesforceCrmCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("auth-mode", "", "How Monte Carlo signs in. password takes username, password and security_token. oauth_client_credentials takes consumer_key, consumer_secret and domain.")
+	_ = cmd.RegisterFlagCompletionFunc("auth-mode", enumCompletion(sdk.AllowedSalesforceCrmAuthModeEnumValues))
+	cmd.Flags().String("consumer-key", "", "Consumer key of the connected app Monte Carlo signs in as, for oauth_client_credentials.")
+	cmd.Flags().String("consumer-secret", "", "Consumer secret of the connected app, for oauth_client_credentials. Stored by Monte Carlo and never returned. Visible in the process list; --consumer-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("consumer-secret-prompt", false, "Read --consumer-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("domain", "", "My Domain of your org, such as acme.my.salesforce.com, for oauth_client_credentials. The .salesforce.com suffix is optional. Changing it requires sending the credentials' secrets again.")
+	cmd.Flags().String("password", "", "Password of username, for password. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("security-token", "", "Security token of username, for password. Stored by Monte Carlo and never returned. Visible in the process list; --security-token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("security-token-prompt", false, "Read --security-token from a hidden prompt instead of the command line.")
+	cmd.Flags().String("username", "", "Salesforce user Monte Carlo signs in as, for password.")
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }
