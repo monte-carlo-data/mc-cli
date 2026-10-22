@@ -349,6 +349,7 @@ func newConnectionsAddCmd() *cobra.Command {
 	cmd.AddCommand(newConnectionsAddSapHanaCmd())
 	cmd.AddCommand(newConnectionsAddSqlServerCmd())
 	cmd.AddCommand(newConnectionsAddSalesforceCrmCmd())
+	cmd.AddCommand(newConnectionsAddSalesforceDataCloudCmd())
 	cmd.AddCommand(newConnectionsAddTableauCmd())
 	cmd.AddCommand(newConnectionsAddLookerCmd())
 	cmd.AddCommand(newConnectionsAddLookerGitCloneCmd())
@@ -863,6 +864,35 @@ func newConnectionsAddSalesforceCrmCmd() *cobra.Command {
 	cmd.Flags().String("security-token", "", "Security token of username, for password. Stored by Monte Carlo and never returned. Visible in the process list; --security-token-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("security-token-prompt", false, "Read --security-token from a hidden prompt instead of the command line.")
 	cmd.Flags().String("username", "", "Salesforce user Monte Carlo signs in as, for password.")
+	registerConnectionsAddFlags(cmd)
+	return cmd
+}
+
+func newConnectionsAddSalesforceDataCloudCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "salesforce-data-cloud",
+		Short: "Add a connection of type salesforce-data-cloud, creating its warehouse and credentials",
+		Long:  "Adds a connection of type salesforce-data-cloud in one step, as the add command does. Pass salesforce-data-cloud credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsAdd(cmd, "salesforce-data-cloud", &connectionsAddNative{
+				group:          flagGroup{"salesforce-data-cloud", []string{"auth-mode", "domain", "consumer-key", "consumer-secret", "consumer-secret-prompt", "dataspace", "dataspaces", "private-key", "private-key-prompt", "username"}},
+				selfHostedOnly: []string{"bq-project-id", "sql-warehouse-id"},
+				build:          buildConnectionsAddSalesforceDataCloud,
+			})
+		},
+	}
+	cmd.Flags().String("auth-mode", "", "How Monte Carlo signs in. oauth_client_credentials takes consumer_secret. jwt_bearer takes username and private_key. Both take domain and consumer_key.")
+	_ = cmd.RegisterFlagCompletionFunc("auth-mode", enumCompletion(sdk.AllowedSalesforceDataCloudAuthModeEnumValues))
+	cmd.Flags().String("domain", "", "My Domain host of your org, such as acme.my.salesforce.com.")
+	cmd.Flags().String("consumer-key", "", "Consumer key of the connected app Monte Carlo signs in as.")
+	cmd.Flags().String("consumer-secret", "", "Consumer secret of the connected app, for oauth_client_credentials. Stored by Monte Carlo and never returned. Visible in the process list; --consumer-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("consumer-secret-prompt", false, "Read --consumer-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("dataspace", "", "The one data space a query connection runs in. Once set, it can be changed but not cleared. Sending it in an update, even unchanged, moves row count collection for that data space's tables to the query connections using these credentials.")
+	cmd.Flags().StringSlice("dataspaces", nil, "Data spaces Monte Carlo collects metadata from.")
+	cmd.Flags().String("private-key", "", "PEM private key whose certificate is on the connected app, for jwt_bearer. It must be an unencrypted RSA key. Stored by Monte Carlo and never returned. Visible in the process list; --private-key-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("private-key-prompt", false, "Read --private-key from a hidden prompt instead of the command line.")
+	cmd.Flags().String("username", "", "Salesforce user the JWT signs in as, for jwt_bearer.")
 	registerConnectionsAddFlags(cmd)
 	return cmd
 }
@@ -2991,6 +3021,119 @@ func buildConnectionsAddSalesforceCrm(cmd *cobra.Command, api *sdk.APIClient, co
 	}, nil
 }
 
+func buildConnectionsAddSalesforceDataCloud(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
+	var err error
+	if err := requireAny(cmd, "auth-mode"); err != nil {
+		return nil, err
+	}
+	authModeValue, err := flagString(cmd, "auth-mode")
+	if err != nil {
+		return nil, err
+	}
+	authMode, err := sdk.NewSalesforceDataCloudAuthModeFromValue(authModeValue)
+	if err != nil {
+		return nil, usageError("%w", err)
+	}
+	if err := requireAny(cmd, "domain"); err != nil {
+		return nil, err
+	}
+	domain, err := flagString(cmd, "domain")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "consumer-key"); err != nil {
+		return nil, err
+	}
+	consumerKey, err := flagString(cmd, "consumer-key")
+	if err != nil {
+		return nil, err
+	}
+	var consumerSecret string
+	if changed(cmd, "consumer-secret", "consumer-secret-prompt") {
+		consumerSecret, err = flagSecret(cmd, "consumer-secret")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var dataspace string
+	if changed(cmd, "dataspace") {
+		dataspace, err = flagString(cmd, "dataspace")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var dataspaces []string
+	if changed(cmd, "dataspaces") {
+		dataspaces, err = flagStringSlice(cmd, "dataspaces")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var privateKey string
+	if changed(cmd, "private-key", "private-key-prompt") {
+		privateKey, err = flagSecret(cmd, "private-key")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var username string
+	if changed(cmd, "username") {
+		username, err = flagString(cmd, "username")
+		if err != nil {
+			return nil, err
+		}
+	}
+	body := sdk.NewSalesforceDataCloudCredentialsIn(*authMode, domain, consumerKey)
+	if changed(cmd, "consumer-secret", "consumer-secret-prompt") {
+		body.SetConsumerSecret(consumerSecret)
+	}
+	if changed(cmd, "dataspace") {
+		body.SetDataspace(dataspace)
+	}
+	if changed(cmd, "dataspaces") {
+		body.SetDataspaces(dataspaces)
+	}
+	if changed(cmd, "private-key", "private-key-prompt") {
+		body.SetPrivateKey(privateKey)
+	}
+	if changed(cmd, "username") {
+		body.SetUsername(username)
+	}
+	return &connectionsAddCredentials{
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			candidate := sdk.NewSalesforceDataCloudCredentialsValidateIn(deploymentId, *authMode, domain, consumerKey)
+			if changed(cmd, "consumer-secret", "consumer-secret-prompt") {
+				candidate.SetConsumerSecret(consumerSecret)
+			}
+			if changed(cmd, "dataspace") {
+				candidate.SetDataspace(dataspace)
+			}
+			if changed(cmd, "dataspaces") {
+				candidate.SetDataspaces(dataspaces)
+			}
+			if changed(cmd, "private-key", "private-key-prompt") {
+				candidate.SetPrivateKey(privateKey)
+			}
+			if changed(cmd, "username") {
+				candidate.SetUsername(username)
+			}
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateSalesforceDataCloudCredentials(ctx).SalesforceDataCloudCredentialsValidateIn(*candidate).Execute)
+		},
+		create: func(ctx context.Context) (string, *http.Response, error) {
+			out, resp, err := retryOnTransient(cmd, api.CredentialsAPI.CreateSalesforceDataCloudCredentials(ctx).SalesforceDataCloudCredentialsIn(*body).Execute)
+			if err != nil {
+				return "", resp, err
+			}
+			return out.GetId(), resp, nil
+		},
+		del: func(ctx context.Context, id string) (*http.Response, error) {
+			return api.CredentialsAPI.DeleteSalesforceDataCloudCredentials(ctx, id).Execute()
+		},
+		deleteCmd: "credentials delete salesforce-data-cloud",
+		listCmd:   "credentials list",
+	}, nil
+}
+
 func buildConnectionsAddTableau(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
 	var err error
 	if err := requireAny(cmd, "server-name"); err != nil {
@@ -4820,6 +4963,7 @@ func newConnectionsUpdateCmd() *cobra.Command {
 	cmd.AddCommand(newConnectionsUpdateSapHanaCmd())
 	cmd.AddCommand(newConnectionsUpdateSqlServerCmd())
 	cmd.AddCommand(newConnectionsUpdateSalesforceCrmCmd())
+	cmd.AddCommand(newConnectionsUpdateSalesforceDataCloudCmd())
 	cmd.AddCommand(newConnectionsUpdateTableauCmd())
 	cmd.AddCommand(newConnectionsUpdateLookerCmd())
 	cmd.AddCommand(newConnectionsUpdateLookerGitCloneCmd())
@@ -5336,6 +5480,35 @@ func newConnectionsUpdateSalesforceCrmCmd() *cobra.Command {
 	cmd.Flags().String("security-token", "", "Security token of username, for password. Stored by Monte Carlo and never returned. Visible in the process list; --security-token-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("security-token-prompt", false, "Read --security-token from a hidden prompt instead of the command line.")
 	cmd.Flags().String("username", "", "Salesforce user Monte Carlo signs in as, for password.")
+	registerConnectionsUpdateFlags(cmd)
+	return cmd
+}
+
+func newConnectionsUpdateSalesforceDataCloudCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "salesforce-data-cloud <connection_id>",
+		Short: "Update a connection of type salesforce-data-cloud, and change its credentials",
+		Long:  "Updates a connection of type salesforce-data-cloud, as the update command does, changing its salesforce-data-cloud credentials with the flags below.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
+				group:   flagGroup{"salesforce-data-cloud", []string{"auth-mode", "consumer-key", "consumer-secret", "consumer-secret-prompt", "dataspace", "dataspaces", "domain", "private-key", "private-key-prompt", "username"}},
+				storage: "mc_managed",
+				build:   buildConnectionsUpdateSalesforceDataCloud,
+			})
+		},
+	}
+	cmd.Flags().String("auth-mode", "", "How Monte Carlo signs in. oauth_client_credentials takes consumer_secret. jwt_bearer takes username and private_key. Both take domain and consumer_key.")
+	_ = cmd.RegisterFlagCompletionFunc("auth-mode", enumCompletion(sdk.AllowedSalesforceDataCloudAuthModeEnumValues))
+	cmd.Flags().String("consumer-key", "", "Consumer key of the connected app Monte Carlo signs in as.")
+	cmd.Flags().String("consumer-secret", "", "Consumer secret of the connected app, for oauth_client_credentials. Stored by Monte Carlo and never returned. Visible in the process list; --consumer-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("consumer-secret-prompt", false, "Read --consumer-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("dataspace", "", "The one data space a query connection runs in. Once set, it can be changed but not cleared. Sending it in an update, even unchanged, moves row count collection for that data space's tables to the query connections using these credentials.")
+	cmd.Flags().StringSlice("dataspaces", nil, "Data spaces Monte Carlo collects metadata from.")
+	cmd.Flags().String("domain", "", "My Domain host of your org, such as acme.my.salesforce.com. Changing it requires sending the credentials' secrets again.")
+	cmd.Flags().String("private-key", "", "PEM private key whose certificate is on the connected app, for jwt_bearer. It must be an unencrypted RSA key. Stored by Monte Carlo and never returned. Visible in the process list; --private-key-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("private-key-prompt", false, "Read --private-key from a hidden prompt instead of the command line.")
+	cmd.Flags().String("username", "", "Salesforce user the JWT signs in as, for jwt_bearer.")
 	registerConnectionsUpdateFlags(cmd)
 	return cmd
 }
@@ -7934,6 +8107,144 @@ func buildConnectionsUpdateSalesforceCrm(cmd *cobra.Command, api *sdk.APIClient,
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateSalesforceCrmCredentials(ctx, credentialsId).SalesforceCrmCredentialsPatch(*patch).Execute)
+			return resp, err
+		},
+	}, nil
+}
+
+func buildConnectionsUpdateSalesforceDataCloud(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+	var err error
+	var authMode *sdk.SalesforceDataCloudAuthMode
+	if changed(cmd, "auth-mode") {
+		authModeValue, err := flagString(cmd, "auth-mode")
+		if err != nil {
+			return nil, err
+		}
+		authMode, err = sdk.NewSalesforceDataCloudAuthModeFromValue(authModeValue)
+		if err != nil {
+			return nil, usageError("%w", err)
+		}
+	}
+	var consumerKey string
+	if changed(cmd, "consumer-key") {
+		consumerKey, err = flagString(cmd, "consumer-key")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var consumerSecret string
+	if changed(cmd, "consumer-secret", "consumer-secret-prompt") {
+		consumerSecret, err = flagSecret(cmd, "consumer-secret")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var dataspace string
+	if changed(cmd, "dataspace") {
+		dataspace, err = flagString(cmd, "dataspace")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var dataspaces []string
+	if changed(cmd, "dataspaces") {
+		dataspaces, err = flagStringSlice(cmd, "dataspaces")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var domain string
+	if changed(cmd, "domain") {
+		domain, err = flagString(cmd, "domain")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var privateKey string
+	if changed(cmd, "private-key", "private-key-prompt") {
+		privateKey, err = flagSecret(cmd, "private-key")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var username string
+	if changed(cmd, "username") {
+		username, err = flagString(cmd, "username")
+		if err != nil {
+			return nil, err
+		}
+	}
+	patch := sdk.NewSalesforceDataCloudCredentialsPatchWithDefaults()
+	check := sdk.NewSalesforceDataCloudCredentialsChangeValidateInWithDefaults()
+	if changed(cmd, "auth-mode") {
+		patch.SetAuthMode(*authMode)
+		check.SetAuthMode(*authMode)
+	}
+	if changed(cmd, "consumer-key") {
+		if consumerKey == "" {
+			patch.SetConsumerKeyNil()
+			check.SetConsumerKeyNil()
+		} else {
+			patch.SetConsumerKey(consumerKey)
+			check.SetConsumerKey(consumerKey)
+		}
+	}
+	if changed(cmd, "consumer-secret", "consumer-secret-prompt") {
+		if consumerSecret == "" {
+			patch.SetConsumerSecretNil()
+			check.SetConsumerSecretNil()
+		} else {
+			patch.SetConsumerSecret(consumerSecret)
+			check.SetConsumerSecret(consumerSecret)
+		}
+	}
+	if changed(cmd, "dataspace") {
+		if dataspace == "" {
+			patch.SetDataspaceNil()
+			check.SetDataspaceNil()
+		} else {
+			patch.SetDataspace(dataspace)
+			check.SetDataspace(dataspace)
+		}
+	}
+	if changed(cmd, "dataspaces") {
+		patch.SetDataspaces(dataspaces)
+		check.SetDataspaces(dataspaces)
+	}
+	if changed(cmd, "domain") {
+		if domain == "" {
+			patch.SetDomainNil()
+			check.SetDomainNil()
+		} else {
+			patch.SetDomain(domain)
+			check.SetDomain(domain)
+		}
+	}
+	if changed(cmd, "private-key", "private-key-prompt") {
+		if privateKey == "" {
+			patch.SetPrivateKeyNil()
+			check.SetPrivateKeyNil()
+		} else {
+			patch.SetPrivateKey(privateKey)
+			check.SetPrivateKey(privateKey)
+		}
+	}
+	if changed(cmd, "username") {
+		if username == "" {
+			patch.SetUsernameNil()
+			check.SetUsernameNil()
+		} else {
+			patch.SetUsername(username)
+			check.SetUsername(username)
+		}
+	}
+	return &connectionsUpdateCredentials{
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateSalesforceDataCloudCredentialsChange(ctx, credentialsId).SalesforceDataCloudCredentialsChangeValidateIn(*check).Execute)
+		},
+		patch: func(ctx context.Context) (*http.Response, error) {
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateSalesforceDataCloudCredentials(ctx, credentialsId).SalesforceDataCloudCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
