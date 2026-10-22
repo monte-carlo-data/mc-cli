@@ -84,7 +84,7 @@ func newConnectionsCreateCmd() *cobra.Command {
 				}
 				body.SetWarehouseId(warehouseId)
 			}
-			if changed(cmd, "dbt-cloud-connection-match", "dbt-cloud-allowed-connections", "dbt-cloud-allowed-environments") {
+			if changed(cmd, "dbt-cloud-connection-match", "dbt-cloud-allowed-connection-fields", "dbt-cloud-allowed-connection-values", "dbt-cloud-allowed-environments") {
 				if err := requireAny(cmd, "dbt-cloud-connection-match"); err != nil {
 					return err
 				}
@@ -96,13 +96,21 @@ func newConnectionsCreateCmd() *cobra.Command {
 				if err != nil {
 					return usageError("%w", err)
 				}
-				dbtCloudAllowedConnections := []string{}
-				if changed(cmd, "dbt-cloud-allowed-connections") {
-					given, err := flagStringSlice(cmd, "dbt-cloud-allowed-connections")
+				dbtCloudAllowedConnectionFields := []string{}
+				if changed(cmd, "dbt-cloud-allowed-connection-fields") {
+					given, err := flagStringSlice(cmd, "dbt-cloud-allowed-connection-fields")
 					if err != nil {
 						return err
 					}
-					dbtCloudAllowedConnections = given
+					dbtCloudAllowedConnectionFields = given
+				}
+				dbtCloudAllowedConnectionValues := []string{}
+				if changed(cmd, "dbt-cloud-allowed-connection-values") {
+					given, err := flagStringSlice(cmd, "dbt-cloud-allowed-connection-values")
+					if err != nil {
+						return err
+					}
+					dbtCloudAllowedConnectionValues = given
 				}
 				dbtCloudAllowedEnvironments := []string{}
 				if changed(cmd, "dbt-cloud-allowed-environments") {
@@ -112,7 +120,7 @@ func newConnectionsCreateCmd() *cobra.Command {
 					}
 					dbtCloudAllowedEnvironments = given
 				}
-				nested := sdk.NewDbtCloudSettingsIn(*dbtCloudConnectionMatch, dbtCloudAllowedConnections, dbtCloudAllowedEnvironments)
+				nested := sdk.NewDbtCloudSettingsIn(*dbtCloudConnectionMatch, dbtCloudAllowedConnectionFields, dbtCloudAllowedConnectionValues, dbtCloudAllowedEnvironments)
 				body.SetDbtCloud(*nested)
 			}
 			req = req.ConnectionIn(*body)
@@ -132,7 +140,8 @@ func newConnectionsCreateCmd() *cobra.Command {
 	cmd.Flags().String("warehouse-id", "", "The warehouse to add the connection to. Its type has to match what the credentials are for. Send exactly one of this, bi_container_id and etl_container_id.")
 	cmd.Flags().String("dbt-cloud-connection-match", "", "How a run is matched to the connection's warehouse. off, the default, drops no run for its dbt connection.")
 	_ = cmd.RegisterFlagCompletionFunc("dbt-cloud-connection-match", enumCompletion(sdk.AllowedConnectionMatchEnumValues))
-	cmd.Flags().StringSlice("dbt-cloud-allowed-connections", nil, "The dbt connections, by id or name, whose runs are kept. At least one for allow_list. Empty otherwise.")
+	cmd.Flags().StringSlice("dbt-cloud-allowed-connection-fields", nil, "The dbt connection fields to compare, such as account for Snowflake. name and id match a dbt connection by its own name or id. At least one for allow_list. Empty otherwise.")
+	cmd.Flags().StringSlice("dbt-cloud-allowed-connection-values", nil, "The values to match, exactly as they appear in dbt Cloud. A run is kept when one of allowed_connection_fields on its dbt connection equals one of them. At least one for allow_list. Empty otherwise.")
 	cmd.Flags().StringSlice("dbt-cloud-allowed-environments", nil, "The dbt environments, by name and ignoring case, whose runs are kept. Empty keeps runs from every environment.")
 	return cmd
 }
@@ -339,6 +348,7 @@ func newConnectionsAddCmd() *cobra.Command {
 	cmd.AddCommand(newConnectionsAddAzureDedicatedSqlPoolCmd())
 	cmd.AddCommand(newConnectionsAddSapHanaCmd())
 	cmd.AddCommand(newConnectionsAddSqlServerCmd())
+	cmd.AddCommand(newConnectionsAddSalesforceCrmCmd())
 	cmd.AddCommand(newConnectionsAddTableauCmd())
 	cmd.AddCommand(newConnectionsAddLookerCmd())
 	cmd.AddCommand(newConnectionsAddLookerGitCloneCmd())
@@ -828,6 +838,35 @@ func newConnectionsAddSqlServerCmd() *cobra.Command {
 	return cmd
 }
 
+func newConnectionsAddSalesforceCrmCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "salesforce-crm",
+		Short: "Add a connection of type salesforce-crm, creating its warehouse and credentials",
+		Long:  "Adds a connection of type salesforce-crm in one step, as the add command does. Pass salesforce-crm credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsAdd(cmd, "salesforce-crm", &connectionsAddNative{
+				group:          flagGroup{"salesforce-crm", []string{"auth-mode", "consumer-key", "consumer-secret", "consumer-secret-prompt", "domain", "password", "password-prompt", "security-token", "security-token-prompt", "username"}},
+				selfHostedOnly: []string{"bq-project-id", "sql-warehouse-id"},
+				build:          buildConnectionsAddSalesforceCrm,
+			})
+		},
+	}
+	cmd.Flags().String("auth-mode", "", "How Monte Carlo signs in. password takes username, password and security_token. oauth_client_credentials takes consumer_key, consumer_secret and domain.")
+	_ = cmd.RegisterFlagCompletionFunc("auth-mode", enumCompletion(sdk.AllowedSalesforceCrmAuthModeEnumValues))
+	cmd.Flags().String("consumer-key", "", "Consumer key of the connected app Monte Carlo signs in as, for oauth_client_credentials.")
+	cmd.Flags().String("consumer-secret", "", "Consumer secret of the connected app, for oauth_client_credentials. Stored by Monte Carlo and never returned. Visible in the process list; --consumer-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("consumer-secret-prompt", false, "Read --consumer-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("domain", "", "My Domain of your org, such as acme.my.salesforce.com, for oauth_client_credentials. The .salesforce.com suffix is optional.")
+	cmd.Flags().String("password", "", "Password of username, for password. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("security-token", "", "Security token of username, for password. Stored by Monte Carlo and never returned. Visible in the process list; --security-token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("security-token-prompt", false, "Read --security-token from a hidden prompt instead of the command line.")
+	cmd.Flags().String("username", "", "Salesforce user Monte Carlo signs in as, for password.")
+	registerConnectionsAddFlags(cmd)
+	return cmd
+}
+
 func newConnectionsAddTableauCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "tableau",
@@ -1108,7 +1147,8 @@ func newConnectionsAddDbtCloudWebhookCmd() *cobra.Command {
 	cmd.Flags().String("base-url", "", "Your dbt Cloud access URL followed by /api/v2, such as https://emea.dbt.com/api/v2. Leave it out for https://cloud.getdbt.com/api/v2.")
 	cmd.Flags().String("dbt-cloud-connection-match", "", "How a run is matched to the connection's warehouse. off, the default, drops no run for its dbt connection.")
 	_ = cmd.RegisterFlagCompletionFunc("dbt-cloud-connection-match", enumCompletion(sdk.AllowedConnectionMatchEnumValues))
-	cmd.Flags().StringSlice("dbt-cloud-allowed-connections", nil, "The dbt connections, by id or name, whose runs are kept. At least one for allow_list. Empty otherwise.")
+	cmd.Flags().StringSlice("dbt-cloud-allowed-connection-fields", nil, "The dbt connection fields to compare, such as account for Snowflake. name and id match a dbt connection by its own name or id. At least one for allow_list. Empty otherwise.")
+	cmd.Flags().StringSlice("dbt-cloud-allowed-connection-values", nil, "The values to match, exactly as they appear in dbt Cloud. A run is kept when one of allowed_connection_fields on its dbt connection equals one of them. At least one for allow_list. Empty otherwise.")
 	cmd.Flags().StringSlice("dbt-cloud-allowed-environments", nil, "The dbt environments, by name and ignoring case, whose runs are kept. Empty keeps runs from every environment.")
 	registerConnectionsAddCommandFlags(cmd)
 	return cmd
@@ -2839,6 +2879,118 @@ func buildConnectionsAddSqlServer(cmd *cobra.Command, api *sdk.APIClient, connec
 	}, nil
 }
 
+func buildConnectionsAddSalesforceCrm(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
+	var err error
+	if err := requireAny(cmd, "auth-mode"); err != nil {
+		return nil, err
+	}
+	authModeValue, err := flagString(cmd, "auth-mode")
+	if err != nil {
+		return nil, err
+	}
+	authMode, err := sdk.NewSalesforceCrmAuthModeFromValue(authModeValue)
+	if err != nil {
+		return nil, usageError("%w", err)
+	}
+	var consumerKey string
+	if changed(cmd, "consumer-key") {
+		consumerKey, err = flagString(cmd, "consumer-key")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var consumerSecret string
+	if changed(cmd, "consumer-secret", "consumer-secret-prompt") {
+		consumerSecret, err = flagSecret(cmd, "consumer-secret")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var domain string
+	if changed(cmd, "domain") {
+		domain, err = flagString(cmd, "domain")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var password string
+	if changed(cmd, "password", "password-prompt") {
+		password, err = flagSecret(cmd, "password")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var securityToken string
+	if changed(cmd, "security-token", "security-token-prompt") {
+		securityToken, err = flagSecret(cmd, "security-token")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var username string
+	if changed(cmd, "username") {
+		username, err = flagString(cmd, "username")
+		if err != nil {
+			return nil, err
+		}
+	}
+	body := sdk.NewSalesforceCrmCredentialsIn(*authMode)
+	if changed(cmd, "consumer-key") {
+		body.SetConsumerKey(consumerKey)
+	}
+	if changed(cmd, "consumer-secret", "consumer-secret-prompt") {
+		body.SetConsumerSecret(consumerSecret)
+	}
+	if changed(cmd, "domain") {
+		body.SetDomain(domain)
+	}
+	if changed(cmd, "password", "password-prompt") {
+		body.SetPassword(password)
+	}
+	if changed(cmd, "security-token", "security-token-prompt") {
+		body.SetSecurityToken(securityToken)
+	}
+	if changed(cmd, "username") {
+		body.SetUsername(username)
+	}
+	return &connectionsAddCredentials{
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			candidate := sdk.NewSalesforceCrmCredentialsValidateIn(deploymentId, *authMode)
+			if changed(cmd, "consumer-key") {
+				candidate.SetConsumerKey(consumerKey)
+			}
+			if changed(cmd, "consumer-secret", "consumer-secret-prompt") {
+				candidate.SetConsumerSecret(consumerSecret)
+			}
+			if changed(cmd, "domain") {
+				candidate.SetDomain(domain)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				candidate.SetPassword(password)
+			}
+			if changed(cmd, "security-token", "security-token-prompt") {
+				candidate.SetSecurityToken(securityToken)
+			}
+			if changed(cmd, "username") {
+				candidate.SetUsername(username)
+			}
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateSalesforceCrmCredentials(ctx).SalesforceCrmCredentialsValidateIn(*candidate).Execute)
+		},
+		create: func(ctx context.Context) (string, *http.Response, error) {
+			out, resp, err := retryOnTransient(cmd, api.CredentialsAPI.CreateSalesforceCrmCredentials(ctx).SalesforceCrmCredentialsIn(*body).Execute)
+			if err != nil {
+				return "", resp, err
+			}
+			return out.GetId(), resp, nil
+		},
+		del: func(ctx context.Context, id string) (*http.Response, error) {
+			return api.CredentialsAPI.DeleteSalesforceCrmCredentials(ctx, id).Execute()
+		},
+		deleteCmd: "credentials delete salesforce-crm",
+		listCmd:   "credentials list",
+	}, nil
+}
+
 func buildConnectionsAddTableau(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
 	var err error
 	if err := requireAny(cmd, "server-name"); err != nil {
@@ -4446,7 +4598,7 @@ func runConnectionsAdd(cmd *cobra.Command, connectionType string, native *connec
 		connection.SetJobTypes(jobTypes)
 	}
 	// Settings only one connection type has. Only that type's subcommand registers their flags.
-	if connectionType == "dbt-cloud-webhook" && changed(cmd, "dbt-cloud-connection-match", "dbt-cloud-allowed-connections", "dbt-cloud-allowed-environments") {
+	if connectionType == "dbt-cloud-webhook" && changed(cmd, "dbt-cloud-connection-match", "dbt-cloud-allowed-connection-fields", "dbt-cloud-allowed-connection-values", "dbt-cloud-allowed-environments") {
 		if err := requireAny(cmd, "dbt-cloud-connection-match"); err != nil {
 			return err
 		}
@@ -4458,13 +4610,21 @@ func runConnectionsAdd(cmd *cobra.Command, connectionType string, native *connec
 		if err != nil {
 			return usageError("%w", err)
 		}
-		dbtCloudAllowedConnections := []string{}
-		if changed(cmd, "dbt-cloud-allowed-connections") {
-			given, err := flagStringSlice(cmd, "dbt-cloud-allowed-connections")
+		dbtCloudAllowedConnectionFields := []string{}
+		if changed(cmd, "dbt-cloud-allowed-connection-fields") {
+			given, err := flagStringSlice(cmd, "dbt-cloud-allowed-connection-fields")
 			if err != nil {
 				return err
 			}
-			dbtCloudAllowedConnections = given
+			dbtCloudAllowedConnectionFields = given
+		}
+		dbtCloudAllowedConnectionValues := []string{}
+		if changed(cmd, "dbt-cloud-allowed-connection-values") {
+			given, err := flagStringSlice(cmd, "dbt-cloud-allowed-connection-values")
+			if err != nil {
+				return err
+			}
+			dbtCloudAllowedConnectionValues = given
 		}
 		dbtCloudAllowedEnvironments := []string{}
 		if changed(cmd, "dbt-cloud-allowed-environments") {
@@ -4474,7 +4634,7 @@ func runConnectionsAdd(cmd *cobra.Command, connectionType string, native *connec
 			}
 			dbtCloudAllowedEnvironments = given
 		}
-		nested := sdk.NewDbtCloudSettingsIn(*dbtCloudConnectionMatch, dbtCloudAllowedConnections, dbtCloudAllowedEnvironments)
+		nested := sdk.NewDbtCloudSettingsIn(*dbtCloudConnectionMatch, dbtCloudAllowedConnectionFields, dbtCloudAllowedConnectionValues, dbtCloudAllowedEnvironments)
 		connection.SetDbtCloud(*nested)
 	}
 	if !skipValidations {
@@ -4659,6 +4819,7 @@ func newConnectionsUpdateCmd() *cobra.Command {
 	cmd.AddCommand(newConnectionsUpdateAzureDedicatedSqlPoolCmd())
 	cmd.AddCommand(newConnectionsUpdateSapHanaCmd())
 	cmd.AddCommand(newConnectionsUpdateSqlServerCmd())
+	cmd.AddCommand(newConnectionsUpdateSalesforceCrmCmd())
 	cmd.AddCommand(newConnectionsUpdateTableauCmd())
 	cmd.AddCommand(newConnectionsUpdateLookerCmd())
 	cmd.AddCommand(newConnectionsUpdateLookerGitCloneCmd())
@@ -5150,6 +5311,35 @@ func newConnectionsUpdateSqlServerCmd() *cobra.Command {
 	return cmd
 }
 
+func newConnectionsUpdateSalesforceCrmCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "salesforce-crm <connection_id>",
+		Short: "Update a connection of type salesforce-crm, and change its credentials",
+		Long:  "Updates a connection of type salesforce-crm, as the update command does, changing its salesforce-crm credentials with the flags below.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
+				group:   flagGroup{"salesforce-crm", []string{"auth-mode", "consumer-key", "consumer-secret", "consumer-secret-prompt", "domain", "password", "password-prompt", "security-token", "security-token-prompt", "username"}},
+				storage: "mc_managed",
+				build:   buildConnectionsUpdateSalesforceCrm,
+			})
+		},
+	}
+	cmd.Flags().String("auth-mode", "", "How Monte Carlo signs in. password takes username, password and security_token. oauth_client_credentials takes consumer_key, consumer_secret and domain.")
+	_ = cmd.RegisterFlagCompletionFunc("auth-mode", enumCompletion(sdk.AllowedSalesforceCrmAuthModeEnumValues))
+	cmd.Flags().String("consumer-key", "", "Consumer key of the connected app Monte Carlo signs in as, for oauth_client_credentials.")
+	cmd.Flags().String("consumer-secret", "", "Consumer secret of the connected app, for oauth_client_credentials. Stored by Monte Carlo and never returned. Visible in the process list; --consumer-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("consumer-secret-prompt", false, "Read --consumer-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("domain", "", "My Domain of your org, such as acme.my.salesforce.com, for oauth_client_credentials. The .salesforce.com suffix is optional. Changing it requires sending the credentials' secrets again.")
+	cmd.Flags().String("password", "", "Password of username, for password. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("security-token", "", "Security token of username, for password. Stored by Monte Carlo and never returned. Visible in the process list; --security-token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("security-token-prompt", false, "Read --security-token from a hidden prompt instead of the command line.")
+	cmd.Flags().String("username", "", "Salesforce user Monte Carlo signs in as, for password.")
+	registerConnectionsUpdateFlags(cmd)
+	return cmd
+}
+
 func newConnectionsUpdateTableauCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "tableau <connection_id>",
@@ -5416,7 +5606,7 @@ func newConnectionsUpdateDbtCloudWebhookCmd() *cobra.Command {
 				group:         flagGroup{"dbt-cloud-webhook", []string{"account-id", "base-url", "hmac-secret", "hmac-secret-prompt", "service-token", "service-token-prompt", "webhook-id"}},
 				storage:       "mc_managed",
 				build:         buildConnectionsUpdateDbtCloudWebhook,
-				settingsFlags: []string{"dbt-cloud-connection-match", "dbt-cloud-allowed-connections", "dbt-cloud-allowed-environments"},
+				settingsFlags: []string{"dbt-cloud-connection-match", "dbt-cloud-allowed-connection-fields", "dbt-cloud-allowed-connection-values", "dbt-cloud-allowed-environments"},
 				settings:      buildConnectionsUpdateDbtCloudWebhookSettings,
 			})
 		},
@@ -5430,7 +5620,8 @@ func newConnectionsUpdateDbtCloudWebhookCmd() *cobra.Command {
 	cmd.Flags().String("webhook-id", "", "Id of the dbt Cloud webhook that sends job.run.completed events to Monte Carlo.")
 	cmd.Flags().String("dbt-cloud-connection-match", "", "How a run is matched to the connection's warehouse. off, the default, drops no run for its dbt connection.")
 	_ = cmd.RegisterFlagCompletionFunc("dbt-cloud-connection-match", enumCompletion(sdk.AllowedConnectionMatchEnumValues))
-	cmd.Flags().StringSlice("dbt-cloud-allowed-connections", nil, "The dbt connections, by id or name, whose runs are kept. At least one for allow_list. Empty otherwise.")
+	cmd.Flags().StringSlice("dbt-cloud-allowed-connection-fields", nil, "The dbt connection fields to compare, such as account for Snowflake. name and id match a dbt connection by its own name or id. At least one for allow_list. Empty otherwise.")
+	cmd.Flags().StringSlice("dbt-cloud-allowed-connection-values", nil, "The values to match, exactly as they appear in dbt Cloud. A run is kept when one of allowed_connection_fields on its dbt connection equals one of them. At least one for allow_list. Empty otherwise.")
 	cmd.Flags().StringSlice("dbt-cloud-allowed-environments", nil, "The dbt environments, by name and ignoring case, whose runs are kept. Empty keeps runs from every environment.")
 	registerConnectionsUpdateFlags(cmd)
 	return cmd
@@ -7621,6 +7812,133 @@ func buildConnectionsUpdateSqlServer(cmd *cobra.Command, api *sdk.APIClient, cre
 	}, nil
 }
 
+func buildConnectionsUpdateSalesforceCrm(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+	var err error
+	var authMode *sdk.SalesforceCrmAuthMode
+	if changed(cmd, "auth-mode") {
+		authModeValue, err := flagString(cmd, "auth-mode")
+		if err != nil {
+			return nil, err
+		}
+		authMode, err = sdk.NewSalesforceCrmAuthModeFromValue(authModeValue)
+		if err != nil {
+			return nil, usageError("%w", err)
+		}
+	}
+	var consumerKey string
+	if changed(cmd, "consumer-key") {
+		consumerKey, err = flagString(cmd, "consumer-key")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var consumerSecret string
+	if changed(cmd, "consumer-secret", "consumer-secret-prompt") {
+		consumerSecret, err = flagSecret(cmd, "consumer-secret")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var domain string
+	if changed(cmd, "domain") {
+		domain, err = flagString(cmd, "domain")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var password string
+	if changed(cmd, "password", "password-prompt") {
+		password, err = flagSecret(cmd, "password")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var securityToken string
+	if changed(cmd, "security-token", "security-token-prompt") {
+		securityToken, err = flagSecret(cmd, "security-token")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var username string
+	if changed(cmd, "username") {
+		username, err = flagString(cmd, "username")
+		if err != nil {
+			return nil, err
+		}
+	}
+	patch := sdk.NewSalesforceCrmCredentialsPatchWithDefaults()
+	check := sdk.NewSalesforceCrmCredentialsChangeValidateInWithDefaults()
+	if changed(cmd, "auth-mode") {
+		patch.SetAuthMode(*authMode)
+		check.SetAuthMode(*authMode)
+	}
+	if changed(cmd, "consumer-key") {
+		if consumerKey == "" {
+			patch.SetConsumerKeyNil()
+			check.SetConsumerKeyNil()
+		} else {
+			patch.SetConsumerKey(consumerKey)
+			check.SetConsumerKey(consumerKey)
+		}
+	}
+	if changed(cmd, "consumer-secret", "consumer-secret-prompt") {
+		if consumerSecret == "" {
+			patch.SetConsumerSecretNil()
+			check.SetConsumerSecretNil()
+		} else {
+			patch.SetConsumerSecret(consumerSecret)
+			check.SetConsumerSecret(consumerSecret)
+		}
+	}
+	if changed(cmd, "domain") {
+		if domain == "" {
+			patch.SetDomainNil()
+			check.SetDomainNil()
+		} else {
+			patch.SetDomain(domain)
+			check.SetDomain(domain)
+		}
+	}
+	if changed(cmd, "password", "password-prompt") {
+		if password == "" {
+			patch.SetPasswordNil()
+			check.SetPasswordNil()
+		} else {
+			patch.SetPassword(password)
+			check.SetPassword(password)
+		}
+	}
+	if changed(cmd, "security-token", "security-token-prompt") {
+		if securityToken == "" {
+			patch.SetSecurityTokenNil()
+			check.SetSecurityTokenNil()
+		} else {
+			patch.SetSecurityToken(securityToken)
+			check.SetSecurityToken(securityToken)
+		}
+	}
+	if changed(cmd, "username") {
+		if username == "" {
+			patch.SetUsernameNil()
+			check.SetUsernameNil()
+		} else {
+			patch.SetUsername(username)
+			check.SetUsername(username)
+		}
+	}
+	return &connectionsUpdateCredentials{
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateSalesforceCrmCredentialsChange(ctx, credentialsId).SalesforceCrmCredentialsChangeValidateIn(*check).Execute)
+		},
+		patch: func(ctx context.Context) (*http.Response, error) {
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateSalesforceCrmCredentials(ctx, credentialsId).SalesforceCrmCredentialsPatch(*patch).Execute)
+			return resp, err
+		},
+	}, nil
+}
+
 func buildConnectionsUpdateTableau(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var connectedAppClientId string
@@ -9326,7 +9644,7 @@ func buildConnectionsUpdateDbtCloudWebhookSettings(cmd *cobra.Command, connectio
 	if !ok || current == nil {
 		return false, nil
 	}
-	settings := sdk.NewDbtCloudSettingsIn(current.GetConnectionMatch(), current.GetAllowedConnections(), current.GetAllowedEnvironments())
+	settings := sdk.NewDbtCloudSettingsIn(current.GetConnectionMatch(), current.GetAllowedConnectionFields(), current.GetAllowedConnectionValues(), current.GetAllowedEnvironments())
 	if changed(cmd, "dbt-cloud-connection-match") {
 		dbtCloudConnectionMatchValue, err := flagString(cmd, "dbt-cloud-connection-match")
 		if err != nil {
@@ -9338,12 +9656,19 @@ func buildConnectionsUpdateDbtCloudWebhookSettings(cmd *cobra.Command, connectio
 		}
 		settings.SetConnectionMatch(*dbtCloudConnectionMatch)
 	}
-	if changed(cmd, "dbt-cloud-allowed-connections") {
-		dbtCloudAllowedConnections, err := flagStringSlice(cmd, "dbt-cloud-allowed-connections")
+	if changed(cmd, "dbt-cloud-allowed-connection-fields") {
+		dbtCloudAllowedConnectionFields, err := flagStringSlice(cmd, "dbt-cloud-allowed-connection-fields")
 		if err != nil {
 			return false, err
 		}
-		settings.SetAllowedConnections(dbtCloudAllowedConnections)
+		settings.SetAllowedConnectionFields(dbtCloudAllowedConnectionFields)
+	}
+	if changed(cmd, "dbt-cloud-allowed-connection-values") {
+		dbtCloudAllowedConnectionValues, err := flagStringSlice(cmd, "dbt-cloud-allowed-connection-values")
+		if err != nil {
+			return false, err
+		}
+		settings.SetAllowedConnectionValues(dbtCloudAllowedConnectionValues)
 	}
 	if changed(cmd, "dbt-cloud-allowed-environments") {
 		dbtCloudAllowedEnvironments, err := flagStringSlice(cmd, "dbt-cloud-allowed-environments")
