@@ -18,6 +18,11 @@ on:
 permissions:
   contents: read
 
+env:
+  # Fetch our own modules straight from GitHub. The Go proxy can keep serving a failed fetch of a
+  # freshly tagged release for a while.
+  GOPRIVATE: github.com/monte-carlo-data/*
+
 jobs:
   build:
     name: Build the reference
