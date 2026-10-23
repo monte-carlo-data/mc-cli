@@ -4914,7 +4914,7 @@ type connectionsUpdateCredentials struct {
 type connectionsUpdateNative struct {
 	group   flagGroup
 	storage string
-	build   func(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error)
+	build   func(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error)
 	// The flags of the settings only this connection type has, and the func that sets them on the update.
 	settingsFlags []string
 	settings      func(cmd *cobra.Command, connection *sdk.ConnectionOut, update *sdk.ConnectionPatch) (bool, error)
@@ -4924,7 +4924,7 @@ func newConnectionsUpdateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update <connection_id>",
 		Short: "Update a connection, and change its credentials",
-		Long:  "Updates a connection. The flags that change credentials are validated first, then the command asks before changing them. The stored credentials fill every field the flags leave alone. Changing a host or URL needs the secrets again. The change applies to every connection using the credentials. Pass a credentials flag as \"\" to clear its field.\n\nThis command changes self-hosted credentials, one set of --self-hosted-* flags, or the shared flags alone for the storage the connection has; the subcommands change each connection type's own credentials.",
+		Long:  "Updates a connection. The flags that change credentials are validated first, then the command asks before changing them. The stored credentials fill every field the flags leave alone. Changing a host or URL needs the secrets again. The change applies to every connection using the credentials. Pass a credentials flag as \"\" to clear its field.\n\nThis command changes self-hosted credentials, one set of --self-hosted-* flags, or the shared flags alone for the storage the connection has; the subcommands change each connection type's own credentials.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], nil)
@@ -4984,7 +4984,7 @@ func newConnectionsUpdateSnowflakeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "snowflake <connection_id>",
 		Short: "Update a connection of type snowflake, and change its credentials",
-		Long:  "Updates a connection of type snowflake, as the update command does, changing its snowflake credentials with the flags below.",
+		Long:  "Updates a connection of type snowflake, as the update command does, changing its snowflake credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -5009,7 +5009,7 @@ func newConnectionsUpdateBigqueryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "bigquery <connection_id>",
 		Short: "Update a connection of type bigquery, and change its credentials",
-		Long:  "Updates a connection of type bigquery, as the update command does, changing its bigquery credentials with the flags below.",
+		Long:  "Updates a connection of type bigquery, as the update command does, changing its bigquery credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -5029,7 +5029,7 @@ func newConnectionsUpdateRedshiftCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "redshift <connection_id>",
 		Short: "Update a connection of type redshift, and change its credentials",
-		Long:  "Updates a connection of type redshift, as the update command does, changing its redshift credentials with the flags below.",
+		Long:  "Updates a connection of type redshift, as the update command does, changing its redshift credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -5058,7 +5058,7 @@ func newConnectionsUpdateDatabricksMetastoreSqlWarehouseCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "databricks-metastore-sql-warehouse <connection_id>",
 		Short: "Update a connection of type databricks-metastore-sql-warehouse, and change its credentials",
-		Long:  "Updates a connection of type databricks-metastore-sql-warehouse, as the update command does, changing its databricks-metastore-sql-warehouse credentials with the flags below.",
+		Long:  "Updates a connection of type databricks-metastore-sql-warehouse, as the update command does, changing its databricks-metastore-sql-warehouse credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -5086,7 +5086,7 @@ func newConnectionsUpdateDatabricksSqlWarehouseCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "databricks-sql-warehouse <connection_id>",
 		Short: "Update a connection of type databricks-sql-warehouse, and change its credentials",
-		Long:  "Updates a connection of type databricks-sql-warehouse, as the update command does, changing its databricks-sql-warehouse credentials with the flags below.",
+		Long:  "Updates a connection of type databricks-sql-warehouse, as the update command does, changing its databricks-sql-warehouse credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -5114,7 +5114,7 @@ func newConnectionsUpdatePostgresCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "postgres <connection_id>",
 		Short: "Update a connection of type postgres, and change its credentials",
-		Long:  "Updates a connection of type postgres, as the update command does, changing its postgres credentials with the flags below.",
+		Long:  "Updates a connection of type postgres, as the update command does, changing its postgres credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -5144,7 +5144,7 @@ func newConnectionsUpdateMysqlCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mysql <connection_id>",
 		Short: "Update a connection of type mysql, and change its credentials",
-		Long:  "Updates a connection of type mysql, as the update command does, changing its mysql credentials with the flags below.",
+		Long:  "Updates a connection of type mysql, as the update command does, changing its mysql credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -5173,7 +5173,7 @@ func newConnectionsUpdateMariadbCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mariadb <connection_id>",
 		Short: "Update a connection of type mariadb, and change its credentials",
-		Long:  "Updates a connection of type mariadb, as the update command does, changing its mariadb credentials with the flags below.",
+		Long:  "Updates a connection of type mariadb, as the update command does, changing its mariadb credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -5197,7 +5197,7 @@ func newConnectionsUpdateOracleCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "oracle <connection_id>",
 		Short: "Update a connection of type oracle, and change its credentials",
-		Long:  "Updates a connection of type oracle, as the update command does, changing its oracle credentials with the flags below.",
+		Long:  "Updates a connection of type oracle, as the update command does, changing its oracle credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -5226,7 +5226,7 @@ func newConnectionsUpdateDb2Cmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "db2 <connection_id>",
 		Short: "Update a connection of type db2, and change its credentials",
-		Long:  "Updates a connection of type db2, as the update command does, changing its db2 credentials with the flags below.",
+		Long:  "Updates a connection of type db2, as the update command does, changing its db2 credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -5252,7 +5252,7 @@ func newConnectionsUpdateTeradataCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "teradata <connection_id>",
 		Short: "Update a connection of type teradata, and change its credentials",
-		Long:  "Updates a connection of type teradata, as the update command does, changing its teradata credentials with the flags below.",
+		Long:  "Updates a connection of type teradata, as the update command does, changing its teradata credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -5282,7 +5282,7 @@ func newConnectionsUpdateClickhouseCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "clickhouse <connection_id>",
 		Short: "Update a connection of type clickhouse, and change its credentials",
-		Long:  "Updates a connection of type clickhouse, as the update command does, changing its clickhouse credentials with the flags below.",
+		Long:  "Updates a connection of type clickhouse, as the update command does, changing its clickhouse credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -5306,7 +5306,7 @@ func newConnectionsUpdateStarburstEnterpriseCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "starburst-enterprise <connection_id>",
 		Short: "Update a connection of type starburst-enterprise, and change its credentials",
-		Long:  "Updates a connection of type starburst-enterprise, as the update command does, changing its starburst-enterprise credentials with the flags below.",
+		Long:  "Updates a connection of type starburst-enterprise, as the update command does, changing its starburst-enterprise credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -5332,7 +5332,7 @@ func newConnectionsUpdateStarburstGalaxyCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "starburst-galaxy <connection_id>",
 		Short: "Update a connection of type starburst-galaxy, and change its credentials",
-		Long:  "Updates a connection of type starburst-galaxy, as the update command does, changing its starburst-galaxy credentials with the flags below.",
+		Long:  "Updates a connection of type starburst-galaxy, as the update command does, changing its starburst-galaxy credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -5356,7 +5356,7 @@ func newConnectionsUpdateAzureSqlDatabaseCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "azure-sql-database <connection_id>",
 		Short: "Update a connection of type azure-sql-database, and change its credentials",
-		Long:  "Updates a connection of type azure-sql-database, as the update command does, changing its azure-sql-database credentials with the flags below.",
+		Long:  "Updates a connection of type azure-sql-database, as the update command does, changing its azure-sql-database credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -5380,7 +5380,7 @@ func newConnectionsUpdateAzureDedicatedSqlPoolCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "azure-dedicated-sql-pool <connection_id>",
 		Short: "Update a connection of type azure-dedicated-sql-pool, and change its credentials",
-		Long:  "Updates a connection of type azure-dedicated-sql-pool, as the update command does, changing its azure-dedicated-sql-pool credentials with the flags below.",
+		Long:  "Updates a connection of type azure-dedicated-sql-pool, as the update command does, changing its azure-dedicated-sql-pool credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -5404,7 +5404,7 @@ func newConnectionsUpdateSapHanaCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sap-hana <connection_id>",
 		Short: "Update a connection of type sap-hana, and change its credentials",
-		Long:  "Updates a connection of type sap-hana, as the update command does, changing its sap-hana credentials with the flags below.",
+		Long:  "Updates a connection of type sap-hana, as the update command does, changing its sap-hana credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -5428,7 +5428,7 @@ func newConnectionsUpdateSqlServerCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sql-server <connection_id>",
 		Short: "Update a connection of type sql-server, and change its credentials",
-		Long:  "Updates a connection of type sql-server, as the update command does, changing its sql-server credentials with the flags below.",
+		Long:  "Updates a connection of type sql-server, as the update command does, changing its sql-server credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -5459,7 +5459,7 @@ func newConnectionsUpdateSalesforceCrmCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "salesforce-crm <connection_id>",
 		Short: "Update a connection of type salesforce-crm, and change its credentials",
-		Long:  "Updates a connection of type salesforce-crm, as the update command does, changing its salesforce-crm credentials with the flags below.",
+		Long:  "Updates a connection of type salesforce-crm, as the update command does, changing its salesforce-crm credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -5488,7 +5488,7 @@ func newConnectionsUpdateSalesforceDataCloudCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "salesforce-data-cloud <connection_id>",
 		Short: "Update a connection of type salesforce-data-cloud, and change its credentials",
-		Long:  "Updates a connection of type salesforce-data-cloud, as the update command does, changing its salesforce-data-cloud credentials with the flags below.",
+		Long:  "Updates a connection of type salesforce-data-cloud, as the update command does, changing its salesforce-data-cloud credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -5517,7 +5517,7 @@ func newConnectionsUpdateTableauCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "tableau <connection_id>",
 		Short: "Update a connection of type tableau, and change its credentials",
-		Long:  "Updates a connection of type tableau, as the update command does, changing its tableau credentials with the flags below.",
+		Long:  "Updates a connection of type tableau, as the update command does, changing its tableau credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -5548,7 +5548,7 @@ func newConnectionsUpdateLookerCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "looker <connection_id>",
 		Short: "Update a connection of type looker, and change its credentials",
-		Long:  "Updates a connection of type looker, as the update command does, changing its looker credentials with the flags below.",
+		Long:  "Updates a connection of type looker, as the update command does, changing its looker credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -5571,7 +5571,7 @@ func newConnectionsUpdateLookerGitCloneCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "looker-git-clone <connection_id>",
 		Short: "Update a connection of type looker-git-clone, and change its credentials",
-		Long:  "Updates a connection of type looker-git-clone, as the update command does, changing its looker-git-clone credentials with the flags below.",
+		Long:  "Updates a connection of type looker-git-clone, as the update command does, changing its looker-git-clone credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -5597,7 +5597,7 @@ func newConnectionsUpdatePowerBiCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "power-bi <connection_id>",
 		Short: "Update a connection of type power-bi, and change its credentials",
-		Long:  "Updates a connection of type power-bi, as the update command does, changing its power-bi credentials with the flags below.",
+		Long:  "Updates a connection of type power-bi, as the update command does, changing its power-bi credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -5624,7 +5624,7 @@ func newConnectionsUpdateFivetranCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "fivetran <connection_id>",
 		Short: "Update a connection of type fivetran, and change its credentials",
-		Long:  "Updates a connection of type fivetran, as the update command does, changing its fivetran credentials with the flags below.",
+		Long:  "Updates a connection of type fivetran, as the update command does, changing its fivetran credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -5647,7 +5647,7 @@ func newConnectionsUpdateAzureDataFactoryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "azure-data-factory <connection_id>",
 		Short: "Update a connection of type azure-data-factory, and change its credentials",
-		Long:  "Updates a connection of type azure-data-factory, as the update command does, changing its azure-data-factory credentials with the flags below.",
+		Long:  "Updates a connection of type azure-data-factory, as the update command does, changing its azure-data-factory credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -5672,7 +5672,7 @@ func newConnectionsUpdateInformaticaV2Cmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "informatica-v2 <connection_id>",
 		Short: "Update a connection of type informatica-v2, and change its credentials",
-		Long:  "Updates a connection of type informatica-v2, as the update command does, changing its informatica-v2 credentials with the flags below.",
+		Long:  "Updates a connection of type informatica-v2, as the update command does, changing its informatica-v2 credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -5707,7 +5707,7 @@ func newConnectionsUpdateMulesoftCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mulesoft <connection_id>",
 		Short: "Update a connection of type mulesoft, and change its credentials",
-		Long:  "Updates a connection of type mulesoft, as the update command does, changing its mulesoft credentials with the flags below.",
+		Long:  "Updates a connection of type mulesoft, as the update command does, changing its mulesoft credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -5731,7 +5731,7 @@ func newConnectionsUpdateGcpDataformCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "gcp-dataform <connection_id>",
 		Short: "Update a connection of type gcp-dataform, and change its credentials",
-		Long:  "Updates a connection of type gcp-dataform, as the update command does, changing its gcp-dataform credentials with the flags below.",
+		Long:  "Updates a connection of type gcp-dataform, as the update command does, changing its gcp-dataform credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -5753,7 +5753,7 @@ func newConnectionsUpdateAirflowCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "airflow <connection_id>",
 		Short: "Update a connection of type airflow, and change its credentials",
-		Long:  "Updates a connection of type airflow, as the update command does, changing its airflow credentials with the flags below.",
+		Long:  "Updates a connection of type airflow, as the update command does, changing its airflow credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -5772,7 +5772,7 @@ func newConnectionsUpdateDbtCloudWebhookCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "dbt-cloud-webhook <connection_id>",
 		Short: "Update a connection of type dbt-cloud-webhook, and change its credentials",
-		Long:  "Updates a connection of type dbt-cloud-webhook, as the update command does, changing its dbt-cloud-webhook credentials with the flags below. The --dbt-cloud-* flags set the dbt_cloud settings only a connection of type dbt-cloud-webhook has. The current settings fill every one left out. Pass \"\" to a list flag to empty it.",
+		Long:  "Updates a connection of type dbt-cloud-webhook, as the update command does, changing its dbt-cloud-webhook credentials with the flags below. The --dbt-cloud-* flags set the dbt_cloud settings only a connection of type dbt-cloud-webhook has. The current settings fill every one left out. Pass \"\" to a list flag to empty it.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -5804,7 +5804,7 @@ func newConnectionsUpdateGlueCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "glue <connection_id>",
 		Short: "Update a connection of type glue, and change its credentials",
-		Long:  "Updates a connection of type glue, as the update command does, changing its glue credentials with the flags below.",
+		Long:  "Updates a connection of type glue, as the update command does, changing its glue credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -5826,7 +5826,7 @@ func newConnectionsUpdateAthenaCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "athena <connection_id>",
 		Short: "Update a connection of type athena, and change its credentials",
-		Long:  "Updates a connection of type athena, as the update command does, changing its athena credentials with the flags below.",
+		Long:  "Updates a connection of type athena, as the update command does, changing its athena credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
@@ -5848,13 +5848,14 @@ func newConnectionsUpdateAthenaCmd() *cobra.Command {
 // registerConnectionsUpdateFlags registers the flags every update command takes. A connection's
 // credentials keep their storage, so a native type's subcommand takes no self-hosted flags.
 func registerConnectionsUpdateFlags(cmd *cobra.Command) {
+	cmd.Flags().String("credentials-id", "", "Credentials for the connection to read with from now on. They must be for the connection's own type, and may be stored by Monte Carlo or self-hosted. The previous credentials are kept, and can be deleted once nothing uses them. Omit it to keep the current credentials. An explicit null is ignored, the same as omitting the field.")
 	cmd.Flags().StringSlice("job-types", nil, "The connection's job types with etl added or removed. Adding etl turns on ETL collection for a Snowflake (Snowflake Tasks), Power BI (dataflows) or Salesforce Data Cloud connection, and creates the ETL container that etl_container_id then names. Removing it deletes that container. No other job can be added or removed. Omit it to leave the job types unchanged.")
 	cmd.Flags().String("name", "", "New display name for the connection. Omit it to leave the name unchanged. An explicit null is ignored, the same as omitting the field.")
 	cmd.Flags().Bool("validate-only", false, "Validate the credentials change and change nothing.")
 	cmd.Flags().Bool("skip-validations", false, "Change the credentials without validating them first, and without asking.")
 }
 
-func buildConnectionsUpdateSnowflake(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdateSnowflake(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var account string
 	if changed(cmd, "account") {
@@ -5941,16 +5942,16 @@ func buildConnectionsUpdateSnowflake(cmd *cobra.Command, api *sdk.APIClient, cre
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateSnowflakeCredentialsChange(ctx, credentialsId).SnowflakeCredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateSnowflakeCredentialsChange(ctx, currentCredentialsId).SnowflakeCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateSnowflakeCredentials(ctx, credentialsId).SnowflakeCredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateSnowflakeCredentials(ctx, currentCredentialsId).SnowflakeCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdateBigquery(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdateBigquery(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var serviceAccountKey string
 	if changed(cmd, "service-account-key", "service-account-key-prompt") {
@@ -5973,16 +5974,16 @@ func buildConnectionsUpdateBigquery(cmd *cobra.Command, api *sdk.APIClient, cred
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateBigqueryCredentialsChange(ctx, credentialsId).BigQueryCredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateBigqueryCredentialsChange(ctx, currentCredentialsId).BigQueryCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateBigqueryCredentials(ctx, credentialsId).BigQueryCredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateBigqueryCredentials(ctx, currentCredentialsId).BigQueryCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdateRedshift(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdateRedshift(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var dbName string
 	if changed(cmd, "db-name") {
@@ -6124,16 +6125,16 @@ func buildConnectionsUpdateRedshift(cmd *cobra.Command, api *sdk.APIClient, cred
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateRedshiftCredentialsChange(ctx, credentialsId).RedshiftCredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateRedshiftCredentialsChange(ctx, currentCredentialsId).RedshiftCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateRedshiftCredentials(ctx, credentialsId).RedshiftCredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateRedshiftCredentials(ctx, currentCredentialsId).RedshiftCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdateDatabricksMetastoreSqlWarehouse(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdateDatabricksMetastoreSqlWarehouse(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var azureTenantId string
 	if changed(cmd, "azure-tenant-id") {
@@ -6268,16 +6269,16 @@ func buildConnectionsUpdateDatabricksMetastoreSqlWarehouse(cmd *cobra.Command, a
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateDatabricksMetastoreSqlWarehouseCredentialsChange(ctx, credentialsId).DatabricksMetastoreSqlWarehouseCredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateDatabricksMetastoreSqlWarehouseCredentialsChange(ctx, currentCredentialsId).DatabricksMetastoreSqlWarehouseCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateDatabricksMetastoreSqlWarehouseCredentials(ctx, credentialsId).DatabricksMetastoreSqlWarehouseCredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateDatabricksMetastoreSqlWarehouseCredentials(ctx, currentCredentialsId).DatabricksMetastoreSqlWarehouseCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdateDatabricksSqlWarehouse(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdateDatabricksSqlWarehouse(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var azureTenantId string
 	if changed(cmd, "azure-tenant-id") {
@@ -6412,16 +6413,16 @@ func buildConnectionsUpdateDatabricksSqlWarehouse(cmd *cobra.Command, api *sdk.A
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateDatabricksSqlWarehouseCredentialsChange(ctx, credentialsId).DatabricksSqlWarehouseCredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateDatabricksSqlWarehouseCredentialsChange(ctx, currentCredentialsId).DatabricksSqlWarehouseCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateDatabricksSqlWarehouseCredentials(ctx, credentialsId).DatabricksSqlWarehouseCredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateDatabricksSqlWarehouseCredentials(ctx, currentCredentialsId).DatabricksSqlWarehouseCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdatePostgres(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdatePostgres(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var dbName string
 	if changed(cmd, "db-name") {
@@ -6574,16 +6575,16 @@ func buildConnectionsUpdatePostgres(cmd *cobra.Command, api *sdk.APIClient, cred
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidatePostgresCredentialsChange(ctx, credentialsId).PostgresCredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidatePostgresCredentialsChange(ctx, currentCredentialsId).PostgresCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdatePostgresCredentials(ctx, credentialsId).PostgresCredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdatePostgresCredentials(ctx, currentCredentialsId).PostgresCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdateMysql(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdateMysql(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var dbName string
 	if changed(cmd, "db-name") {
@@ -6725,16 +6726,16 @@ func buildConnectionsUpdateMysql(cmd *cobra.Command, api *sdk.APIClient, credent
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateMysqlCredentialsChange(ctx, credentialsId).MySqlCredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateMysqlCredentialsChange(ctx, currentCredentialsId).MySqlCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateMysqlCredentials(ctx, credentialsId).MySqlCredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateMysqlCredentials(ctx, currentCredentialsId).MySqlCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdateMariadb(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdateMariadb(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var dbName string
 	if changed(cmd, "db-name") {
@@ -6816,16 +6817,16 @@ func buildConnectionsUpdateMariadb(cmd *cobra.Command, api *sdk.APIClient, crede
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateMariadbCredentialsChange(ctx, credentialsId).MariaDbCredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateMariadbCredentialsChange(ctx, currentCredentialsId).MariaDbCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateMariadbCredentials(ctx, credentialsId).MariaDbCredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateMariadbCredentials(ctx, currentCredentialsId).MariaDbCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdateOracle(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdateOracle(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var dbName string
 	if changed(cmd, "db-name") {
@@ -6967,16 +6968,16 @@ func buildConnectionsUpdateOracle(cmd *cobra.Command, api *sdk.APIClient, creden
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateOracleCredentialsChange(ctx, credentialsId).OracleCredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateOracleCredentialsChange(ctx, currentCredentialsId).OracleCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateOracleCredentials(ctx, credentialsId).OracleCredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateOracleCredentials(ctx, currentCredentialsId).OracleCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdateDb2(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdateDb2(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var dbName string
 	if changed(cmd, "db-name") {
@@ -7085,16 +7086,16 @@ func buildConnectionsUpdateDb2(cmd *cobra.Command, api *sdk.APIClient, credentia
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateDb2CredentialsChange(ctx, credentialsId).Db2CredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateDb2CredentialsChange(ctx, currentCredentialsId).Db2CredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateDb2Credentials(ctx, credentialsId).Db2CredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateDb2Credentials(ctx, currentCredentialsId).Db2CredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdateTeradata(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdateTeradata(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var dbName string
 	if changed(cmd, "db-name") {
@@ -7233,16 +7234,16 @@ func buildConnectionsUpdateTeradata(cmd *cobra.Command, api *sdk.APIClient, cred
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateTeradataCredentialsChange(ctx, credentialsId).TeradataCredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateTeradataCredentialsChange(ctx, currentCredentialsId).TeradataCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateTeradataCredentials(ctx, credentialsId).TeradataCredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateTeradataCredentials(ctx, currentCredentialsId).TeradataCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdateClickhouse(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdateClickhouse(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var dbName string
 	if changed(cmd, "db-name") {
@@ -7324,16 +7325,16 @@ func buildConnectionsUpdateClickhouse(cmd *cobra.Command, api *sdk.APIClient, cr
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateClickhouseCredentialsChange(ctx, credentialsId).ClickHouseCredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateClickhouseCredentialsChange(ctx, currentCredentialsId).ClickHouseCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateClickhouseCredentials(ctx, credentialsId).ClickHouseCredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateClickhouseCredentials(ctx, currentCredentialsId).ClickHouseCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdateStarburstEnterprise(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdateStarburstEnterprise(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var dbName string
 	if changed(cmd, "db-name") {
@@ -7442,16 +7443,16 @@ func buildConnectionsUpdateStarburstEnterprise(cmd *cobra.Command, api *sdk.APIC
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateStarburstEnterpriseCredentialsChange(ctx, credentialsId).StarburstEnterpriseCredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateStarburstEnterpriseCredentialsChange(ctx, currentCredentialsId).StarburstEnterpriseCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateStarburstEnterpriseCredentials(ctx, credentialsId).StarburstEnterpriseCredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateStarburstEnterpriseCredentials(ctx, currentCredentialsId).StarburstEnterpriseCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdateStarburstGalaxy(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdateStarburstGalaxy(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var dbName string
 	if changed(cmd, "db-name") {
@@ -7533,16 +7534,16 @@ func buildConnectionsUpdateStarburstGalaxy(cmd *cobra.Command, api *sdk.APIClien
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateStarburstGalaxyCredentialsChange(ctx, credentialsId).StarburstGalaxyCredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateStarburstGalaxyCredentialsChange(ctx, currentCredentialsId).StarburstGalaxyCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateStarburstGalaxyCredentials(ctx, credentialsId).StarburstGalaxyCredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateStarburstGalaxyCredentials(ctx, currentCredentialsId).StarburstGalaxyCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdateAzureSqlDatabase(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdateAzureSqlDatabase(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var dbName string
 	if changed(cmd, "db-name") {
@@ -7624,16 +7625,16 @@ func buildConnectionsUpdateAzureSqlDatabase(cmd *cobra.Command, api *sdk.APIClie
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateAzureSqlDatabaseCredentialsChange(ctx, credentialsId).AzureSqlDatabaseCredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateAzureSqlDatabaseCredentialsChange(ctx, currentCredentialsId).AzureSqlDatabaseCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateAzureSqlDatabaseCredentials(ctx, credentialsId).AzureSqlDatabaseCredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateAzureSqlDatabaseCredentials(ctx, currentCredentialsId).AzureSqlDatabaseCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdateAzureDedicatedSqlPool(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdateAzureDedicatedSqlPool(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var dbName string
 	if changed(cmd, "db-name") {
@@ -7715,16 +7716,16 @@ func buildConnectionsUpdateAzureDedicatedSqlPool(cmd *cobra.Command, api *sdk.AP
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateAzureDedicatedSqlPoolCredentialsChange(ctx, credentialsId).AzureDedicatedSqlPoolCredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateAzureDedicatedSqlPoolCredentialsChange(ctx, currentCredentialsId).AzureDedicatedSqlPoolCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateAzureDedicatedSqlPoolCredentials(ctx, credentialsId).AzureDedicatedSqlPoolCredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateAzureDedicatedSqlPoolCredentials(ctx, currentCredentialsId).AzureDedicatedSqlPoolCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdateSapHana(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdateSapHana(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var dbName string
 	if changed(cmd, "db-name") {
@@ -7806,16 +7807,16 @@ func buildConnectionsUpdateSapHana(cmd *cobra.Command, api *sdk.APIClient, crede
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateSapHanaCredentialsChange(ctx, credentialsId).SapHanaCredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateSapHanaCredentialsChange(ctx, currentCredentialsId).SapHanaCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateSapHanaCredentials(ctx, credentialsId).SapHanaCredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateSapHanaCredentials(ctx, currentCredentialsId).SapHanaCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdateSqlServer(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdateSqlServer(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var authMode *sdk.SqlServerAuthMode
 	if changed(cmd, "auth-mode") {
@@ -7976,16 +7977,16 @@ func buildConnectionsUpdateSqlServer(cmd *cobra.Command, api *sdk.APIClient, cre
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateSqlServerCredentialsChange(ctx, credentialsId).SqlServerCredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateSqlServerCredentialsChange(ctx, currentCredentialsId).SqlServerCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateSqlServerCredentials(ctx, credentialsId).SqlServerCredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateSqlServerCredentials(ctx, currentCredentialsId).SqlServerCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdateSalesforceCrm(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdateSalesforceCrm(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var authMode *sdk.SalesforceCrmAuthMode
 	if changed(cmd, "auth-mode") {
@@ -8103,16 +8104,16 @@ func buildConnectionsUpdateSalesforceCrm(cmd *cobra.Command, api *sdk.APIClient,
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateSalesforceCrmCredentialsChange(ctx, credentialsId).SalesforceCrmCredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateSalesforceCrmCredentialsChange(ctx, currentCredentialsId).SalesforceCrmCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateSalesforceCrmCredentials(ctx, credentialsId).SalesforceCrmCredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateSalesforceCrmCredentials(ctx, currentCredentialsId).SalesforceCrmCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdateSalesforceDataCloud(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdateSalesforceDataCloud(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var authMode *sdk.SalesforceDataCloudAuthMode
 	if changed(cmd, "auth-mode") {
@@ -8241,16 +8242,16 @@ func buildConnectionsUpdateSalesforceDataCloud(cmd *cobra.Command, api *sdk.APIC
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateSalesforceDataCloudCredentialsChange(ctx, credentialsId).SalesforceDataCloudCredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateSalesforceDataCloudCredentialsChange(ctx, currentCredentialsId).SalesforceDataCloudCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateSalesforceDataCloudCredentials(ctx, credentialsId).SalesforceDataCloudCredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateSalesforceDataCloudCredentials(ctx, currentCredentialsId).SalesforceDataCloudCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdateTableau(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdateTableau(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var connectedAppClientId string
 	if changed(cmd, "connected-app-client-id") {
@@ -8412,16 +8413,16 @@ func buildConnectionsUpdateTableau(cmd *cobra.Command, api *sdk.APIClient, crede
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateTableauCredentialsChange(ctx, credentialsId).TableauCredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateTableauCredentialsChange(ctx, currentCredentialsId).TableauCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateTableauCredentials(ctx, credentialsId).TableauCredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateTableauCredentials(ctx, currentCredentialsId).TableauCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdateLooker(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdateLooker(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var apiClientId string
 	if changed(cmd, "api-client-id") {
@@ -8487,16 +8488,16 @@ func buildConnectionsUpdateLooker(cmd *cobra.Command, api *sdk.APIClient, creden
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateLookerCredentialsChange(ctx, credentialsId).LookerCredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateLookerCredentialsChange(ctx, currentCredentialsId).LookerCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateLookerCredentials(ctx, credentialsId).LookerCredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateLookerCredentials(ctx, currentCredentialsId).LookerCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdateLookerGitClone(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdateLookerGitClone(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var repoUrl string
 	if changed(cmd, "repo-url") {
@@ -8594,16 +8595,16 @@ func buildConnectionsUpdateLookerGitClone(cmd *cobra.Command, api *sdk.APIClient
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateLookerGitCloneCredentialsChange(ctx, credentialsId).LookerGitCloneCredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateLookerGitCloneCredentialsChange(ctx, currentCredentialsId).LookerGitCloneCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateLookerGitCloneCredentials(ctx, credentialsId).LookerGitCloneCredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateLookerGitCloneCredentials(ctx, currentCredentialsId).LookerGitCloneCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdatePowerBi(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdatePowerBi(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var appClientId string
 	if changed(cmd, "app-client-id") {
@@ -8705,16 +8706,16 @@ func buildConnectionsUpdatePowerBi(cmd *cobra.Command, api *sdk.APIClient, crede
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidatePowerBiCredentialsChange(ctx, credentialsId).PowerBiCredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidatePowerBiCredentialsChange(ctx, currentCredentialsId).PowerBiCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdatePowerBiCredentials(ctx, credentialsId).PowerBiCredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdatePowerBiCredentials(ctx, currentCredentialsId).PowerBiCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdateFivetran(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdateFivetran(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var apiKey string
 	if changed(cmd, "api-key", "api-key-prompt") {
@@ -8769,16 +8770,16 @@ func buildConnectionsUpdateFivetran(cmd *cobra.Command, api *sdk.APIClient, cred
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateFivetranCredentialsChange(ctx, credentialsId).FivetranCredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateFivetranCredentialsChange(ctx, currentCredentialsId).FivetranCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateFivetranCredentials(ctx, credentialsId).FivetranCredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateFivetranCredentials(ctx, currentCredentialsId).FivetranCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdateAzureDataFactory(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdateAzureDataFactory(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var appClientId string
 	if changed(cmd, "app-client-id") {
@@ -8881,16 +8882,16 @@ func buildConnectionsUpdateAzureDataFactory(cmd *cobra.Command, api *sdk.APIClie
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateAzureDataFactoryCredentialsChange(ctx, credentialsId).AzureDataFactoryCredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateAzureDataFactoryCredentialsChange(ctx, currentCredentialsId).AzureDataFactoryCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateAzureDataFactoryCredentials(ctx, credentialsId).AzureDataFactoryCredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateAzureDataFactoryCredentials(ctx, currentCredentialsId).AzureDataFactoryCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdateInformaticaV2(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdateInformaticaV2(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var authMode *sdk.InformaticaV2AuthMode
 	if changed(cmd, "auth-mode") {
@@ -9087,16 +9088,16 @@ func buildConnectionsUpdateInformaticaV2(cmd *cobra.Command, api *sdk.APIClient,
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateInformaticaV2CredentialsChange(ctx, credentialsId).InformaticaV2CredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateInformaticaV2CredentialsChange(ctx, currentCredentialsId).InformaticaV2CredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateInformaticaV2Credentials(ctx, credentialsId).InformaticaV2CredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateInformaticaV2Credentials(ctx, currentCredentialsId).InformaticaV2CredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdateMulesoft(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdateMulesoft(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var appClientId string
 	if changed(cmd, "app-client-id") {
@@ -9166,16 +9167,16 @@ func buildConnectionsUpdateMulesoft(cmd *cobra.Command, api *sdk.APIClient, cred
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateMulesoftCredentialsChange(ctx, credentialsId).MulesoftCredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateMulesoftCredentialsChange(ctx, currentCredentialsId).MulesoftCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateMulesoftCredentials(ctx, credentialsId).MulesoftCredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateMulesoftCredentials(ctx, currentCredentialsId).MulesoftCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdateGcpDataform(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdateGcpDataform(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var locations []string
 	if changed(cmd, "locations") {
@@ -9225,16 +9226,16 @@ func buildConnectionsUpdateGcpDataform(cmd *cobra.Command, api *sdk.APIClient, c
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateGcpDataformCredentialsChange(ctx, credentialsId).GcpDataformCredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateGcpDataformCredentialsChange(ctx, currentCredentialsId).GcpDataformCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateGcpDataformCredentials(ctx, credentialsId).GcpDataformCredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateGcpDataformCredentials(ctx, currentCredentialsId).GcpDataformCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdateAirflow(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdateAirflow(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var hostName string
 	if changed(cmd, "host-name") {
@@ -9253,13 +9254,13 @@ func buildConnectionsUpdateAirflow(cmd *cobra.Command, api *sdk.APIClient, crede
 	}
 	return &connectionsUpdateCredentials{
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateAirflowCredentials(ctx, credentialsId).AirflowCredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateAirflowCredentials(ctx, currentCredentialsId).AirflowCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdateDbtCloudWebhook(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdateDbtCloudWebhook(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var accountId string
 	if changed(cmd, "account-id") {
@@ -9346,16 +9347,16 @@ func buildConnectionsUpdateDbtCloudWebhook(cmd *cobra.Command, api *sdk.APIClien
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateDbtCloudWebhookCredentialsChange(ctx, credentialsId).DbtCloudWebhookCredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateDbtCloudWebhookCredentialsChange(ctx, currentCredentialsId).DbtCloudWebhookCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateDbtCloudWebhookCredentials(ctx, credentialsId).DbtCloudWebhookCredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateDbtCloudWebhookCredentials(ctx, currentCredentialsId).DbtCloudWebhookCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdateGlue(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdateGlue(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var assumableRole string
 	if changed(cmd, "assumable-role") {
@@ -9426,16 +9427,16 @@ func buildConnectionsUpdateGlue(cmd *cobra.Command, api *sdk.APIClient, credenti
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateGlueCredentialsChange(ctx, credentialsId).GlueCredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateGlueCredentialsChange(ctx, currentCredentialsId).GlueCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateGlueCredentials(ctx, credentialsId).GlueCredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateGlueCredentials(ctx, currentCredentialsId).GlueCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdateAthena(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdateAthena(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var assumableRole string
 	if changed(cmd, "assumable-role") {
@@ -9522,16 +9523,16 @@ func buildConnectionsUpdateAthena(cmd *cobra.Command, api *sdk.APIClient, creden
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateAthenaCredentialsChange(ctx, credentialsId).AthenaCredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateAthenaCredentialsChange(ctx, currentCredentialsId).AthenaCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateAthenaCredentials(ctx, credentialsId).AthenaCredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateAthenaCredentials(ctx, currentCredentialsId).AthenaCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdateSelfHostedAws(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdateSelfHostedAws(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var selfHostedAwsAssumableRole string
 	if changed(cmd, "self-hosted-aws-assumable-role") {
@@ -9634,16 +9635,16 @@ func buildConnectionsUpdateSelfHostedAws(cmd *cobra.Command, api *sdk.APIClient,
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateAwsSecretsManagerCredentialsChange(ctx, credentialsId).AwsSecretsManagerCredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateAwsSecretsManagerCredentialsChange(ctx, currentCredentialsId).AwsSecretsManagerCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateAwsSecretsManagerCredentials(ctx, credentialsId).AwsSecretsManagerCredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateAwsSecretsManagerCredentials(ctx, currentCredentialsId).AwsSecretsManagerCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdateSelfHostedGcp(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdateSelfHostedGcp(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var bqProjectId string
 	if changed(cmd, "bq-project-id") {
@@ -9698,16 +9699,16 @@ func buildConnectionsUpdateSelfHostedGcp(cmd *cobra.Command, api *sdk.APIClient,
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateGcpSecretManagerCredentialsChange(ctx, credentialsId).GcpSecretManagerCredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateGcpSecretManagerCredentialsChange(ctx, currentCredentialsId).GcpSecretManagerCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateGcpSecretManagerCredentials(ctx, credentialsId).GcpSecretManagerCredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateGcpSecretManagerCredentials(ctx, currentCredentialsId).GcpSecretManagerCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdateSelfHostedAzure(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdateSelfHostedAzure(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var selfHostedAzureAkvSecret string
 	if changed(cmd, "self-hosted-azure-akv-secret") {
@@ -9794,16 +9795,16 @@ func buildConnectionsUpdateSelfHostedAzure(cmd *cobra.Command, api *sdk.APIClien
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateAzureKeyVaultCredentialsChange(ctx, credentialsId).AzureKeyVaultCredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateAzureKeyVaultCredentialsChange(ctx, currentCredentialsId).AzureKeyVaultCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateAzureKeyVaultCredentials(ctx, credentialsId).AzureKeyVaultCredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateAzureKeyVaultCredentials(ctx, currentCredentialsId).AzureKeyVaultCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdateSelfHostedEnvVar(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdateSelfHostedEnvVar(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var bqProjectId string
 	if changed(cmd, "bq-project-id") {
@@ -9874,16 +9875,16 @@ func buildConnectionsUpdateSelfHostedEnvVar(cmd *cobra.Command, api *sdk.APIClie
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateEnvVarCredentialsChange(ctx, credentialsId).EnvVarCredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateEnvVarCredentialsChange(ctx, currentCredentialsId).EnvVarCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateEnvVarCredentials(ctx, credentialsId).EnvVarCredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateEnvVarCredentials(ctx, currentCredentialsId).EnvVarCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
 }
 
-func buildConnectionsUpdateSelfHostedFile(cmd *cobra.Command, api *sdk.APIClient, credentialsId string) (*connectionsUpdateCredentials, error) {
+func buildConnectionsUpdateSelfHostedFile(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var bqProjectId string
 	if changed(cmd, "bq-project-id") {
@@ -9938,10 +9939,10 @@ func buildConnectionsUpdateSelfHostedFile(cmd *cobra.Command, api *sdk.APIClient
 	return &connectionsUpdateCredentials{
 		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
 			check.SetDeploymentId(deploymentId)
-			return retryOnTransient(cmd, api.CredentialsAPI.ValidateFileCredentialsChange(ctx, credentialsId).FileCredentialsChangeValidateIn(*check).Execute)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateFileCredentialsChange(ctx, currentCredentialsId).FileCredentialsChangeValidateIn(*check).Execute)
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
-			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateFileCredentials(ctx, credentialsId).FileCredentialsPatch(*patch).Execute)
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateFileCredentials(ctx, currentCredentialsId).FileCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
@@ -9993,7 +9994,7 @@ func buildConnectionsUpdateDbtCloudWebhookSettings(cmd *cobra.Command, connectio
 }
 
 // runConnectionsUpdate reads every flag, validates a credentials change unless told otherwise, then
-// changes the credentials, and renames the connection or sets its type's settings.
+// updates the connection: its credentials, name or type settings.
 func runConnectionsUpdate(cmd *cobra.Command, connectionId string, native *connectionsUpdateNative) error {
 	groups := []flagGroup{
 		{"self-hosted-aws", []string{"self-hosted-aws-assumable-role", "self-hosted-aws-region", "self-hosted-aws-secret", "self-hosted-aws-external-id"}},
@@ -10017,7 +10018,10 @@ func runConnectionsUpdate(cmd *cobra.Command, connectionId string, native *conne
 		}
 	}
 	changing := changed(cmd, credentialsFlags...)
-	renaming := changed(cmd, "job-types", "name")
+	if changing && changed(cmd, "credentials-id") {
+		return usageError("pass --credentials-id or the flags that change the credentials, not both")
+	}
+	renaming := changed(cmd, "credentials-id", "job-types", "name")
 	var settingsFlags []string
 	if native != nil {
 		settingsFlags = native.settingsFlags
@@ -10048,20 +10052,23 @@ func runConnectionsUpdate(cmd *cobra.Command, connectionId string, native *conne
 	if err != nil {
 		return apiErr(resp, err)
 	}
-	credentialsId, _ := connection.GetCredentialsIdOk()
+	connectionType := connection.GetConnectionType()
+	if native != nil && connectionType != native.group.name {
+		return fmt.Errorf("connection %s is of type %s; this command updates %s connections", connectionId, connectionType, native.group.name)
+	}
+	currentCredentialsId, _ := connection.GetCredentialsIdOk()
 	var credentials *connectionsUpdateCredentials
 	if changing {
-		if credentialsId == nil {
-			return fmt.Errorf("connection %s has no credentials this command can change; recreate it with %s %s", connectionId, binaryName, "connections add")
+		if currentCredentialsId == nil {
+			return fmt.Errorf("connection %s has no credentials this command can change; point it at credentials with --credentials-id", connectionId)
 		}
 		stored := ""
 		if v, ok := connection.GetCredentialsStorageTypeOk(); ok && v != nil {
 			stored = string(*v)
 		}
-		connectionType := connection.GetConnectionType()
 		if native != nil {
-			if connectionType != native.group.name || stored != native.storage {
-				return fmt.Errorf("connection %s is of type %s and keeps its credentials in %s; this command changes %s credentials kept in %s", connectionId, connectionType, stored, native.group.name, native.storage)
+			if stored != native.storage {
+				return fmt.Errorf("connection %s keeps its credentials in %s; this command changes %s credentials kept in %s", connectionId, stored, native.group.name, native.storage)
 			}
 		} else {
 			storages := map[string]string{
@@ -10082,17 +10089,17 @@ func runConnectionsUpdate(cmd *cobra.Command, connectionId string, native *conne
 		}
 		switch {
 		case native != nil:
-			credentials, err = native.build(cmd, api, *credentialsId)
+			credentials, err = native.build(cmd, api, *currentCredentialsId)
 		case selected == "self-hosted-aws":
-			credentials, err = buildConnectionsUpdateSelfHostedAws(cmd, api, *credentialsId)
+			credentials, err = buildConnectionsUpdateSelfHostedAws(cmd, api, *currentCredentialsId)
 		case selected == "self-hosted-gcp":
-			credentials, err = buildConnectionsUpdateSelfHostedGcp(cmd, api, *credentialsId)
+			credentials, err = buildConnectionsUpdateSelfHostedGcp(cmd, api, *currentCredentialsId)
 		case selected == "self-hosted-azure":
-			credentials, err = buildConnectionsUpdateSelfHostedAzure(cmd, api, *credentialsId)
+			credentials, err = buildConnectionsUpdateSelfHostedAzure(cmd, api, *currentCredentialsId)
 		case selected == "self-hosted-env-var":
-			credentials, err = buildConnectionsUpdateSelfHostedEnvVar(cmd, api, *credentialsId)
+			credentials, err = buildConnectionsUpdateSelfHostedEnvVar(cmd, api, *currentCredentialsId)
 		case selected == "self-hosted-file":
-			credentials, err = buildConnectionsUpdateSelfHostedFile(cmd, api, *credentialsId)
+			credentials, err = buildConnectionsUpdateSelfHostedFile(cmd, api, *currentCredentialsId)
 		}
 		if err != nil {
 			return err
@@ -10102,6 +10109,13 @@ func runConnectionsUpdate(cmd *cobra.Command, connectionId string, native *conne
 		}
 	}
 	rename := sdk.NewConnectionPatch()
+	if changed(cmd, "credentials-id") {
+		credentialsId, err := flagString(cmd, "credentials-id")
+		if err != nil {
+			return err
+		}
+		rename.SetCredentialsId(credentialsId)
+	}
 	if changed(cmd, "job-types") {
 		jobTypes, err := flagStringSlice(cmd, "job-types")
 		if err != nil {
@@ -10117,9 +10131,6 @@ func runConnectionsUpdate(cmd *cobra.Command, connectionId string, native *conne
 		rename.SetName(name)
 	}
 	if updatingSettings {
-		if connectionType := connection.GetConnectionType(); connectionType != native.group.name {
-			return fmt.Errorf("connection %s is of type %s; only a connection of type %s has the settings these flags set", connectionId, connectionType, native.group.name)
-		}
 		found, err := native.settings(cmd, connection, rename)
 		if err != nil {
 			return err
@@ -10160,7 +10171,7 @@ func runConnectionsUpdate(cmd *cobra.Command, connectionId string, native *conne
 		}
 	}
 	if credentials != nil {
-		reach := "credentials " + *credentialsId + ", used by connection " + connectionId + " and any other connection using them"
+		reach := "credentials " + *currentCredentialsId + ", used by connection " + connectionId + " and any other connection using them"
 		if !skipValidations {
 			if err := confirm(cmd, "Change "+reach); err != nil {
 				return err
