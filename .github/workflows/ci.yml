@@ -12,6 +12,9 @@ permissions:
   contents: read
 
 env:
+  # Fetch our own modules straight from GitHub. The Go proxy can keep serving a failed fetch of a
+  # freshly tagged release for a while.
+  GOPRIVATE: github.com/monte-carlo-data/*
   # The release files that get a provenance attestation. release-snapshot checks each pattern
   # matches, so a typo fails before a merge instead of after the tag.
   RELEASE_SUBJECTS: |
