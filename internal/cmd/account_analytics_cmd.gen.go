@@ -37,7 +37,7 @@ func newAccountAnalyticsGetCatalogCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "catalog",
 		Short: "List metrics, or the dimensions that work with chosen metrics",
-		Long:  "List the metrics you can query, or the dimensions that work with the metrics you chose.\n\nWithout `metrics`, the answer lists every metric you can query, with its label and\ndescription. A metric marked `requires_metric_time` answers only when the query groups by\n`metric_time`.\n\nWith `metrics`, the answer lists the dimensions you can group and filter all of them by.\nA time dimension lists its grains: `metric_time` with `week` is queried as\n`metric_time__week`. Per-domain metrics, such as `domain_coverage_rate`, count an asset\nonce in each domain it belongs to, so the domains do not add up to the account total.\nMetrics can be grouped only by dimensions they share: ask with `metrics` first.\n\n`search` keeps only the names that contain a text, ignoring case. The unfiltered list of\nmetrics is long. Fields without a value, such as `type` for a metric, are left out.\n\nAn unknown metric is refused with a 422 that says why. Requires dashboard access.",
+		Long:  "List the metrics you can query, or the dimensions that work with the metrics you chose.\n\nWithout `metrics`, the answer lists every metric you can query, with its label and\ndescription. A metric marked `requires_metric_time` answers only when the query groups by\n`metric_time`.\n\nWith `metrics`, the answer lists the dimensions you can group and filter all of them by.\nA time dimension lists its grains: `metric_time` with `week` is queried as\n`metric_time__week`. Per-domain metrics, such as `domain_coverage_rate`, count an asset\nonce in each domain it belongs to, so the domains do not add up to the account total.\nMetrics can be grouped only by dimensions they share: ask with `metrics` first.\n\n`search` keeps only the items whose name, label or description contains a text, ignoring\ncase. The unfiltered list of metrics is long. Fields without a value, such as `type` for a\nmetric, are left out.\n\nAn unknown metric is refused with a 422 that says why. Requires dashboard access.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			api, ctx, err := apiClient(cmd)
@@ -67,7 +67,7 @@ func newAccountAnalyticsGetCatalogCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("metrics", "", "Comma-separated metric names, such as coverage_rate,covered_assets. With them, the answer lists the dimensions all of them can be grouped and filtered by. Without them, it lists every metric. Send the names in one parameter: only the last of a repeated parameter is read.")
-	cmd.Flags().String("search", "", "Keeps the metrics, or the dimensions, whose name contains this text, ignoring case, such as incident.")
+	cmd.Flags().String("search", "", "Keeps the metrics, or the dimensions, whose name, label or description contains this text, ignoring case, such as incident.")
 	return cmd
 }
 
