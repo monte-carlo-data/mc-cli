@@ -1,9 +1,9 @@
 {
-  "api_codegen_commit": "f853ee2c22865c5190e03d8eefb6fac5888b46fa",
-  "api_codegen_run_id": 41925696124,
-  "generated_at": "2026-11-04T22:31:23Z",
-  "mc_sdk_go_commit": "79895db217fbace8c9171d696bb6fb6cb4ca87fd",
-  "monolith_commit": "4de71cc1644468343ca910fee070b0fff90e9482",
-  "monolith_run_id": 41923953630,
-  "exported_at": "2026-11-04T22:21:59Z"
+  "api_codegen_commit": "01eaf00834d9acdc0c5d3144191798e9ab1d4b0f",
+  "api_codegen_run_id": 42213627976,
+  "generated_at": "2026-11-06T11:55:58Z",
+  "mc_sdk_go_commit": "9cb140977c410f811db9f2defd7befcb98dc9bd3",
+  "monolith_commit": "d3d46550f1676c6d387aae8b114cb36218c3bb4f",
+  "monolith_run_id": 42212550850,
+  "exported_at": "2026-11-06T11:47:39Z"
 }

@@ -30,6 +30,7 @@ func newAccountAnalyticsGetCmd() *cobra.Command {
 		Short: "Get account analytic",
 	}
 	cmd.AddCommand(newAccountAnalyticsGetCatalogCmd())
+	cmd.AddCommand(newAccountAnalyticsGetDocsCmd())
 	return cmd
 }
 
@@ -68,6 +69,36 @@ func newAccountAnalyticsGetCatalogCmd() *cobra.Command {
 	}
 	cmd.Flags().String("metrics", "", "Comma-separated metric names, such as coverage_rate,covered_assets. With them, the answer lists the dimensions all of them can be grouped and filtered by. Without them, it lists every metric. Send the names in one parameter: only the last of a repeated parameter is read.")
 	cmd.Flags().String("search", "", "Keeps the metrics, or the dimensions, whose name, label or description contains this text, ignoring case, such as incident.")
+	return cmd
+}
+
+func newAccountAnalyticsGetDocsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "docs",
+		Short: "List the Analytics API docs, or read one page",
+		Long:  "List the pages of the Analytics API docs, or read one.\n\nWithout `slug`, the answer lists every page with its slug, title, summary and parent page.\nWith `slug`, it returns that page with its body as Markdown. The pages are the ones\npublished at docs.getmontecarlo.com: how to query, the data catalog, the dashboard examples\nand the dashboard style. `doc:<slug>` links in a body name other pages.\n\nAn unknown slug is refused with a 422 `docs_page_not_found`. Requires dashboard access.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.AccountAnalyticsAPI.GetAccountAnalyticsDocs(ctx)
+			if changed(cmd, "slug") {
+				slug, err := flagString(cmd, "slug")
+				if err != nil {
+					return err
+				}
+				req = req.Slug(slug)
+			}
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "pages")
+		},
+	}
+	cmd.Flags().String("slug", "", "The page to read, such as analytics-api-dashboard-style. Without it, the answer lists every page without its body.")
 	return cmd
 }
 
