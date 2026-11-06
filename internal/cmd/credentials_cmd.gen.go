@@ -2790,7 +2790,7 @@ func newCredentialsDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <credentials_id>",
 		Short: "Delete credentials",
-		Long:  "Delete credentials of any connection type and storage.\n\nTakes the id the list or a connection returns. Refused while a connection still uses them.\nDelete the connection first. Monte Carlo stops using them. Whatever they point at is\nuntouched.",
+		Long:  "Delete credentials of any connection type and storage.\n\nTakes the id the list or a connection returns. Refused while a connection still uses them.\nDelete the connection first. Monte Carlo stops using them. Whatever they point at is\nuntouched. To retire a secret, rotate or revoke it where it lives.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := confirm(cmd, "Delete credential"+" "+args[0]); err != nil {
@@ -3762,8 +3762,22 @@ func newCredentialsDeleteTeradataCmd() *cobra.Command {
 
 func newCredentialsGetCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "get",
-		Short: "Get credential",
+		Use:   "get <credentials_id>",
+		Short: "Get credentials",
+		Long:  "Get credentials of any kind by id.\n\nTakes the id the list or a connection returns. `details` holds the other fields of that\nkind. A secret is never returned.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetCredentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "details")
+		},
 	}
 	cmd.AddCommand(newCredentialsGetAirflowCmd())
 	cmd.AddCommand(newCredentialsGetAthenaCmd())
@@ -4646,7 +4660,7 @@ func newCredentialsListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List credentials",
-		Long:  "List the credentials in your account, of every kind, a page at a time.\n\nCredentials are returned oldest first. Each entry says what connection type it is for and\nwhere its secret lives; read the typed endpoint for that kind to see its other fields.",
+		Long:  "List the credentials in your account, of every kind, a page at a time.\n\nCredentials are returned oldest first. Each entry says what connection type it is for and\nwhere its secret lives. Get one by id to see the other fields of its kind.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			api, ctx, err := apiClient(cmd)
