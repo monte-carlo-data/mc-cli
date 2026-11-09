@@ -347,6 +347,9 @@ func newConnectionsAddCmd() *cobra.Command {
 	cmd.AddCommand(newConnectionsAddAzureSqlDatabaseCmd())
 	cmd.AddCommand(newConnectionsAddAzureDedicatedSqlPoolCmd())
 	cmd.AddCommand(newConnectionsAddSapHanaCmd())
+	cmd.AddCommand(newConnectionsAddHiveMysqlCmd())
+	cmd.AddCommand(newConnectionsAddDremioCmd())
+	cmd.AddCommand(newConnectionsAddMotherduckCmd())
 	cmd.AddCommand(newConnectionsAddSqlServerCmd())
 	cmd.AddCommand(newConnectionsAddSalesforceCrmCmd())
 	cmd.AddCommand(newConnectionsAddSalesforceDataCloudCmd())
@@ -360,6 +363,7 @@ func newConnectionsAddCmd() *cobra.Command {
 	cmd.AddCommand(newConnectionsAddMulesoftCmd())
 	cmd.AddCommand(newConnectionsAddGcpDataformCmd())
 	cmd.AddCommand(newConnectionsAddAirflowCmd())
+	cmd.AddCommand(newConnectionsAddPineconeCmd())
 	cmd.AddCommand(newConnectionsAddDbtCloudWebhookCmd())
 	cmd.AddCommand(newConnectionsAddGlueCmd())
 	cmd.AddCommand(newConnectionsAddAthenaCmd())
@@ -808,6 +812,75 @@ func newConnectionsAddSapHanaCmd() *cobra.Command {
 	return cmd
 }
 
+func newConnectionsAddHiveMysqlCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "hive-mysql",
+		Short: "Add a connection of type hive-mysql, creating its warehouse and credentials",
+		Long:  "Adds a connection of type hive-mysql in one step, as the add command does. Pass hive-mysql credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsAdd(cmd, "hive-mysql", &connectionsAddNative{
+				group:          flagGroup{"hive-mysql", []string{"host", "port", "user", "password", "password-prompt", "db-name"}},
+				selfHostedOnly: []string{"bq-project-id", "sql-warehouse-id"},
+				build:          buildConnectionsAddHiveMysql,
+			})
+		},
+	}
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	cmd.Flags().String("password", "", "Password of the database user. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("db-name", "", "MySQL database that holds the Hive metastore.")
+	registerConnectionsAddFlags(cmd)
+	return cmd
+}
+
+func newConnectionsAddDremioCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "dremio",
+		Short: "Add a connection of type dremio, creating its warehouse and credentials",
+		Long:  "Adds a connection of type dremio in one step, as the add command does. Pass dremio credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsAdd(cmd, "dremio", &connectionsAddNative{
+				group:          flagGroup{"dremio", []string{"host", "port", "token", "token-prompt", "db-name", "tls"}},
+				selfHostedOnly: []string{"bq-project-id", "sql-warehouse-id"},
+				build:          buildConnectionsAddDremio,
+			})
+		},
+	}
+	cmd.Flags().String("host", "", "Hostname of the Dremio Arrow Flight endpoint, such as data.dremio.cloud for Dremio Cloud (data.eu.dremio.cloud in the EU).")
+	cmd.Flags().Int32("port", 0, "Port Dremio serves Arrow Flight on.")
+	cmd.Flags().String("token", "", "Personal access token Monte Carlo signs in to Dremio with. Stored by Monte Carlo and never returned. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
+	cmd.Flags().String("db-name", "", "Dremio project or space to connect to.")
+	cmd.Flags().Bool("tls", false, "Connect over TLS. Dremio Cloud requires it.")
+	registerConnectionsAddFlags(cmd)
+	return cmd
+}
+
+func newConnectionsAddMotherduckCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "motherduck",
+		Short: "Add a connection of type motherduck, creating its warehouse and credentials",
+		Long:  "Adds a connection of type motherduck in one step, as the add command does. Pass motherduck credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsAdd(cmd, "motherduck", &connectionsAddNative{
+				group:          flagGroup{"motherduck", []string{"db-name", "token", "token-prompt"}},
+				selfHostedOnly: []string{"bq-project-id", "sql-warehouse-id"},
+				build:          buildConnectionsAddMotherduck,
+			})
+		},
+	}
+	cmd.Flags().String("db-name", "", "MotherDuck database to connect to.")
+	cmd.Flags().String("token", "", "Access token Monte Carlo signs in to MotherDuck with. Stored by Monte Carlo and never returned. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
+	registerConnectionsAddFlags(cmd)
+	return cmd
+}
+
 func newConnectionsAddSqlServerCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sql-server",
@@ -1150,6 +1223,28 @@ func newConnectionsAddAirflowCmd() *cobra.Command {
 	}
 	cmd.Flags().String("host-name", "", "Host name of the Airflow web server, as Airflow reports it to Monte Carlo.")
 	registerConnectionsAddCommandFlags(cmd)
+	return cmd
+}
+
+func newConnectionsAddPineconeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "pinecone",
+		Short: "Add a connection of type pinecone, creating its warehouse and credentials",
+		Long:  "Adds a connection of type pinecone in one step, as the add command does. Pass pinecone credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsAdd(cmd, "pinecone", &connectionsAddNative{
+				group:          flagGroup{"pinecone", []string{"environment", "project-id", "api-key", "api-key-prompt"}},
+				selfHostedOnly: []string{"bq-project-id", "sql-warehouse-id"},
+				build:          buildConnectionsAddPinecone,
+			})
+		},
+	}
+	cmd.Flags().String("environment", "", "Pinecone environment the project runs in, such as us-east-1-aws.")
+	cmd.Flags().String("project-id", "", "Id of the Pinecone project.")
+	cmd.Flags().String("api-key", "", "API key of the Pinecone project. Stored by Monte Carlo and never returned. Visible in the process list; --api-key-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("api-key-prompt", false, "Read --api-key from a hidden prompt instead of the command line.")
+	registerConnectionsAddFlags(cmd)
 	return cmd
 }
 
@@ -2764,6 +2859,167 @@ func buildConnectionsAddSapHana(cmd *cobra.Command, api *sdk.APIClient, connecti
 	}, nil
 }
 
+func buildConnectionsAddHiveMysql(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
+	var err error
+	if err := requireAny(cmd, "host"); err != nil {
+		return nil, err
+	}
+	host, err := flagString(cmd, "host")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "port"); err != nil {
+		return nil, err
+	}
+	port, err := flagInt(cmd, "port")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "user"); err != nil {
+		return nil, err
+	}
+	user, err := flagString(cmd, "user")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "password", "password-prompt"); err != nil {
+		return nil, err
+	}
+	password, err := flagSecret(cmd, "password")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "db-name"); err != nil {
+		return nil, err
+	}
+	dbName, err := flagString(cmd, "db-name")
+	if err != nil {
+		return nil, err
+	}
+	body := sdk.NewHiveMySqlCredentialsIn(host, port, user, password, dbName)
+	return &connectionsAddCredentials{
+		create: func(ctx context.Context) (string, *http.Response, error) {
+			out, resp, err := retryOnTransient(cmd, api.CredentialsAPI.CreateHiveMysqlCredentials(ctx).HiveMySqlCredentialsIn(*body).Execute)
+			if err != nil {
+				return "", resp, err
+			}
+			return out.GetId(), resp, nil
+		},
+		del: func(ctx context.Context, id string) (*http.Response, error) {
+			return api.CredentialsAPI.DeleteHiveMysqlCredentials(ctx, id).Execute()
+		},
+		deleteCmd: "credentials delete hive-mysql",
+		listCmd:   "credentials list",
+	}, nil
+}
+
+func buildConnectionsAddDremio(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
+	var err error
+	if err := requireAny(cmd, "host"); err != nil {
+		return nil, err
+	}
+	host, err := flagString(cmd, "host")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "port"); err != nil {
+		return nil, err
+	}
+	port, err := flagInt(cmd, "port")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "token", "token-prompt"); err != nil {
+		return nil, err
+	}
+	token, err := flagSecret(cmd, "token")
+	if err != nil {
+		return nil, err
+	}
+	var dbName string
+	if changed(cmd, "db-name") {
+		dbName, err = flagString(cmd, "db-name")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var tls bool
+	if changed(cmd, "tls") {
+		tls, err = flagBool(cmd, "tls")
+		if err != nil {
+			return nil, err
+		}
+	}
+	body := sdk.NewDremioCredentialsIn(host, port, token)
+	if changed(cmd, "db-name") {
+		body.SetDbName(dbName)
+	}
+	if changed(cmd, "tls") {
+		body.SetTls(tls)
+	}
+	return &connectionsAddCredentials{
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			candidate := sdk.NewDremioCredentialsValidateIn(deploymentId, host, port, token)
+			if changed(cmd, "db-name") {
+				candidate.SetDbName(dbName)
+			}
+			if changed(cmd, "tls") {
+				candidate.SetTls(tls)
+			}
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateDremioCredentials(ctx).DremioCredentialsValidateIn(*candidate).Execute)
+		},
+		create: func(ctx context.Context) (string, *http.Response, error) {
+			out, resp, err := retryOnTransient(cmd, api.CredentialsAPI.CreateDremioCredentials(ctx).DremioCredentialsIn(*body).Execute)
+			if err != nil {
+				return "", resp, err
+			}
+			return out.GetId(), resp, nil
+		},
+		del: func(ctx context.Context, id string) (*http.Response, error) {
+			return api.CredentialsAPI.DeleteDremioCredentials(ctx, id).Execute()
+		},
+		deleteCmd: "credentials delete dremio",
+		listCmd:   "credentials list",
+	}, nil
+}
+
+func buildConnectionsAddMotherduck(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
+	var err error
+	if err := requireAny(cmd, "db-name"); err != nil {
+		return nil, err
+	}
+	dbName, err := flagString(cmd, "db-name")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "token", "token-prompt"); err != nil {
+		return nil, err
+	}
+	token, err := flagSecret(cmd, "token")
+	if err != nil {
+		return nil, err
+	}
+	body := sdk.NewMotherDuckCredentialsIn(dbName, token)
+	return &connectionsAddCredentials{
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			candidate := sdk.NewMotherDuckCredentialsValidateIn(deploymentId, dbName, token)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateMotherduckCredentials(ctx).MotherDuckCredentialsValidateIn(*candidate).Execute)
+		},
+		create: func(ctx context.Context) (string, *http.Response, error) {
+			out, resp, err := retryOnTransient(cmd, api.CredentialsAPI.CreateMotherduckCredentials(ctx).MotherDuckCredentialsIn(*body).Execute)
+			if err != nil {
+				return "", resp, err
+			}
+			return out.GetId(), resp, nil
+		},
+		del: func(ctx context.Context, id string) (*http.Response, error) {
+			return api.CredentialsAPI.DeleteMotherduckCredentials(ctx, id).Execute()
+		},
+		deleteCmd: "credentials delete motherduck",
+		listCmd:   "credentials list",
+	}, nil
+}
+
 func buildConnectionsAddSqlServer(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
 	var err error
 	if err := requireAny(cmd, "host"); err != nil {
@@ -3953,6 +4209,50 @@ func buildConnectionsAddAirflow(cmd *cobra.Command, api *sdk.APIClient, connecti
 	}, nil
 }
 
+func buildConnectionsAddPinecone(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
+	var err error
+	if err := requireAny(cmd, "environment"); err != nil {
+		return nil, err
+	}
+	environment, err := flagString(cmd, "environment")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "project-id"); err != nil {
+		return nil, err
+	}
+	projectId, err := flagString(cmd, "project-id")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "api-key", "api-key-prompt"); err != nil {
+		return nil, err
+	}
+	apiKey, err := flagSecret(cmd, "api-key")
+	if err != nil {
+		return nil, err
+	}
+	body := sdk.NewPineconeCredentialsIn(environment, projectId, apiKey)
+	return &connectionsAddCredentials{
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			candidate := sdk.NewPineconeCredentialsValidateIn(deploymentId, environment, projectId, apiKey)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidatePineconeCredentials(ctx).PineconeCredentialsValidateIn(*candidate).Execute)
+		},
+		create: func(ctx context.Context) (string, *http.Response, error) {
+			out, resp, err := retryOnTransient(cmd, api.CredentialsAPI.CreatePineconeCredentials(ctx).PineconeCredentialsIn(*body).Execute)
+			if err != nil {
+				return "", resp, err
+			}
+			return out.GetId(), resp, nil
+		},
+		del: func(ctx context.Context, id string) (*http.Response, error) {
+			return api.CredentialsAPI.DeletePineconeCredentials(ctx, id).Execute()
+		},
+		deleteCmd: "credentials delete pinecone",
+		listCmd:   "credentials list",
+	}, nil
+}
+
 func buildConnectionsAddDbtCloudWebhook(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
 	var err error
 	if err := requireAny(cmd, "service-token", "service-token-prompt"); err != nil {
@@ -4961,6 +5261,9 @@ func newConnectionsUpdateCmd() *cobra.Command {
 	cmd.AddCommand(newConnectionsUpdateAzureSqlDatabaseCmd())
 	cmd.AddCommand(newConnectionsUpdateAzureDedicatedSqlPoolCmd())
 	cmd.AddCommand(newConnectionsUpdateSapHanaCmd())
+	cmd.AddCommand(newConnectionsUpdateHiveMysqlCmd())
+	cmd.AddCommand(newConnectionsUpdateDremioCmd())
+	cmd.AddCommand(newConnectionsUpdateMotherduckCmd())
 	cmd.AddCommand(newConnectionsUpdateSqlServerCmd())
 	cmd.AddCommand(newConnectionsUpdateSalesforceCrmCmd())
 	cmd.AddCommand(newConnectionsUpdateSalesforceDataCloudCmd())
@@ -4974,6 +5277,7 @@ func newConnectionsUpdateCmd() *cobra.Command {
 	cmd.AddCommand(newConnectionsUpdateMulesoftCmd())
 	cmd.AddCommand(newConnectionsUpdateGcpDataformCmd())
 	cmd.AddCommand(newConnectionsUpdateAirflowCmd())
+	cmd.AddCommand(newConnectionsUpdatePineconeCmd())
 	cmd.AddCommand(newConnectionsUpdateDbtCloudWebhookCmd())
 	cmd.AddCommand(newConnectionsUpdateGlueCmd())
 	cmd.AddCommand(newConnectionsUpdateAthenaCmd())
@@ -5424,6 +5728,75 @@ func newConnectionsUpdateSapHanaCmd() *cobra.Command {
 	return cmd
 }
 
+func newConnectionsUpdateHiveMysqlCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "hive-mysql <connection_id>",
+		Short: "Update a connection of type hive-mysql, and change its credentials",
+		Long:  "Updates a connection of type hive-mysql, as the update command does, changing its hive-mysql credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
+				group:   flagGroup{"hive-mysql", []string{"db-name", "host", "password", "password-prompt", "port", "user"}},
+				storage: "mc_managed",
+				build:   buildConnectionsUpdateHiveMysql,
+			})
+		},
+	}
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
+	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	registerConnectionsUpdateFlags(cmd)
+	return cmd
+}
+
+func newConnectionsUpdateDremioCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "dremio <connection_id>",
+		Short: "Update a connection of type dremio, and change its credentials",
+		Long:  "Updates a connection of type dremio, as the update command does, changing its dremio credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
+				group:   flagGroup{"dremio", []string{"db-name", "host", "port", "tls", "token", "token-prompt"}},
+				storage: "mc_managed",
+				build:   buildConnectionsUpdateDremio,
+			})
+		},
+	}
+	cmd.Flags().String("db-name", "", "Dremio project or space to connect to.")
+	cmd.Flags().String("host", "", "Hostname of the Dremio Arrow Flight endpoint, such as data.dremio.cloud for Dremio Cloud (data.eu.dremio.cloud in the EU). Changing it requires sending the credentials' secrets again.")
+	cmd.Flags().Int32("port", 0, "Port Dremio serves Arrow Flight on.")
+	cmd.Flags().Bool("tls", false, "Connect over TLS. Dremio Cloud requires it.")
+	cmd.Flags().String("token", "", "New personal access token. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
+	registerConnectionsUpdateFlags(cmd)
+	return cmd
+}
+
+func newConnectionsUpdateMotherduckCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "motherduck <connection_id>",
+		Short: "Update a connection of type motherduck, and change its credentials",
+		Long:  "Updates a connection of type motherduck, as the update command does, changing its motherduck credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
+				group:   flagGroup{"motherduck", []string{"db-name", "token", "token-prompt"}},
+				storage: "mc_managed",
+				build:   buildConnectionsUpdateMotherduck,
+			})
+		},
+	}
+	cmd.Flags().String("db-name", "", "MotherDuck database to connect to.")
+	cmd.Flags().String("token", "", "New access token. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
+	registerConnectionsUpdateFlags(cmd)
+	return cmd
+}
+
 func newConnectionsUpdateSqlServerCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sql-server <connection_id>",
@@ -5764,6 +6137,28 @@ func newConnectionsUpdateAirflowCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("host-name", "", "Host name of the Airflow web server, as Airflow reports it to Monte Carlo.")
+	registerConnectionsUpdateFlags(cmd)
+	return cmd
+}
+
+func newConnectionsUpdatePineconeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "pinecone <connection_id>",
+		Short: "Update a connection of type pinecone, and change its credentials",
+		Long:  "Updates a connection of type pinecone, as the update command does, changing its pinecone credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
+				group:   flagGroup{"pinecone", []string{"api-key", "api-key-prompt", "environment", "project-id"}},
+				storage: "mc_managed",
+				build:   buildConnectionsUpdatePinecone,
+			})
+		},
+	}
+	cmd.Flags().String("api-key", "", "New API key of the Pinecone project. Visible in the process list; --api-key-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("api-key-prompt", false, "Read --api-key from a hidden prompt instead of the command line.")
+	cmd.Flags().String("environment", "", "Pinecone environment the project runs in, such as us-east-1-aws. Changing it requires sending the credentials' secrets again.")
+	cmd.Flags().String("project-id", "", "Id of the Pinecone project. Changing it requires sending the credentials' secrets again.")
 	registerConnectionsUpdateFlags(cmd)
 	return cmd
 }
@@ -7816,6 +8211,217 @@ func buildConnectionsUpdateSapHana(cmd *cobra.Command, api *sdk.APIClient, curre
 	}, nil
 }
 
+func buildConnectionsUpdateHiveMysql(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
+	var err error
+	var dbName string
+	if changed(cmd, "db-name") {
+		dbName, err = flagString(cmd, "db-name")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var host string
+	if changed(cmd, "host") {
+		host, err = flagString(cmd, "host")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var password string
+	if changed(cmd, "password", "password-prompt") {
+		password, err = flagSecret(cmd, "password")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var port int32
+	if changed(cmd, "port") {
+		port, err = flagInt(cmd, "port")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var user string
+	if changed(cmd, "user") {
+		user, err = flagString(cmd, "user")
+		if err != nil {
+			return nil, err
+		}
+	}
+	patch := sdk.NewHiveMySqlCredentialsPatchWithDefaults()
+	if changed(cmd, "db-name") {
+		if dbName == "" {
+			patch.SetDbNameNil()
+		} else {
+			patch.SetDbName(dbName)
+		}
+	}
+	if changed(cmd, "host") {
+		if host == "" {
+			patch.SetHostNil()
+		} else {
+			patch.SetHost(host)
+		}
+	}
+	if changed(cmd, "password", "password-prompt") {
+		if password == "" {
+			patch.SetPasswordNil()
+		} else {
+			patch.SetPassword(password)
+		}
+	}
+	if changed(cmd, "port") {
+		patch.SetPort(port)
+	}
+	if changed(cmd, "user") {
+		if user == "" {
+			patch.SetUserNil()
+		} else {
+			patch.SetUser(user)
+		}
+	}
+	return &connectionsUpdateCredentials{
+		patch: func(ctx context.Context) (*http.Response, error) {
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateHiveMysqlCredentials(ctx, currentCredentialsId).HiveMySqlCredentialsPatch(*patch).Execute)
+			return resp, err
+		},
+	}, nil
+}
+
+func buildConnectionsUpdateDremio(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
+	var err error
+	var dbName string
+	if changed(cmd, "db-name") {
+		dbName, err = flagString(cmd, "db-name")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var host string
+	if changed(cmd, "host") {
+		host, err = flagString(cmd, "host")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var port int32
+	if changed(cmd, "port") {
+		port, err = flagInt(cmd, "port")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var tls bool
+	if changed(cmd, "tls") {
+		tls, err = flagBool(cmd, "tls")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var token string
+	if changed(cmd, "token", "token-prompt") {
+		token, err = flagSecret(cmd, "token")
+		if err != nil {
+			return nil, err
+		}
+	}
+	patch := sdk.NewDremioCredentialsPatchWithDefaults()
+	check := sdk.NewDremioCredentialsChangeValidateInWithDefaults()
+	if changed(cmd, "db-name") {
+		if dbName == "" {
+			patch.SetDbNameNil()
+			check.SetDbNameNil()
+		} else {
+			patch.SetDbName(dbName)
+			check.SetDbName(dbName)
+		}
+	}
+	if changed(cmd, "host") {
+		if host == "" {
+			patch.SetHostNil()
+			check.SetHostNil()
+		} else {
+			patch.SetHost(host)
+			check.SetHost(host)
+		}
+	}
+	if changed(cmd, "port") {
+		patch.SetPort(port)
+		check.SetPort(port)
+	}
+	if changed(cmd, "tls") {
+		patch.SetTls(tls)
+		check.SetTls(tls)
+	}
+	if changed(cmd, "token", "token-prompt") {
+		if token == "" {
+			patch.SetTokenNil()
+			check.SetTokenNil()
+		} else {
+			patch.SetToken(token)
+			check.SetToken(token)
+		}
+	}
+	return &connectionsUpdateCredentials{
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateDremioCredentialsChange(ctx, currentCredentialsId).DremioCredentialsChangeValidateIn(*check).Execute)
+		},
+		patch: func(ctx context.Context) (*http.Response, error) {
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateDremioCredentials(ctx, currentCredentialsId).DremioCredentialsPatch(*patch).Execute)
+			return resp, err
+		},
+	}, nil
+}
+
+func buildConnectionsUpdateMotherduck(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
+	var err error
+	var dbName string
+	if changed(cmd, "db-name") {
+		dbName, err = flagString(cmd, "db-name")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var token string
+	if changed(cmd, "token", "token-prompt") {
+		token, err = flagSecret(cmd, "token")
+		if err != nil {
+			return nil, err
+		}
+	}
+	patch := sdk.NewMotherDuckCredentialsPatchWithDefaults()
+	check := sdk.NewMotherDuckCredentialsChangeValidateInWithDefaults()
+	if changed(cmd, "db-name") {
+		if dbName == "" {
+			patch.SetDbNameNil()
+			check.SetDbNameNil()
+		} else {
+			patch.SetDbName(dbName)
+			check.SetDbName(dbName)
+		}
+	}
+	if changed(cmd, "token", "token-prompt") {
+		if token == "" {
+			patch.SetTokenNil()
+			check.SetTokenNil()
+		} else {
+			patch.SetToken(token)
+			check.SetToken(token)
+		}
+	}
+	return &connectionsUpdateCredentials{
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateMotherduckCredentialsChange(ctx, currentCredentialsId).MotherDuckCredentialsChangeValidateIn(*check).Execute)
+		},
+		patch: func(ctx context.Context) (*http.Response, error) {
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateMotherduckCredentials(ctx, currentCredentialsId).MotherDuckCredentialsPatch(*patch).Execute)
+			return resp, err
+		},
+	}, nil
+}
+
 func buildConnectionsUpdateSqlServer(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var authMode *sdk.SqlServerAuthMode
@@ -9255,6 +9861,70 @@ func buildConnectionsUpdateAirflow(cmd *cobra.Command, api *sdk.APIClient, curre
 	return &connectionsUpdateCredentials{
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateAirflowCredentials(ctx, currentCredentialsId).AirflowCredentialsPatch(*patch).Execute)
+			return resp, err
+		},
+	}, nil
+}
+
+func buildConnectionsUpdatePinecone(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
+	var err error
+	var apiKey string
+	if changed(cmd, "api-key", "api-key-prompt") {
+		apiKey, err = flagSecret(cmd, "api-key")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var environment string
+	if changed(cmd, "environment") {
+		environment, err = flagString(cmd, "environment")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var projectId string
+	if changed(cmd, "project-id") {
+		projectId, err = flagString(cmd, "project-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	patch := sdk.NewPineconeCredentialsPatchWithDefaults()
+	check := sdk.NewPineconeCredentialsChangeValidateInWithDefaults()
+	if changed(cmd, "api-key", "api-key-prompt") {
+		if apiKey == "" {
+			patch.SetApiKeyNil()
+			check.SetApiKeyNil()
+		} else {
+			patch.SetApiKey(apiKey)
+			check.SetApiKey(apiKey)
+		}
+	}
+	if changed(cmd, "environment") {
+		if environment == "" {
+			patch.SetEnvironmentNil()
+			check.SetEnvironmentNil()
+		} else {
+			patch.SetEnvironment(environment)
+			check.SetEnvironment(environment)
+		}
+	}
+	if changed(cmd, "project-id") {
+		if projectId == "" {
+			patch.SetProjectIdNil()
+			check.SetProjectIdNil()
+		} else {
+			patch.SetProjectId(projectId)
+			check.SetProjectId(projectId)
+		}
+	}
+	return &connectionsUpdateCredentials{
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidatePineconeCredentialsChange(ctx, currentCredentialsId).PineconeCredentialsChangeValidateIn(*check).Execute)
+		},
+		patch: func(ctx context.Context) (*http.Response, error) {
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdatePineconeCredentials(ctx, currentCredentialsId).PineconeCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
