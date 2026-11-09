@@ -251,7 +251,7 @@ func newConnectionsValidateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "validate <connection_id>",
 		Short: "Validate a connection",
-		Long:  "Check a connection against the system it reads from.\n\nTests the connection as it stands, with the credentials it already uses. Nothing is\nchanged, and you send no credentials.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.\n\nAn id that does not exist or belongs to another account returns 404. A connection that\nruns on no deployment, as an Airflow or push-only custom BI one does, returns 409.",
+		Long:  "Check a connection against the system it reads from.\n\nTests the connection as it stands, with the credentials it already uses. Nothing is\nchanged, and you send no credentials.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.\n\nAn id that does not exist or belongs to another account returns 404. A connection that\nruns on no deployment, as an Airflow or push-only custom BI one does, returns 409. So does a\nconnection whose type has no checks to run, such as S3 or Hive (S3).",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			api, ctx, err := apiClient(cmd)
@@ -367,6 +367,8 @@ func newConnectionsAddCmd() *cobra.Command {
 	cmd.AddCommand(newConnectionsAddDbtCloudWebhookCmd())
 	cmd.AddCommand(newConnectionsAddGlueCmd())
 	cmd.AddCommand(newConnectionsAddAthenaCmd())
+	cmd.AddCommand(newConnectionsAddS3Cmd())
+	cmd.AddCommand(newConnectionsAddHiveS3Cmd())
 	return cmd
 }
 
@@ -1320,6 +1322,50 @@ func newConnectionsAddAthenaCmd() *cobra.Command {
 	cmd.Flags().String("catalog", "", "Athena data catalog to query. Omit it to use AwsDataCatalog.")
 	cmd.Flags().String("external-id", "", "External id your role's trust policy requires, if it requires one. It is not the deployment's aws_external_id.")
 	cmd.Flags().String("workgroup", "", "Athena workgroup to run queries in. Omit it to use the primary workgroup. The role needs permission to start queries in it.")
+	registerConnectionsAddFlags(cmd)
+	return cmd
+}
+
+func newConnectionsAddS3Cmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "s3",
+		Short: "Add a connection of type s3, creating its warehouse and credentials",
+		Long:  "Adds a connection of type s3 in one step, as the add command does. Pass s3 credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsAdd(cmd, "s3", &connectionsAddNative{
+				group:          flagGroup{"s3", []string{"assumable-role", "bucket", "prefix", "external-id"}},
+				selfHostedOnly: []string{"bq-project-id", "sql-warehouse-id"},
+				build:          buildConnectionsAddS3,
+			})
+		},
+	}
+	cmd.Flags().String("assumable-role", "", "ARN of the IAM role in your AWS account that the deployment assumes.")
+	cmd.Flags().String("bucket", "", "S3 bucket Monte Carlo reads from.")
+	cmd.Flags().String("prefix", "", "Key prefix the objects sit under, such as emr/prod. Leave out the bucket, a leading / and any s3:// scheme.")
+	cmd.Flags().String("external-id", "", "External id your role's trust policy requires, if it requires one. It is not the deployment's aws_external_id.")
+	registerConnectionsAddFlags(cmd)
+	return cmd
+}
+
+func newConnectionsAddHiveS3Cmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "hive-s3",
+		Short: "Add a connection of type hive-s3, creating its warehouse and credentials",
+		Long:  "Adds a connection of type hive-s3 in one step, as the add command does. Pass hive-s3 credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsAdd(cmd, "hive-s3", &connectionsAddNative{
+				group:          flagGroup{"hive-s3", []string{"assumable-role", "bucket", "prefix", "external-id"}},
+				selfHostedOnly: []string{"bq-project-id", "sql-warehouse-id"},
+				build:          buildConnectionsAddHiveS3,
+			})
+		},
+	}
+	cmd.Flags().String("assumable-role", "", "ARN of the IAM role in your AWS account that the deployment assumes.")
+	cmd.Flags().String("bucket", "", "S3 bucket Monte Carlo reads from.")
+	cmd.Flags().String("prefix", "", "Key prefix of the EMR log root, such as emr/prod. Leave out the bucket, a leading / and any s3:// scheme. Send an empty string when the cluster's EMR log URI is the bucket root. Monte Carlo reads each cluster's Hive logs under <prefix>/<cluster-id>/node/<instance-id>/applications/hive/.")
+	cmd.Flags().String("external-id", "", "External id your role's trust policy requires, if it requires one. It is not the deployment's aws_external_id.")
 	registerConnectionsAddFlags(cmd)
 	return cmd
 }
@@ -4468,6 +4514,106 @@ func buildConnectionsAddAthena(cmd *cobra.Command, api *sdk.APIClient, connectio
 	}, nil
 }
 
+func buildConnectionsAddS3(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
+	var err error
+	if err := requireAny(cmd, "assumable-role"); err != nil {
+		return nil, err
+	}
+	assumableRole, err := flagString(cmd, "assumable-role")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "bucket"); err != nil {
+		return nil, err
+	}
+	bucket, err := flagString(cmd, "bucket")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "prefix"); err != nil {
+		return nil, err
+	}
+	prefix, err := flagString(cmd, "prefix")
+	if err != nil {
+		return nil, err
+	}
+	var externalId string
+	if changed(cmd, "external-id") {
+		externalId, err = flagString(cmd, "external-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	body := sdk.NewS3CredentialsIn(assumableRole, bucket, prefix)
+	if changed(cmd, "external-id") {
+		body.SetExternalId(externalId)
+	}
+	return &connectionsAddCredentials{
+		create: func(ctx context.Context) (string, *http.Response, error) {
+			out, resp, err := retryOnTransient(cmd, api.CredentialsAPI.CreateS3Credentials(ctx).S3CredentialsIn(*body).Execute)
+			if err != nil {
+				return "", resp, err
+			}
+			return out.GetId(), resp, nil
+		},
+		del: func(ctx context.Context, id string) (*http.Response, error) {
+			return api.CredentialsAPI.DeleteS3Credentials(ctx, id).Execute()
+		},
+		deleteCmd: "credentials delete s3",
+		listCmd:   "credentials list",
+	}, nil
+}
+
+func buildConnectionsAddHiveS3(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
+	var err error
+	if err := requireAny(cmd, "assumable-role"); err != nil {
+		return nil, err
+	}
+	assumableRole, err := flagString(cmd, "assumable-role")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "bucket"); err != nil {
+		return nil, err
+	}
+	bucket, err := flagString(cmd, "bucket")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "prefix"); err != nil {
+		return nil, err
+	}
+	prefix, err := flagString(cmd, "prefix")
+	if err != nil {
+		return nil, err
+	}
+	var externalId string
+	if changed(cmd, "external-id") {
+		externalId, err = flagString(cmd, "external-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	body := sdk.NewHiveS3CredentialsIn(assumableRole, bucket, prefix)
+	if changed(cmd, "external-id") {
+		body.SetExternalId(externalId)
+	}
+	return &connectionsAddCredentials{
+		create: func(ctx context.Context) (string, *http.Response, error) {
+			out, resp, err := retryOnTransient(cmd, api.CredentialsAPI.CreateHiveS3Credentials(ctx).HiveS3CredentialsIn(*body).Execute)
+			if err != nil {
+				return "", resp, err
+			}
+			return out.GetId(), resp, nil
+		},
+		del: func(ctx context.Context, id string) (*http.Response, error) {
+			return api.CredentialsAPI.DeleteHiveS3Credentials(ctx, id).Execute()
+		},
+		deleteCmd: "credentials delete hive-s3",
+		listCmd:   "credentials list",
+	}, nil
+}
+
 func buildConnectionsAddSelfHostedAws(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
 	var err error
 	if err := requireAny(cmd, "self-hosted-aws-secret"); err != nil {
@@ -5281,6 +5427,8 @@ func newConnectionsUpdateCmd() *cobra.Command {
 	cmd.AddCommand(newConnectionsUpdateDbtCloudWebhookCmd())
 	cmd.AddCommand(newConnectionsUpdateGlueCmd())
 	cmd.AddCommand(newConnectionsUpdateAthenaCmd())
+	cmd.AddCommand(newConnectionsUpdateS3Cmd())
+	cmd.AddCommand(newConnectionsUpdateHiveS3Cmd())
 	return cmd
 }
 
@@ -6236,6 +6384,50 @@ func newConnectionsUpdateAthenaCmd() *cobra.Command {
 	cmd.Flags().String("catalog", "", "Athena data catalog to query. Omit it to use AwsDataCatalog.")
 	cmd.Flags().String("external-id", "", "External id your role's trust policy requires, if it requires one. It is not the deployment's aws_external_id.")
 	cmd.Flags().String("workgroup", "", "Athena workgroup to run queries in. Omit it to use the primary workgroup. The role needs permission to start queries in it.")
+	registerConnectionsUpdateFlags(cmd)
+	return cmd
+}
+
+func newConnectionsUpdateS3Cmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "s3 <connection_id>",
+		Short: "Update a connection of type s3, and change its credentials",
+		Long:  "Updates a connection of type s3, as the update command does, changing its s3 credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
+				group:   flagGroup{"s3", []string{"assumable-role", "bucket", "external-id", "prefix"}},
+				storage: "mc_managed",
+				build:   buildConnectionsUpdateS3,
+			})
+		},
+	}
+	cmd.Flags().String("assumable-role", "", "ARN of the IAM role in your AWS account that the deployment assumes.")
+	cmd.Flags().String("bucket", "", "S3 bucket Monte Carlo reads from.")
+	cmd.Flags().String("external-id", "", "External id your role's trust policy requires, if it requires one. It is not the deployment's aws_external_id.")
+	cmd.Flags().String("prefix", "", "Key prefix the objects sit under, such as emr/prod. Leave out the bucket, a leading / and any s3:// scheme.")
+	registerConnectionsUpdateFlags(cmd)
+	return cmd
+}
+
+func newConnectionsUpdateHiveS3Cmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "hive-s3 <connection_id>",
+		Short: "Update a connection of type hive-s3, and change its credentials",
+		Long:  "Updates a connection of type hive-s3, as the update command does, changing its hive-s3 credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
+				group:   flagGroup{"hive-s3", []string{"assumable-role", "bucket", "external-id", "prefix"}},
+				storage: "mc_managed",
+				build:   buildConnectionsUpdateHiveS3,
+			})
+		},
+	}
+	cmd.Flags().String("assumable-role", "", "ARN of the IAM role in your AWS account that the deployment assumes.")
+	cmd.Flags().String("bucket", "", "S3 bucket Monte Carlo reads from.")
+	cmd.Flags().String("external-id", "", "External id your role's trust policy requires, if it requires one. It is not the deployment's aws_external_id.")
+	cmd.Flags().String("prefix", "", "Key prefix of the EMR log root, such as emr/prod. Leave out the bucket, a leading / and any s3:// scheme. Send an empty string when the cluster's EMR log URI is the bucket root. Monte Carlo reads each cluster's Hive logs under <prefix>/<cluster-id>/node/<instance-id>/applications/hive/.")
 	registerConnectionsUpdateFlags(cmd)
 	return cmd
 }
@@ -10197,6 +10389,140 @@ func buildConnectionsUpdateAthena(cmd *cobra.Command, api *sdk.APIClient, curren
 		},
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateAthenaCredentials(ctx, currentCredentialsId).AthenaCredentialsPatch(*patch).Execute)
+			return resp, err
+		},
+	}, nil
+}
+
+func buildConnectionsUpdateS3(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
+	var err error
+	var assumableRole string
+	if changed(cmd, "assumable-role") {
+		assumableRole, err = flagString(cmd, "assumable-role")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var bucket string
+	if changed(cmd, "bucket") {
+		bucket, err = flagString(cmd, "bucket")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var externalId string
+	if changed(cmd, "external-id") {
+		externalId, err = flagString(cmd, "external-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var prefix string
+	if changed(cmd, "prefix") {
+		prefix, err = flagString(cmd, "prefix")
+		if err != nil {
+			return nil, err
+		}
+	}
+	patch := sdk.NewS3CredentialsPatchWithDefaults()
+	if changed(cmd, "assumable-role") {
+		if assumableRole == "" {
+			patch.SetAssumableRoleNil()
+		} else {
+			patch.SetAssumableRole(assumableRole)
+		}
+	}
+	if changed(cmd, "bucket") {
+		if bucket == "" {
+			patch.SetBucketNil()
+		} else {
+			patch.SetBucket(bucket)
+		}
+	}
+	if changed(cmd, "external-id") {
+		if externalId == "" {
+			patch.SetExternalIdNil()
+		} else {
+			patch.SetExternalId(externalId)
+		}
+	}
+	if changed(cmd, "prefix") {
+		if prefix == "" {
+			patch.SetPrefixNil()
+		} else {
+			patch.SetPrefix(prefix)
+		}
+	}
+	return &connectionsUpdateCredentials{
+		patch: func(ctx context.Context) (*http.Response, error) {
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateS3Credentials(ctx, currentCredentialsId).S3CredentialsPatch(*patch).Execute)
+			return resp, err
+		},
+	}, nil
+}
+
+func buildConnectionsUpdateHiveS3(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
+	var err error
+	var assumableRole string
+	if changed(cmd, "assumable-role") {
+		assumableRole, err = flagString(cmd, "assumable-role")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var bucket string
+	if changed(cmd, "bucket") {
+		bucket, err = flagString(cmd, "bucket")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var externalId string
+	if changed(cmd, "external-id") {
+		externalId, err = flagString(cmd, "external-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var prefix string
+	if changed(cmd, "prefix") {
+		prefix, err = flagString(cmd, "prefix")
+		if err != nil {
+			return nil, err
+		}
+	}
+	patch := sdk.NewHiveS3CredentialsPatchWithDefaults()
+	if changed(cmd, "assumable-role") {
+		if assumableRole == "" {
+			patch.SetAssumableRoleNil()
+		} else {
+			patch.SetAssumableRole(assumableRole)
+		}
+	}
+	if changed(cmd, "bucket") {
+		if bucket == "" {
+			patch.SetBucketNil()
+		} else {
+			patch.SetBucket(bucket)
+		}
+	}
+	if changed(cmd, "external-id") {
+		if externalId == "" {
+			patch.SetExternalIdNil()
+		} else {
+			patch.SetExternalId(externalId)
+		}
+	}
+	if changed(cmd, "prefix") {
+		if prefix == "" {
+			patch.SetPrefixNil()
+		} else {
+			patch.SetPrefix(prefix)
+		}
+	}
+	return &connectionsUpdateCredentials{
+		patch: func(ctx context.Context) (*http.Response, error) {
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateHiveS3Credentials(ctx, currentCredentialsId).HiveS3CredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
