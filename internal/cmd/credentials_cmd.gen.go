@@ -46,19 +46,23 @@ func newCredentialsCreateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsCreateDatabricksSqlWarehouseCmd())
 	cmd.AddCommand(newCredentialsCreateDb2Cmd())
 	cmd.AddCommand(newCredentialsCreateDbtCloudWebhookCmd())
+	cmd.AddCommand(newCredentialsCreateDremioCmd())
 	cmd.AddCommand(newCredentialsCreateEnvVarCmd())
 	cmd.AddCommand(newCredentialsCreateFileCmd())
 	cmd.AddCommand(newCredentialsCreateFivetranCmd())
 	cmd.AddCommand(newCredentialsCreateGcpDataformCmd())
 	cmd.AddCommand(newCredentialsCreateGcpSecretManagerCmd())
 	cmd.AddCommand(newCredentialsCreateGlueCmd())
+	cmd.AddCommand(newCredentialsCreateHiveMysqlCmd())
 	cmd.AddCommand(newCredentialsCreateInformaticaV2Cmd())
 	cmd.AddCommand(newCredentialsCreateLookerCmd())
 	cmd.AddCommand(newCredentialsCreateLookerGitCloneCmd())
 	cmd.AddCommand(newCredentialsCreateMariadbCmd())
+	cmd.AddCommand(newCredentialsCreateMotherduckCmd())
 	cmd.AddCommand(newCredentialsCreateMulesoftCmd())
 	cmd.AddCommand(newCredentialsCreateMysqlCmd())
 	cmd.AddCommand(newCredentialsCreateOracleCmd())
+	cmd.AddCommand(newCredentialsCreatePineconeCmd())
 	cmd.AddCommand(newCredentialsCreatePostgresCmd())
 	cmd.AddCommand(newCredentialsCreatePowerBiCmd())
 	cmd.AddCommand(newCredentialsCreateRedshiftCmd())
@@ -886,6 +890,67 @@ func newCredentialsCreateDbtCloudWebhookCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsCreateDremioCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "dremio",
+		Short: "Create Dremio credentials",
+		Long:  "Store a Dremio access token for connections to use.\n\nMonte Carlo keeps the token and returns everything else. Create the credentials first, then\ncreate a connection that references them. Nothing is checked against Dremio here.\n\nAn account holds a limited number of credentials; past that the create is refused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "token", "token-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreateDremioCredentials(ctx)
+			host, err := flagString(cmd, "host")
+			if err != nil {
+				return err
+			}
+			port, err := flagInt(cmd, "port")
+			if err != nil {
+				return err
+			}
+			token, err := flagSecret(cmd, "token")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewDremioCredentialsIn(host, port, token)
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "tls") {
+				tls, err := flagBool(cmd, "tls")
+				if err != nil {
+					return err
+				}
+				body.SetTls(tls)
+			}
+			req = req.DremioCredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "tls")
+		},
+	}
+	cmd.Flags().String("host", "", "Hostname of the Dremio Arrow Flight endpoint, such as data.dremio.cloud for Dremio Cloud (data.eu.dremio.cloud in the EU).")
+	_ = cmd.MarkFlagRequired("host")
+	cmd.Flags().Int32("port", 0, "Port Dremio serves Arrow Flight on.")
+	_ = cmd.MarkFlagRequired("port")
+	cmd.Flags().String("token", "", "Personal access token Monte Carlo signs in to Dremio with. Stored by Monte Carlo and never returned. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
+	cmd.Flags().String("db-name", "", "Dremio project or space to connect to.")
+	cmd.Flags().Bool("tls", false, "Connect over TLS. Dremio Cloud requires it.")
+	return cmd
+}
+
 func newCredentialsCreateEnvVarCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "env-var",
@@ -1196,6 +1261,63 @@ func newCredentialsCreateGlueCmd() *cobra.Command {
 	cmd.Flags().String("aws-region", "", "AWS region to call. Omit it to use the deployment's own region.")
 	cmd.Flags().String("external-id", "", "External id your role's trust policy requires, if it requires one. It is not the deployment's aws_external_id.")
 	cmd.Flags().String("ssl-ca-data", "", "PEM text of a CA certificate to check the AWS endpoint's certificate against.")
+	return cmd
+}
+
+func newCredentialsCreateHiveMysqlCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "hive-mysql",
+		Short: "Create Hive (MySQL) credentials",
+		Long:  "Store a login to the MySQL database behind a Hive metastore, for connections to use.\n\nMonte Carlo keeps the password and returns everything else. Create the credentials first,\nthen create a connection on a Data Lake warehouse that references them. Nothing is checked\nagainst MySQL here.\n\nAn account holds a limited number of credentials; past that the create is refused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "password", "password-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreateHiveMysqlCredentials(ctx)
+			host, err := flagString(cmd, "host")
+			if err != nil {
+				return err
+			}
+			port, err := flagInt(cmd, "port")
+			if err != nil {
+				return err
+			}
+			user, err := flagString(cmd, "user")
+			if err != nil {
+				return err
+			}
+			password, err := flagSecret(cmd, "password")
+			if err != nil {
+				return err
+			}
+			dbName, err := flagString(cmd, "db-name")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewHiveMySqlCredentialsIn(host, port, user, password, dbName)
+			req = req.HiveMySqlCredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user")
+		},
+	}
+	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
+	_ = cmd.MarkFlagRequired("host")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	_ = cmd.MarkFlagRequired("port")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	_ = cmd.MarkFlagRequired("user")
+	cmd.Flags().String("password", "", "Password of the database user. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("db-name", "", "MySQL database that holds the Hive metastore.")
+	_ = cmd.MarkFlagRequired("db-name")
 	return cmd
 }
 
@@ -1514,6 +1636,45 @@ func newCredentialsCreateMariadbCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsCreateMotherduckCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "motherduck",
+		Short: "Create MotherDuck credentials",
+		Long:  "Store a MotherDuck access token for connections to use.\n\nMonte Carlo keeps the token and returns everything else. Create the credentials first, then\ncreate a connection that references them. Nothing is checked against MotherDuck here.\n\nAn account holds a limited number of credentials; past that the create is refused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "token", "token-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreateMotherduckCredentials(ctx)
+			dbName, err := flagString(cmd, "db-name")
+			if err != nil {
+				return err
+			}
+			token, err := flagSecret(cmd, "token")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewMotherDuckCredentialsIn(dbName, token)
+			req = req.MotherDuckCredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "db_name")
+		},
+	}
+	cmd.Flags().String("db-name", "", "MotherDuck database to connect to.")
+	_ = cmd.MarkFlagRequired("db-name")
+	cmd.Flags().String("token", "", "Access token Monte Carlo signs in to MotherDuck with. Stored by Monte Carlo and never returned. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
+	return cmd
+}
+
 func newCredentialsCreateMulesoftCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mulesoft",
@@ -1767,6 +1928,51 @@ func newCredentialsCreateOracleCmd() *cobra.Command {
 	cmd.Flags().Bool("ssl-skip-cert-verification", false, "Encrypt the connection without checking the server's certificate.")
 	cmd.Flags().Bool("ssl-verify-cert", false, "Check the server's certificate against the CA.")
 	cmd.Flags().Bool("ssl-verify-identity", false, "Check the certificate and that it names the host.")
+	return cmd
+}
+
+func newCredentialsCreatePineconeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "pinecone",
+		Short: "Create Pinecone credentials",
+		Long:  "Store a Pinecone project API key for connections to use.\n\nMonte Carlo keeps the API key and returns everything else. Create the credentials first,\nthen create a connection that references them. Nothing is checked against Pinecone here.\n\nAn account holds a limited number of credentials; past that the create is refused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "api-key", "api-key-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreatePineconeCredentials(ctx)
+			environment, err := flagString(cmd, "environment")
+			if err != nil {
+				return err
+			}
+			projectId, err := flagString(cmd, "project-id")
+			if err != nil {
+				return err
+			}
+			apiKey, err := flagSecret(cmd, "api-key")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewPineconeCredentialsIn(environment, projectId, apiKey)
+			req = req.PineconeCredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "environment", "project_id")
+		},
+	}
+	cmd.Flags().String("environment", "", "Pinecone environment the project runs in, such as us-east-1-aws.")
+	_ = cmd.MarkFlagRequired("environment")
+	cmd.Flags().String("project-id", "", "Id of the Pinecone project.")
+	_ = cmd.MarkFlagRequired("project-id")
+	cmd.Flags().String("api-key", "", "API key of the Pinecone project. Stored by Monte Carlo and never returned. Visible in the process list; --api-key-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("api-key-prompt", false, "Read --api-key from a hidden prompt instead of the command line.")
 	return cmd
 }
 
@@ -2820,19 +3026,23 @@ func newCredentialsDeleteCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsDeleteDatabricksSqlWarehouseCmd())
 	cmd.AddCommand(newCredentialsDeleteDb2Cmd())
 	cmd.AddCommand(newCredentialsDeleteDbtCloudWebhookCmd())
+	cmd.AddCommand(newCredentialsDeleteDremioCmd())
 	cmd.AddCommand(newCredentialsDeleteEnvVarCmd())
 	cmd.AddCommand(newCredentialsDeleteFileCmd())
 	cmd.AddCommand(newCredentialsDeleteFivetranCmd())
 	cmd.AddCommand(newCredentialsDeleteGcpDataformCmd())
 	cmd.AddCommand(newCredentialsDeleteGcpSecretManagerCmd())
 	cmd.AddCommand(newCredentialsDeleteGlueCmd())
+	cmd.AddCommand(newCredentialsDeleteHiveMysqlCmd())
 	cmd.AddCommand(newCredentialsDeleteInformaticaV2Cmd())
 	cmd.AddCommand(newCredentialsDeleteLookerCmd())
 	cmd.AddCommand(newCredentialsDeleteLookerGitCloneCmd())
 	cmd.AddCommand(newCredentialsDeleteMariadbCmd())
+	cmd.AddCommand(newCredentialsDeleteMotherduckCmd())
 	cmd.AddCommand(newCredentialsDeleteMulesoftCmd())
 	cmd.AddCommand(newCredentialsDeleteMysqlCmd())
 	cmd.AddCommand(newCredentialsDeleteOracleCmd())
+	cmd.AddCommand(newCredentialsDeletePineconeCmd())
 	cmd.AddCommand(newCredentialsDeletePostgresCmd())
 	cmd.AddCommand(newCredentialsDeletePowerBiCmd())
 	cmd.AddCommand(newCredentialsDeleteRedshiftCmd())
@@ -3160,6 +3370,30 @@ func newCredentialsDeleteDbtCloudWebhookCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsDeleteDremioCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "dremio <credentials_id>",
+		Short: "Delete Dremio credentials",
+		Long:  "Delete Dremio credentials.\n\nRefused while a connection still uses them. Delete the connection first. Monte Carlo stops using\nthe stored token. Revoke it in Dremio if the token itself must be retired.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete dremio credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeleteDremioCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
 func newCredentialsDeleteEnvVarCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "env-var <credentials_id>",
@@ -3304,6 +3538,30 @@ func newCredentialsDeleteGlueCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsDeleteHiveMysqlCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "hive-mysql <credentials_id>",
+		Short: "Delete Hive (MySQL) credentials",
+		Long:  "Delete Hive (MySQL) credentials.\n\nRefused while a connection still uses them. Delete the connection first. Monte Carlo stops\nusing the stored password. Change it in MySQL if the password itself must be retired.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete hive-mysql credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeleteHiveMysqlCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
 func newCredentialsDeleteInformaticaV2Cmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "informatica-v2 <credentials_id>",
@@ -3400,6 +3658,30 @@ func newCredentialsDeleteMariadbCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsDeleteMotherduckCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "motherduck <credentials_id>",
+		Short: "Delete MotherDuck credentials",
+		Long:  "Delete MotherDuck credentials.\n\nRefused while a connection still uses them. Delete the connection first. Monte Carlo stops using\nthe stored token. Revoke it in MotherDuck if the token itself must be retired.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete motherduck credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeleteMotherduckCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
 func newCredentialsDeleteMulesoftCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mulesoft <credentials_id>",
@@ -3463,6 +3745,30 @@ func newCredentialsDeleteOracleCmd() *cobra.Command {
 				return err
 			}
 			req := api.CredentialsAPI.DeleteOracleCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
+func newCredentialsDeletePineconeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "pinecone <credentials_id>",
+		Short: "Delete Pinecone credentials",
+		Long:  "Delete Pinecone credentials.\n\nRefused while a connection still uses them. Delete the connection first. Monte Carlo stops\nusing the stored API key. Delete the key in Pinecone if the key itself must be retired.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete pinecone credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeletePineconeCredentials(ctx, args[0])
 			if resp, err := req.Execute(); err != nil {
 				return apiErr(resp, err)
 			}
@@ -3792,19 +4098,23 @@ func newCredentialsGetCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsGetDatabricksSqlWarehouseCmd())
 	cmd.AddCommand(newCredentialsGetDb2Cmd())
 	cmd.AddCommand(newCredentialsGetDbtCloudWebhookCmd())
+	cmd.AddCommand(newCredentialsGetDremioCmd())
 	cmd.AddCommand(newCredentialsGetEnvVarCmd())
 	cmd.AddCommand(newCredentialsGetFileCmd())
 	cmd.AddCommand(newCredentialsGetFivetranCmd())
 	cmd.AddCommand(newCredentialsGetGcpDataformCmd())
 	cmd.AddCommand(newCredentialsGetGcpSecretManagerCmd())
 	cmd.AddCommand(newCredentialsGetGlueCmd())
+	cmd.AddCommand(newCredentialsGetHiveMysqlCmd())
 	cmd.AddCommand(newCredentialsGetInformaticaV2Cmd())
 	cmd.AddCommand(newCredentialsGetLookerCmd())
 	cmd.AddCommand(newCredentialsGetLookerGitCloneCmd())
 	cmd.AddCommand(newCredentialsGetMariadbCmd())
+	cmd.AddCommand(newCredentialsGetMotherduckCmd())
 	cmd.AddCommand(newCredentialsGetMulesoftCmd())
 	cmd.AddCommand(newCredentialsGetMysqlCmd())
 	cmd.AddCommand(newCredentialsGetOracleCmd())
+	cmd.AddCommand(newCredentialsGetPineconeCmd())
 	cmd.AddCommand(newCredentialsGetPostgresCmd())
 	cmd.AddCommand(newCredentialsGetPowerBiCmd())
 	cmd.AddCommand(newCredentialsGetRedshiftCmd())
@@ -4106,6 +4416,28 @@ func newCredentialsGetDbtCloudWebhookCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsGetDremioCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "dremio <credentials_id>",
+		Short: "Get Dremio credentials",
+		Long:  "Get one set of Dremio credentials, without the token.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetDremioCredentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "tls")
+		},
+	}
+	return cmd
+}
+
 func newCredentialsGetEnvVarCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "env-var <credentials_id>",
@@ -4238,6 +4570,28 @@ func newCredentialsGetGlueCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsGetHiveMysqlCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "hive-mysql <credentials_id>",
+		Short: "Get Hive (MySQL) credentials",
+		Long:  "Get one set of Hive (MySQL) credentials, without the password.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetHiveMysqlCredentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user")
+		},
+	}
+	return cmd
+}
+
 func newCredentialsGetInformaticaV2Cmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "informatica-v2 <credentials_id>",
@@ -4326,6 +4680,28 @@ func newCredentialsGetMariadbCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsGetMotherduckCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "motherduck <credentials_id>",
+		Short: "Get MotherDuck credentials",
+		Long:  "Get one set of MotherDuck credentials, without the token.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetMotherduckCredentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "db_name")
+		},
+	}
+	return cmd
+}
+
 func newCredentialsGetMulesoftCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mulesoft <credentials_id>",
@@ -4387,6 +4763,28 @@ func newCredentialsGetOracleCmd() *cobra.Command {
 				return apiErr(resp, err)
 			}
 			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user", "ssl_ca_data", "ssl_disabled", "ssl_verify_cert", "ssl_verify_identity", "ssl_skip_cert_verification")
+		},
+	}
+	return cmd
+}
+
+func newCredentialsGetPineconeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "pinecone <credentials_id>",
+		Short: "Get Pinecone credentials",
+		Long:  "Get one set of Pinecone credentials, without the API key.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetPineconeCredentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "environment", "project_id")
 		},
 	}
 	return cmd
@@ -4729,19 +5127,23 @@ func newCredentialsUpdateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsUpdateDatabricksSqlWarehouseCmd())
 	cmd.AddCommand(newCredentialsUpdateDb2Cmd())
 	cmd.AddCommand(newCredentialsUpdateDbtCloudWebhookCmd())
+	cmd.AddCommand(newCredentialsUpdateDremioCmd())
 	cmd.AddCommand(newCredentialsUpdateEnvVarCmd())
 	cmd.AddCommand(newCredentialsUpdateFileCmd())
 	cmd.AddCommand(newCredentialsUpdateFivetranCmd())
 	cmd.AddCommand(newCredentialsUpdateGcpDataformCmd())
 	cmd.AddCommand(newCredentialsUpdateGcpSecretManagerCmd())
 	cmd.AddCommand(newCredentialsUpdateGlueCmd())
+	cmd.AddCommand(newCredentialsUpdateHiveMysqlCmd())
 	cmd.AddCommand(newCredentialsUpdateInformaticaV2Cmd())
 	cmd.AddCommand(newCredentialsUpdateLookerCmd())
 	cmd.AddCommand(newCredentialsUpdateLookerGitCloneCmd())
 	cmd.AddCommand(newCredentialsUpdateMariadbCmd())
+	cmd.AddCommand(newCredentialsUpdateMotherduckCmd())
 	cmd.AddCommand(newCredentialsUpdateMulesoftCmd())
 	cmd.AddCommand(newCredentialsUpdateMysqlCmd())
 	cmd.AddCommand(newCredentialsUpdateOracleCmd())
+	cmd.AddCommand(newCredentialsUpdatePineconeCmd())
 	cmd.AddCommand(newCredentialsUpdatePostgresCmd())
 	cmd.AddCommand(newCredentialsUpdatePowerBiCmd())
 	cmd.AddCommand(newCredentialsUpdateRedshiftCmd())
@@ -5617,6 +6019,71 @@ func newCredentialsUpdateDbtCloudWebhookCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsUpdateDremioCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "dremio <credentials_id>",
+		Short: "Update Dremio credentials",
+		Long:  "Change Dremio credentials in place.\n\nEvery connection using the credentials picks up the change. Send only the fields to change: a\nfield left out is unchanged, `db_name` or `tls` set to null is cleared, and `token` set to null\nis unchanged. Sending an empty body returns the credentials as they are.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdateDremioCredentials(ctx, args[0])
+			body := sdk.NewDremioCredentialsPatch()
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "tls") {
+				tls, err := flagBool(cmd, "tls")
+				if err != nil {
+					return err
+				}
+				body.SetTls(tls)
+			}
+			if changed(cmd, "token", "token-prompt") {
+				token, err := flagSecret(cmd, "token")
+				if err != nil {
+					return err
+				}
+				body.SetToken(token)
+			}
+			req = req.DremioCredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "tls")
+		},
+	}
+	cmd.Flags().String("db-name", "", "Dremio project or space to connect to.")
+	cmd.Flags().String("host", "", "Hostname of the Dremio Arrow Flight endpoint, such as data.dremio.cloud for Dremio Cloud (data.eu.dremio.cloud in the EU). Changing it requires sending the credentials' secrets again.")
+	cmd.Flags().Int32("port", 0, "Port Dremio serves Arrow Flight on.")
+	cmd.Flags().Bool("tls", false, "Connect over TLS. Dremio Cloud requires it.")
+	cmd.Flags().String("token", "", "New personal access token. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
+	return cmd
+}
+
 func newCredentialsUpdateEnvVarCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "env-var <credentials_id>",
@@ -5921,6 +6388,71 @@ func newCredentialsUpdateGlueCmd() *cobra.Command {
 	cmd.Flags().String("aws-region", "", "AWS region to call. Omit it to use the deployment's own region.")
 	cmd.Flags().String("external-id", "", "External id your role's trust policy requires, if it requires one. It is not the deployment's aws_external_id.")
 	cmd.Flags().String("ssl-ca-data", "", "PEM text of a CA certificate to check the AWS endpoint's certificate against.")
+	return cmd
+}
+
+func newCredentialsUpdateHiveMysqlCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "hive-mysql <credentials_id>",
+		Short: "Update Hive (MySQL) credentials",
+		Long:  "Change Hive (MySQL) credentials in place.\n\nEvery connection using the credentials picks up the change. Send only the fields to\nchange: a field left out is unchanged, and `password` set to null is unchanged. Sending an\nempty body returns the credentials as they are.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdateHiveMysqlCredentials(ctx, args[0])
+			body := sdk.NewHiveMySqlCredentialsPatch()
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "user") {
+				user, err := flagString(cmd, "user")
+				if err != nil {
+					return err
+				}
+				body.SetUser(user)
+			}
+			req = req.HiveMySqlCredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user")
+		},
+	}
+	cmd.Flags().String("db-name", "", "Database to connect to.")
+	cmd.Flags().String("host", "", "Hostname of the database endpoint. Changing it requires sending the credentials' secrets again.")
+	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
 	return cmd
 }
 
@@ -6253,6 +6785,47 @@ func newCredentialsUpdateMariadbCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsUpdateMotherduckCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "motherduck <credentials_id>",
+		Short: "Update MotherDuck credentials",
+		Long:  "Change MotherDuck credentials in place.\n\nEvery connection using the credentials picks up the change. Send only the fields to change: a\nfield left out is unchanged, and `token` set to null is unchanged. Sending an\nempty body returns the credentials as they are.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdateMotherduckCredentials(ctx, args[0])
+			body := sdk.NewMotherDuckCredentialsPatch()
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "token", "token-prompt") {
+				token, err := flagSecret(cmd, "token")
+				if err != nil {
+					return err
+				}
+				body.SetToken(token)
+			}
+			req = req.MotherDuckCredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "db_name")
+		},
+	}
+	cmd.Flags().String("db-name", "", "MotherDuck database to connect to.")
+	cmd.Flags().String("token", "", "New access token. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
+	return cmd
+}
+
 func newCredentialsUpdateMulesoftCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mulesoft <credentials_id>",
@@ -6522,6 +7095,55 @@ func newCredentialsUpdateOracleCmd() *cobra.Command {
 	cmd.Flags().Bool("ssl-verify-cert", false, "Check the server's certificate against the CA.")
 	cmd.Flags().Bool("ssl-verify-identity", false, "Check the certificate and that it names the host.")
 	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	return cmd
+}
+
+func newCredentialsUpdatePineconeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "pinecone <credentials_id>",
+		Short: "Update Pinecone credentials",
+		Long:  "Change Pinecone credentials in place.\n\nEvery connection using the credentials picks up the change. Send only the fields to\nchange: a field left out is unchanged, and `api_key` set to null is unchanged. Sending an\nempty body returns the credentials as they are.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdatePineconeCredentials(ctx, args[0])
+			body := sdk.NewPineconeCredentialsPatch()
+			if changed(cmd, "api-key", "api-key-prompt") {
+				apiKey, err := flagSecret(cmd, "api-key")
+				if err != nil {
+					return err
+				}
+				body.SetApiKey(apiKey)
+			}
+			if changed(cmd, "environment") {
+				environment, err := flagString(cmd, "environment")
+				if err != nil {
+					return err
+				}
+				body.SetEnvironment(environment)
+			}
+			if changed(cmd, "project-id") {
+				projectId, err := flagString(cmd, "project-id")
+				if err != nil {
+					return err
+				}
+				body.SetProjectId(projectId)
+			}
+			req = req.PineconeCredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "environment", "project_id")
+		},
+	}
+	cmd.Flags().String("api-key", "", "New API key of the Pinecone project. Visible in the process list; --api-key-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("api-key-prompt", false, "Read --api-key from a hidden prompt instead of the command line.")
+	cmd.Flags().String("environment", "", "Pinecone environment the project runs in, such as us-east-1-aws. Changing it requires sending the credentials' secrets again.")
+	cmd.Flags().String("project-id", "", "Id of the Pinecone project. Changing it requires sending the credentials' secrets again.")
 	return cmd
 }
 
@@ -7636,6 +8258,8 @@ func newCredentialsValidateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsValidateDb2ChangeCmd())
 	cmd.AddCommand(newCredentialsValidateDbtCloudWebhookCmd())
 	cmd.AddCommand(newCredentialsValidateDbtCloudWebhookChangeCmd())
+	cmd.AddCommand(newCredentialsValidateDremioCmd())
+	cmd.AddCommand(newCredentialsValidateDremioChangeCmd())
 	cmd.AddCommand(newCredentialsValidateEnvVarCmd())
 	cmd.AddCommand(newCredentialsValidateEnvVarChangeCmd())
 	cmd.AddCommand(newCredentialsValidateFileCmd())
@@ -7656,12 +8280,16 @@ func newCredentialsValidateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsValidateLookerGitCloneChangeCmd())
 	cmd.AddCommand(newCredentialsValidateMariadbCmd())
 	cmd.AddCommand(newCredentialsValidateMariadbChangeCmd())
+	cmd.AddCommand(newCredentialsValidateMotherduckCmd())
+	cmd.AddCommand(newCredentialsValidateMotherduckChangeCmd())
 	cmd.AddCommand(newCredentialsValidateMulesoftCmd())
 	cmd.AddCommand(newCredentialsValidateMulesoftChangeCmd())
 	cmd.AddCommand(newCredentialsValidateMysqlCmd())
 	cmd.AddCommand(newCredentialsValidateMysqlChangeCmd())
 	cmd.AddCommand(newCredentialsValidateOracleCmd())
 	cmd.AddCommand(newCredentialsValidateOracleChangeCmd())
+	cmd.AddCommand(newCredentialsValidatePineconeCmd())
+	cmd.AddCommand(newCredentialsValidatePineconeChangeCmd())
 	cmd.AddCommand(newCredentialsValidatePostgresCmd())
 	cmd.AddCommand(newCredentialsValidatePostgresChangeCmd())
 	cmd.AddCommand(newCredentialsValidatePowerBiCmd())
@@ -10187,6 +10815,206 @@ func newCredentialsValidateDbtCloudWebhookChangeCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsValidateDremioCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "dremio",
+		Short: "Validate Dremio credentials",
+		Long:  "Check a candidate Dremio access token against Dremio.\n\nNo credentials are created. Send the values you would create the credentials with, and a\ndeployment to run them from, and the checks run against your Dremio endpoint.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "token", "token-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateDremioCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			host, err := flagString(cmd, "host")
+			if err != nil {
+				return err
+			}
+			port, err := flagInt(cmd, "port")
+			if err != nil {
+				return err
+			}
+			token, err := flagSecret(cmd, "token")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewDremioCredentialsValidateIn(deploymentId, host, port, token)
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "tls") {
+				tls, err := flagBool(cmd, "tls")
+				if err != nil {
+					return err
+				}
+				body.SetTls(tls)
+			}
+			req = req.DremioCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("host", "", "Hostname of the Dremio Arrow Flight endpoint, such as data.dremio.cloud for Dremio Cloud (data.eu.dremio.cloud in the EU).")
+	_ = cmd.MarkFlagRequired("host")
+	cmd.Flags().Int32("port", 0, "Port Dremio serves Arrow Flight on.")
+	_ = cmd.MarkFlagRequired("port")
+	cmd.Flags().String("token", "", "Personal access token Monte Carlo signs in to Dremio with. Used for this check and not kept. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
+	cmd.Flags().String("db-name", "", "Dremio project or space to connect to.")
+	cmd.Flags().Bool("tls", false, "Connect over TLS. Dremio Cloud requires it.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateDremioChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "dremio-change <credentials_id>",
+		Short: "Validate a change to Dremio credentials",
+		Long:  "Check a change to Dremio credentials before making it.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateDremioCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewDremioCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "tls") {
+				tls, err := flagBool(cmd, "tls")
+				if err != nil {
+					return err
+				}
+				body.SetTls(tls)
+			}
+			if changed(cmd, "token", "token-prompt") {
+				token, err := flagSecret(cmd, "token")
+				if err != nil {
+					return err
+				}
+				body.SetToken(token)
+			}
+			req = req.DremioCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("db-name", "", "Dremio project or space to connect to.")
+	cmd.Flags().String("host", "", "Hostname of the Dremio Arrow Flight endpoint, such as data.dremio.cloud for Dremio Cloud (data.eu.dremio.cloud in the EU). Changing it requires sending the credentials' secrets again.")
+	cmd.Flags().Int32("port", 0, "Port Dremio serves Arrow Flight on.")
+	cmd.Flags().Bool("tls", false, "Connect over TLS. Dremio Cloud requires it.")
+	cmd.Flags().String("token", "", "New personal access token. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
 func newCredentialsValidateEnvVarCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "env-var",
@@ -12191,6 +13019,160 @@ func newCredentialsValidateMariadbChangeCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsValidateMotherduckCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "motherduck",
+		Short: "Validate MotherDuck credentials",
+		Long:  "Check a candidate MotherDuck access token against MotherDuck.\n\nNo credentials are created. Send the values you would create the credentials with, and a\ndeployment to run them from, and the checks run against your MotherDuck database.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "token", "token-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateMotherduckCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			dbName, err := flagString(cmd, "db-name")
+			if err != nil {
+				return err
+			}
+			token, err := flagSecret(cmd, "token")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewMotherDuckCredentialsValidateIn(deploymentId, dbName, token)
+			req = req.MotherDuckCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("db-name", "", "MotherDuck database to connect to.")
+	_ = cmd.MarkFlagRequired("db-name")
+	cmd.Flags().String("token", "", "Access token Monte Carlo signs in to MotherDuck with. Used for this check and not kept. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateMotherduckChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "motherduck-change <credentials_id>",
+		Short: "Validate a change to MotherDuck credentials",
+		Long:  "Check a change to MotherDuck credentials before making it.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateMotherduckCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewMotherDuckCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "token", "token-prompt") {
+				token, err := flagSecret(cmd, "token")
+				if err != nil {
+					return err
+				}
+				body.SetToken(token)
+			}
+			req = req.MotherDuckCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("db-name", "", "MotherDuck database to connect to.")
+	cmd.Flags().String("token", "", "New access token. Visible in the process list; --token-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("token-prompt", false, "Read --token from a hidden prompt instead of the command line.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
 func newCredentialsValidateMulesoftCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mulesoft",
@@ -12937,6 +13919,174 @@ func newCredentialsValidateOracleChangeCmd() *cobra.Command {
 	cmd.Flags().Bool("ssl-verify-cert", false, "Check the server's certificate against the CA.")
 	cmd.Flags().Bool("ssl-verify-identity", false, "Check the certificate and that it names the host.")
 	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidatePineconeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "pinecone",
+		Short: "Validate Pinecone credentials",
+		Long:  "Check a candidate Pinecone API key against Pinecone.\n\nNo credentials are created. Send the values you would create the credentials with, and a\ndeployment to run them from, and the checks run against your Pinecone project.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "api-key", "api-key-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidatePineconeCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			environment, err := flagString(cmd, "environment")
+			if err != nil {
+				return err
+			}
+			projectId, err := flagString(cmd, "project-id")
+			if err != nil {
+				return err
+			}
+			apiKey, err := flagSecret(cmd, "api-key")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewPineconeCredentialsValidateIn(deploymentId, environment, projectId, apiKey)
+			req = req.PineconeCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("environment", "", "Pinecone environment the project runs in, such as us-east-1-aws.")
+	_ = cmd.MarkFlagRequired("environment")
+	cmd.Flags().String("project-id", "", "Id of the Pinecone project.")
+	_ = cmd.MarkFlagRequired("project-id")
+	cmd.Flags().String("api-key", "", "API key of the Pinecone project. Used for this check and not kept. Visible in the process list; --api-key-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("api-key-prompt", false, "Read --api-key from a hidden prompt instead of the command line.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidatePineconeChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "pinecone-change <credentials_id>",
+		Short: "Validate a change to Pinecone credentials",
+		Long:  "Check a change to Pinecone credentials before making it.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidatePineconeCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewPineconeCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "api-key", "api-key-prompt") {
+				apiKey, err := flagSecret(cmd, "api-key")
+				if err != nil {
+					return err
+				}
+				body.SetApiKey(apiKey)
+			}
+			if changed(cmd, "environment") {
+				environment, err := flagString(cmd, "environment")
+				if err != nil {
+					return err
+				}
+				body.SetEnvironment(environment)
+			}
+			if changed(cmd, "project-id") {
+				projectId, err := flagString(cmd, "project-id")
+				if err != nil {
+					return err
+				}
+				body.SetProjectId(projectId)
+			}
+			req = req.PineconeCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("api-key", "", "New API key of the Pinecone project. Visible in the process list; --api-key-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("api-key-prompt", false, "Read --api-key from a hidden prompt instead of the command line.")
+	cmd.Flags().String("environment", "", "Pinecone environment the project runs in, such as us-east-1-aws. Changing it requires sending the credentials' secrets again.")
+	cmd.Flags().String("project-id", "", "Id of the Pinecone project. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }
