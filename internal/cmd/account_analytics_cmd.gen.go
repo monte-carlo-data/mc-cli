@@ -76,7 +76,7 @@ func newAccountAnalyticsGetDocsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "docs",
 		Short: "List the Analytics API docs, or read one page",
-		Long:  "List the pages of the Analytics API docs, or read one.\n\nWithout `slug`, the answer lists every page with its slug, title, summary and parent page.\nWith `slug`, it returns that page with its body as Markdown. The pages are the ones\npublished at docs.getmontecarlo.com: how to query, the data catalog, the dashboard examples\nand the dashboard style. `doc:<slug>` links in a body name other pages.\n\nAn unknown slug is refused with a 422 `docs_page_not_found`. Requires dashboard access.",
+		Long:  "List the pages of the Analytics API docs, or read one.\n\nWithout `slug`, the answer lists every page with its slug, title, summary and parent page,\nand the prompt of each dashboard example.\nWith `slug`, it returns that page with its body as Markdown. The pages are the ones\npublished at docs.getmontecarlo.com: how to query, the data catalog, the dashboard examples\nand the dashboard style. `doc:<slug>` links in a body name other pages.\n\nAn unknown slug is refused with a 422 `docs_page_not_found`. Requires dashboard access.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			api, ctx, err := apiClient(cmd)
