@@ -54,6 +54,7 @@ func newCredentialsCreateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsCreateGcpSecretManagerCmd())
 	cmd.AddCommand(newCredentialsCreateGlueCmd())
 	cmd.AddCommand(newCredentialsCreateHiveMysqlCmd())
+	cmd.AddCommand(newCredentialsCreateHiveS3Cmd())
 	cmd.AddCommand(newCredentialsCreateInformaticaV2Cmd())
 	cmd.AddCommand(newCredentialsCreateLookerCmd())
 	cmd.AddCommand(newCredentialsCreateLookerGitCloneCmd())
@@ -66,6 +67,7 @@ func newCredentialsCreateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsCreatePostgresCmd())
 	cmd.AddCommand(newCredentialsCreatePowerBiCmd())
 	cmd.AddCommand(newCredentialsCreateRedshiftCmd())
+	cmd.AddCommand(newCredentialsCreateS3Cmd())
 	cmd.AddCommand(newCredentialsCreateSalesforceCrmCmd())
 	cmd.AddCommand(newCredentialsCreateSalesforceDataCloudCmd())
 	cmd.AddCommand(newCredentialsCreateSapHanaCmd())
@@ -1321,6 +1323,56 @@ func newCredentialsCreateHiveMysqlCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsCreateHiveS3Cmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "hive-s3",
+		Short: "Create Hive (S3) credentials",
+		Long:  "Store the S3 location of your Hive query logs and the IAM role Monte Carlo assumes\nto read them.\n\nHive (S3) needs no secret. Create the credentials first, then create a connection that\nreferences them on a `data-lake` warehouse. Nothing is checked against AWS here.\n\nAn account holds a limited number of credentials. Past that, the create is refused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreateHiveS3Credentials(ctx)
+			assumableRole, err := flagString(cmd, "assumable-role")
+			if err != nil {
+				return err
+			}
+			bucket, err := flagString(cmd, "bucket")
+			if err != nil {
+				return err
+			}
+			prefix, err := flagString(cmd, "prefix")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewHiveS3CredentialsIn(assumableRole, bucket, prefix)
+			if changed(cmd, "external-id") {
+				externalId, err := flagString(cmd, "external-id")
+				if err != nil {
+					return err
+				}
+				body.SetExternalId(externalId)
+			}
+			req = req.HiveS3CredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "assumable_role", "external_id", "bucket", "prefix")
+		},
+	}
+	cmd.Flags().String("assumable-role", "", "ARN of the IAM role in your AWS account that the deployment assumes.")
+	_ = cmd.MarkFlagRequired("assumable-role")
+	cmd.Flags().String("bucket", "", "S3 bucket Monte Carlo reads from.")
+	_ = cmd.MarkFlagRequired("bucket")
+	cmd.Flags().String("prefix", "", "Key prefix of the EMR log root, such as emr/prod. Leave out the bucket, a leading / and any s3:// scheme. Send an empty string when the cluster's EMR log URI is the bucket root. Monte Carlo reads each cluster's Hive logs under <prefix>/<cluster-id>/node/<instance-id>/applications/hive/.")
+	_ = cmd.MarkFlagRequired("prefix")
+	cmd.Flags().String("external-id", "", "External id your role's trust policy requires, if it requires one. It is not the deployment's aws_external_id.")
+	return cmd
+}
+
 func newCredentialsCreateInformaticaV2Cmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "informatica-v2",
@@ -2251,6 +2303,56 @@ func newCredentialsCreateRedshiftCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsCreateS3Cmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "s3",
+		Short: "Create S3 credentials",
+		Long:  "Store an S3 location and the IAM role Monte Carlo assumes to read it.\n\nS3 needs no secret. Create the credentials first, then create a connection that\nreferences them on a `data-lake` warehouse. Nothing is checked against AWS here.\n\nAn account holds a limited number of credentials. Past that, the create is refused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreateS3Credentials(ctx)
+			assumableRole, err := flagString(cmd, "assumable-role")
+			if err != nil {
+				return err
+			}
+			bucket, err := flagString(cmd, "bucket")
+			if err != nil {
+				return err
+			}
+			prefix, err := flagString(cmd, "prefix")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewS3CredentialsIn(assumableRole, bucket, prefix)
+			if changed(cmd, "external-id") {
+				externalId, err := flagString(cmd, "external-id")
+				if err != nil {
+					return err
+				}
+				body.SetExternalId(externalId)
+			}
+			req = req.S3CredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "assumable_role", "external_id", "bucket", "prefix")
+		},
+	}
+	cmd.Flags().String("assumable-role", "", "ARN of the IAM role in your AWS account that the deployment assumes.")
+	_ = cmd.MarkFlagRequired("assumable-role")
+	cmd.Flags().String("bucket", "", "S3 bucket Monte Carlo reads from.")
+	_ = cmd.MarkFlagRequired("bucket")
+	cmd.Flags().String("prefix", "", "Key prefix the objects sit under, such as emr/prod. Leave out the bucket, a leading / and any s3:// scheme.")
+	_ = cmd.MarkFlagRequired("prefix")
+	cmd.Flags().String("external-id", "", "External id your role's trust policy requires, if it requires one. It is not the deployment's aws_external_id.")
+	return cmd
+}
+
 func newCredentialsCreateSalesforceCrmCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "salesforce-crm",
@@ -3034,6 +3136,7 @@ func newCredentialsDeleteCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsDeleteGcpSecretManagerCmd())
 	cmd.AddCommand(newCredentialsDeleteGlueCmd())
 	cmd.AddCommand(newCredentialsDeleteHiveMysqlCmd())
+	cmd.AddCommand(newCredentialsDeleteHiveS3Cmd())
 	cmd.AddCommand(newCredentialsDeleteInformaticaV2Cmd())
 	cmd.AddCommand(newCredentialsDeleteLookerCmd())
 	cmd.AddCommand(newCredentialsDeleteLookerGitCloneCmd())
@@ -3046,6 +3149,7 @@ func newCredentialsDeleteCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsDeletePostgresCmd())
 	cmd.AddCommand(newCredentialsDeletePowerBiCmd())
 	cmd.AddCommand(newCredentialsDeleteRedshiftCmd())
+	cmd.AddCommand(newCredentialsDeleteS3Cmd())
 	cmd.AddCommand(newCredentialsDeleteSalesforceCrmCmd())
 	cmd.AddCommand(newCredentialsDeleteSalesforceDataCloudCmd())
 	cmd.AddCommand(newCredentialsDeleteSapHanaCmd())
@@ -3562,6 +3666,30 @@ func newCredentialsDeleteHiveMysqlCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsDeleteHiveS3Cmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "hive-s3 <credentials_id>",
+		Short: "Delete Hive (S3) credentials",
+		Long:  "Delete Hive (S3) credentials.\n\nRefused while a connection still uses them. Delete the connection first. The bucket and\nthe role in your AWS account are left as they are.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete hive-s3 credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeleteHiveS3Credentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
 func newCredentialsDeleteInformaticaV2Cmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "informatica-v2 <credentials_id>",
@@ -3850,6 +3978,30 @@ func newCredentialsDeleteRedshiftCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsDeleteS3Cmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "s3 <credentials_id>",
+		Short: "Delete S3 credentials",
+		Long:  "Delete S3 credentials.\n\nRefused while a connection still uses them. Delete the connection first. The bucket and\nthe role in your AWS account are left as they are.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete s3 credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeleteS3Credentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
 func newCredentialsDeleteSalesforceCrmCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "salesforce-crm <credentials_id>",
@@ -4106,6 +4258,7 @@ func newCredentialsGetCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsGetGcpSecretManagerCmd())
 	cmd.AddCommand(newCredentialsGetGlueCmd())
 	cmd.AddCommand(newCredentialsGetHiveMysqlCmd())
+	cmd.AddCommand(newCredentialsGetHiveS3Cmd())
 	cmd.AddCommand(newCredentialsGetInformaticaV2Cmd())
 	cmd.AddCommand(newCredentialsGetLookerCmd())
 	cmd.AddCommand(newCredentialsGetLookerGitCloneCmd())
@@ -4118,6 +4271,7 @@ func newCredentialsGetCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsGetPostgresCmd())
 	cmd.AddCommand(newCredentialsGetPowerBiCmd())
 	cmd.AddCommand(newCredentialsGetRedshiftCmd())
+	cmd.AddCommand(newCredentialsGetS3Cmd())
 	cmd.AddCommand(newCredentialsGetSalesforceCrmCmd())
 	cmd.AddCommand(newCredentialsGetSalesforceDataCloudCmd())
 	cmd.AddCommand(newCredentialsGetSapHanaCmd())
@@ -4592,6 +4746,28 @@ func newCredentialsGetHiveMysqlCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsGetHiveS3Cmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "hive-s3 <credentials_id>",
+		Short: "Get Hive (S3) credentials",
+		Long:  "Get one set of Hive (S3) credentials.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetHiveS3Credentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "assumable_role", "external_id", "bucket", "prefix")
+		},
+	}
+	return cmd
+}
+
 func newCredentialsGetInformaticaV2Cmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "informatica-v2 <credentials_id>",
@@ -4851,6 +5027,28 @@ func newCredentialsGetRedshiftCmd() *cobra.Command {
 				return apiErr(resp, err)
 			}
 			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user", "ssl_ca_data", "ssl_disabled", "ssl_verify_cert", "ssl_verify_identity", "ssl_skip_cert_verification")
+		},
+	}
+	return cmd
+}
+
+func newCredentialsGetS3Cmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "s3 <credentials_id>",
+		Short: "Get S3 credentials",
+		Long:  "Get one set of S3 credentials.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetS3Credentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "assumable_role", "external_id", "bucket", "prefix")
 		},
 	}
 	return cmd
@@ -5135,6 +5333,7 @@ func newCredentialsUpdateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsUpdateGcpSecretManagerCmd())
 	cmd.AddCommand(newCredentialsUpdateGlueCmd())
 	cmd.AddCommand(newCredentialsUpdateHiveMysqlCmd())
+	cmd.AddCommand(newCredentialsUpdateHiveS3Cmd())
 	cmd.AddCommand(newCredentialsUpdateInformaticaV2Cmd())
 	cmd.AddCommand(newCredentialsUpdateLookerCmd())
 	cmd.AddCommand(newCredentialsUpdateLookerGitCloneCmd())
@@ -5147,6 +5346,7 @@ func newCredentialsUpdateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsUpdatePostgresCmd())
 	cmd.AddCommand(newCredentialsUpdatePowerBiCmd())
 	cmd.AddCommand(newCredentialsUpdateRedshiftCmd())
+	cmd.AddCommand(newCredentialsUpdateS3Cmd())
 	cmd.AddCommand(newCredentialsUpdateSalesforceCrmCmd())
 	cmd.AddCommand(newCredentialsUpdateSalesforceDataCloudCmd())
 	cmd.AddCommand(newCredentialsUpdateSapHanaCmd())
@@ -6456,6 +6656,62 @@ func newCredentialsUpdateHiveMysqlCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsUpdateHiveS3Cmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "hive-s3 <credentials_id>",
+		Short: "Update Hive (S3) credentials",
+		Long:  "Change Hive (S3) credentials in place.\n\nEvery connection using the credentials picks up the change. Sending an empty body returns\nthe credentials as they are.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdateHiveS3Credentials(ctx, args[0])
+			body := sdk.NewHiveS3CredentialsPatch()
+			if changed(cmd, "assumable-role") {
+				assumableRole, err := flagString(cmd, "assumable-role")
+				if err != nil {
+					return err
+				}
+				body.SetAssumableRole(assumableRole)
+			}
+			if changed(cmd, "bucket") {
+				bucket, err := flagString(cmd, "bucket")
+				if err != nil {
+					return err
+				}
+				body.SetBucket(bucket)
+			}
+			if changed(cmd, "external-id") {
+				externalId, err := flagString(cmd, "external-id")
+				if err != nil {
+					return err
+				}
+				body.SetExternalId(externalId)
+			}
+			if changed(cmd, "prefix") {
+				prefix, err := flagString(cmd, "prefix")
+				if err != nil {
+					return err
+				}
+				body.SetPrefix(prefix)
+			}
+			req = req.HiveS3CredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "assumable_role", "external_id", "bucket", "prefix")
+		},
+	}
+	cmd.Flags().String("assumable-role", "", "ARN of the IAM role in your AWS account that the deployment assumes.")
+	cmd.Flags().String("bucket", "", "S3 bucket Monte Carlo reads from.")
+	cmd.Flags().String("external-id", "", "External id your role's trust policy requires, if it requires one. It is not the deployment's aws_external_id.")
+	cmd.Flags().String("prefix", "", "Key prefix of the EMR log root, such as emr/prod. Leave out the bucket, a leading / and any s3:// scheme. Send an empty string when the cluster's EMR log URI is the bucket root. Monte Carlo reads each cluster's Hive logs under <prefix>/<cluster-id>/node/<instance-id>/applications/hive/.")
+	return cmd
+}
+
 func newCredentialsUpdateInformaticaV2Cmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "informatica-v2 <credentials_id>",
@@ -7441,6 +7697,62 @@ func newCredentialsUpdateRedshiftCmd() *cobra.Command {
 	cmd.Flags().Bool("ssl-verify-cert", false, "Check the server's certificate against the CA.")
 	cmd.Flags().Bool("ssl-verify-identity", false, "Check the certificate and that it names the host.")
 	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	return cmd
+}
+
+func newCredentialsUpdateS3Cmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "s3 <credentials_id>",
+		Short: "Update S3 credentials",
+		Long:  "Change S3 credentials in place.\n\nEvery connection using the credentials picks up the change. Sending an empty body returns\nthe credentials as they are.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdateS3Credentials(ctx, args[0])
+			body := sdk.NewS3CredentialsPatch()
+			if changed(cmd, "assumable-role") {
+				assumableRole, err := flagString(cmd, "assumable-role")
+				if err != nil {
+					return err
+				}
+				body.SetAssumableRole(assumableRole)
+			}
+			if changed(cmd, "bucket") {
+				bucket, err := flagString(cmd, "bucket")
+				if err != nil {
+					return err
+				}
+				body.SetBucket(bucket)
+			}
+			if changed(cmd, "external-id") {
+				externalId, err := flagString(cmd, "external-id")
+				if err != nil {
+					return err
+				}
+				body.SetExternalId(externalId)
+			}
+			if changed(cmd, "prefix") {
+				prefix, err := flagString(cmd, "prefix")
+				if err != nil {
+					return err
+				}
+				body.SetPrefix(prefix)
+			}
+			req = req.S3CredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "assumable_role", "external_id", "bucket", "prefix")
+		},
+	}
+	cmd.Flags().String("assumable-role", "", "ARN of the IAM role in your AWS account that the deployment assumes.")
+	cmd.Flags().String("bucket", "", "S3 bucket Monte Carlo reads from.")
+	cmd.Flags().String("external-id", "", "External id your role's trust policy requires, if it requires one. It is not the deployment's aws_external_id.")
+	cmd.Flags().String("prefix", "", "Key prefix the objects sit under, such as emr/prod. Leave out the bucket, a leading / and any s3:// scheme.")
 	return cmd
 }
 
