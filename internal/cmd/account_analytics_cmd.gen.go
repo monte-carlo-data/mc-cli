@@ -75,8 +75,8 @@ func newAccountAnalyticsGetCatalogCmd() *cobra.Command {
 func newAccountAnalyticsGetDocsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "docs",
-		Short: "List the Analytics API docs, or read one page",
-		Long:  "List the pages of the Analytics API docs, or read one.\n\nWithout `slug`, the answer lists every page with its slug, title, summary and parent page,\nand the prompt of each dashboard example.\nWith `slug`, it returns that page with its body as Markdown. The pages are the ones\npublished at docs.getmontecarlo.com: how to query, the data catalog, the dashboard examples\nand the dashboard style. `doc:<slug>` links in a body name other pages.\n\nAn unknown slug is refused with a 422 `docs_page_not_found`. Requires dashboard access.",
+		Short: "List the Analytics API docs, or read pages",
+		Long:  "List the pages of the Analytics API docs, or read some.\n\nWithout `slug`, the answer lists every page with its slug, title, summary and parent page,\nand the prompt of each dashboard example.\nWith `slug`, one slug or several comma-separated, it returns those pages with their bodies\nas Markdown, in that order. The pages are the ones\npublished at docs.getmontecarlo.com: how to query, the data catalog, the dashboard examples\nand the dashboard style. `doc:<slug>` links in a body name other pages.\n\nAn unknown slug is refused with a 422 `docs_page_not_found`. Requires dashboard access.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			api, ctx, err := apiClient(cmd)
@@ -98,7 +98,7 @@ func newAccountAnalyticsGetDocsCmd() *cobra.Command {
 			return render(cmd, out, "pages")
 		},
 	}
-	cmd.Flags().String("slug", "", "The page to read, such as analytics-api-dashboard-style. Without it, the answer lists every page without its body.")
+	cmd.Flags().String("slug", "", "The pages to read: one slug, or up to 10 comma-separated, such as analytics-api-dashboard-style,analytics-api-dimensions. The answer has them in that order. Without it, the answer lists every page without its body.")
 	return cmd
 }
 
