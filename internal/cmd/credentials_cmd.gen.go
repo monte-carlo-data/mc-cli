@@ -53,12 +53,14 @@ func newCredentialsCreateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsCreateGcpDataformCmd())
 	cmd.AddCommand(newCredentialsCreateGcpSecretManagerCmd())
 	cmd.AddCommand(newCredentialsCreateGlueCmd())
+	cmd.AddCommand(newCredentialsCreateHiveCmd())
 	cmd.AddCommand(newCredentialsCreateHiveMysqlCmd())
 	cmd.AddCommand(newCredentialsCreateHiveS3Cmd())
 	cmd.AddCommand(newCredentialsCreateInformaticaV2Cmd())
 	cmd.AddCommand(newCredentialsCreateLookerCmd())
 	cmd.AddCommand(newCredentialsCreateLookerGitCloneCmd())
 	cmd.AddCommand(newCredentialsCreateMariadbCmd())
+	cmd.AddCommand(newCredentialsCreateMicrosoftFabricCmd())
 	cmd.AddCommand(newCredentialsCreateMotherduckCmd())
 	cmd.AddCommand(newCredentialsCreateMulesoftCmd())
 	cmd.AddCommand(newCredentialsCreateMysqlCmd())
@@ -66,12 +68,14 @@ func newCredentialsCreateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsCreatePineconeCmd())
 	cmd.AddCommand(newCredentialsCreatePostgresCmd())
 	cmd.AddCommand(newCredentialsCreatePowerBiCmd())
+	cmd.AddCommand(newCredentialsCreatePrestoCmd())
 	cmd.AddCommand(newCredentialsCreateRedshiftCmd())
 	cmd.AddCommand(newCredentialsCreateS3Cmd())
 	cmd.AddCommand(newCredentialsCreateSalesforceCrmCmd())
 	cmd.AddCommand(newCredentialsCreateSalesforceDataCloudCmd())
 	cmd.AddCommand(newCredentialsCreateSapHanaCmd())
 	cmd.AddCommand(newCredentialsCreateSnowflakeCmd())
+	cmd.AddCommand(newCredentialsCreateSparkCmd())
 	cmd.AddCommand(newCredentialsCreateSqlServerCmd())
 	cmd.AddCommand(newCredentialsCreateStarburstEnterpriseCmd())
 	cmd.AddCommand(newCredentialsCreateStarburstGalaxyCmd())
@@ -1266,6 +1270,71 @@ func newCredentialsCreateGlueCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsCreateHiveCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "hive",
+		Short: "Create Hive credentials",
+		Long:  "Store the address of a HiveServer2 and the user to sign in as, for connections to use.\n\nHive needs no secret. Create the credentials first, then create a connection on a Data Lake\nwarehouse that references them. Nothing is checked against Hive here.\n\nAn account holds a limited number of credentials; past that the create is refused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreateHiveCredentials(ctx)
+			host, err := flagString(cmd, "host")
+			if err != nil {
+				return err
+			}
+			user, err := flagString(cmd, "user")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewHiveCredentialsIn(host, user)
+			if changed(cmd, "auth-mode") {
+				authModeValue, err := flagString(cmd, "auth-mode")
+				if err != nil {
+					return err
+				}
+				authMode, err := sdk.NewHiveAuthModeFromValue(authModeValue)
+				if err != nil {
+					return usageError("%w", err)
+				}
+				body.SetAuthMode(*authMode)
+			}
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			req = req.HiveCredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "user", "db_name", "auth_mode")
+		},
+	}
+	cmd.Flags().String("host", "", "Hostname of the HiveServer2.")
+	_ = cmd.MarkFlagRequired("host")
+	cmd.Flags().String("user", "", "User Monte Carlo signs in as. Hive takes no password.")
+	_ = cmd.MarkFlagRequired("user")
+	cmd.Flags().String("auth-mode", "", "How Monte Carlo signs in. Omit it for SASL.")
+	_ = cmd.RegisterFlagCompletionFunc("auth-mode", enumCompletion(sdk.AllowedHiveAuthModeEnumValues))
+	cmd.Flags().String("db-name", "", "Database Monte Carlo connects to.")
+	cmd.Flags().Int32("port", 0, "Port the HiveServer2 listens on in binary mode.")
+	return cmd
+}
+
 func newCredentialsCreateHiveMysqlCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "hive-mysql",
@@ -1685,6 +1754,69 @@ func newCredentialsCreateMariadbCmd() *cobra.Command {
 	cmd.Flags().String("password", "", "Password of the database user. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().String("db-name", "", "Database to connect to.")
+	return cmd
+}
+
+func newCredentialsCreateMicrosoftFabricCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "microsoft-fabric",
+		Short: "Create Microsoft Fabric credentials",
+		Long:  "Store a Microsoft Fabric service principal for connections to use.\n\nMonte Carlo keeps the client secret and returns everything else. Create the credentials\nfirst, then create a connection that references them. Nothing is checked against Fabric\nhere.\n\nAn account holds a limited number of credentials; past that the create is refused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "app-client-secret", "app-client-secret-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreateMicrosoftFabricCredentials(ctx)
+			host, err := flagString(cmd, "host")
+			if err != nil {
+				return err
+			}
+			port, err := flagInt(cmd, "port")
+			if err != nil {
+				return err
+			}
+			dbName, err := flagString(cmd, "db-name")
+			if err != nil {
+				return err
+			}
+			tenantId, err := flagString(cmd, "tenant-id")
+			if err != nil {
+				return err
+			}
+			appClientId, err := flagString(cmd, "app-client-id")
+			if err != nil {
+				return err
+			}
+			appClientSecret, err := flagSecret(cmd, "app-client-secret")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewMicrosoftFabricCredentialsIn(host, port, dbName, tenantId, appClientId, appClientSecret)
+			req = req.MicrosoftFabricCredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "tenant_id", "app_client_id")
+		},
+	}
+	cmd.Flags().String("host", "", "Hostname of the Fabric warehouse or lakehouse SQL analytics endpoint, as Fabric shows it under SQL connection string, such as abc123.datawarehouse.fabric.microsoft.com. It goes unquoted into the connection string Monte Carlo builds, so it cannot contain whitespace or any of ;, {, } and =.")
+	_ = cmd.MarkFlagRequired("host")
+	cmd.Flags().Int32("port", 0, "Port of the SQL endpoint. Fabric serves it on 1433.")
+	_ = cmd.MarkFlagRequired("port")
+	cmd.Flags().String("db-name", "", "Warehouse or lakehouse to connect to. It goes unquoted into the connection string Monte Carlo builds, so it cannot contain whitespace or any of ;, {, } and =.")
+	_ = cmd.MarkFlagRequired("db-name")
+	cmd.Flags().String("tenant-id", "", "Microsoft Entra ID tenant the Fabric workspace belongs to.")
+	_ = cmd.MarkFlagRequired("tenant-id")
+	cmd.Flags().String("app-client-id", "", "Client ID of the Entra ID app registration Monte Carlo signs in with.")
+	_ = cmd.MarkFlagRequired("app-client-id")
+	cmd.Flags().String("app-client-secret", "", "Secret of the app registration. Stored by Monte Carlo and never returned. Visible in the process list; --app-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("app-client-secret-prompt", false, "Read --app-client-secret from a hidden prompt instead of the command line.")
 	return cmd
 }
 
@@ -2206,6 +2338,97 @@ func newCredentialsCreatePowerBiCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsCreatePrestoCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "presto",
+		Short: "Create Presto credentials",
+		Long:  "Store a login to a Presto or Trino cluster, for connections to use.\n\nMonte Carlo keeps the password and returns everything else. Create the credentials first,\nthen create a connection on a Data Lake warehouse that references them. Nothing is checked\nagainst the cluster here.\n\nAn account holds a limited number of credentials; past that the create is refused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreatePrestoCredentials(ctx)
+			host, err := flagString(cmd, "host")
+			if err != nil {
+				return err
+			}
+			port, err := flagInt(cmd, "port")
+			if err != nil {
+				return err
+			}
+			user, err := flagString(cmd, "user")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewPrestoCredentialsIn(host, port, user)
+			if changed(cmd, "catalog") {
+				catalog, err := flagString(cmd, "catalog")
+				if err != nil {
+					return err
+				}
+				body.SetCatalog(catalog)
+			}
+			if changed(cmd, "http-scheme") {
+				httpScheme, err := flagString(cmd, "http-scheme")
+				if err != nil {
+					return err
+				}
+				body.SetHttpScheme(httpScheme)
+			}
+			if changed(cmd, "metadata-catalog-id") {
+				metadataCatalogId, err := flagString(cmd, "metadata-catalog-id")
+				if err != nil {
+					return err
+				}
+				body.SetMetadataCatalogId(metadataCatalogId)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "schema") {
+				schema, err := flagString(cmd, "schema")
+				if err != nil {
+					return err
+				}
+				body.SetSchema(schema)
+			}
+			if changed(cmd, "ssl-skip-verification") {
+				sslSkipVerification, err := flagBool(cmd, "ssl-skip-verification")
+				if err != nil {
+					return err
+				}
+				body.SetSslSkipVerification(sslSkipVerification)
+			}
+			req = req.PrestoCredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "user", "catalog", "schema", "http_scheme", "metadata_catalog_id", "ssl_skip_verification")
+		},
+	}
+	cmd.Flags().String("host", "", "Hostname of the Presto or Trino coordinator.")
+	_ = cmd.MarkFlagRequired("host")
+	cmd.Flags().Int32("port", 0, "Port the coordinator listens on.")
+	_ = cmd.MarkFlagRequired("port")
+	cmd.Flags().String("user", "", "User Monte Carlo signs in as.")
+	_ = cmd.MarkFlagRequired("user")
+	cmd.Flags().String("catalog", "", "Catalog Monte Carlo queries.")
+	cmd.Flags().String("http-scheme", "", "Whether to reach the coordinator over http or https.")
+	cmd.Flags().String("metadata-catalog-id", "", "Name of the catalog in the metadata store, when it differs from catalog. Requires catalog, which may then hold only lowercase letters, digits, _ and -.")
+	cmd.Flags().String("password", "", "Password of user. Leave it out for a cluster that takes none. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("schema", "", "Schema Monte Carlo queries by default.")
+	cmd.Flags().Bool("ssl-skip-verification", false, "Connect over TLS without checking the server's certificate.")
+	return cmd
+}
+
 func newCredentialsCreateRedshiftCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "redshift",
@@ -2644,6 +2867,88 @@ func newCredentialsCreateSnowflakeCmd() *cobra.Command {
 	cmd.Flags().String("private-key-passphrase", "", "Passphrase the private key is encrypted with. Omit it for an unencrypted key. Never returned. Visible in the process list; --private-key-passphrase-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("private-key-passphrase-prompt", false, "Read --private-key-passphrase from a hidden prompt instead of the command line.")
 	cmd.Flags().String("warehouse", "", "Snowflake virtual warehouse to run queries in. Omit it to use the user's default.")
+	return cmd
+}
+
+func newCredentialsCreateSparkCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "spark",
+		Short: "Create Spark credentials",
+		Long:  "Store a Spark Thrift server sign-in for connections to use.\n\nMonte Carlo keeps the password and returns everything else. Create the credentials first,\nthen create a connection that references them. Nothing is checked against the server here.\n\n`mode` decides what else to send: `host`, `port` and `db_name` for `binary`, or `url` and\n`password` for `http`. An account holds a limited number of credentials. Past that, the\ncreate is refused.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.CreateSparkCredentials(ctx)
+			modeValue, err := flagString(cmd, "mode")
+			if err != nil {
+				return err
+			}
+			mode, err := sdk.NewSparkModeFromValue(modeValue)
+			if err != nil {
+				return usageError("%w", err)
+			}
+			user, err := flagString(cmd, "user")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewSparkCredentialsIn(*mode, user)
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "url") {
+				url, err := flagString(cmd, "url")
+				if err != nil {
+					return err
+				}
+				body.SetUrl(url)
+			}
+			req = req.SparkCredentialsIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "mode", "host", "port", "db_name", "url", "user")
+		},
+	}
+	cmd.Flags().String("mode", "", "How Monte Carlo reaches the Spark Thrift server. binary takes host, port and db_name. http takes url and password.")
+	_ = cmd.RegisterFlagCompletionFunc("mode", enumCompletion(sdk.AllowedSparkModeEnumValues))
+	_ = cmd.MarkFlagRequired("mode")
+	cmd.Flags().String("user", "", "User Monte Carlo signs in as.")
+	_ = cmd.MarkFlagRequired("user")
+	cmd.Flags().String("db-name", "", "Database Monte Carlo connects to, such as default, for binary.")
+	cmd.Flags().String("host", "", "Host name of the Thrift server, for binary.")
+	cmd.Flags().String("password", "", "Password of user. http needs one. binary does not send it to the server, so it is optional there. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port of the Thrift server, such as 10000, for binary.")
+	cmd.Flags().String("url", "", "URL of the Thrift server's HTTP endpoint, for http, such as https://thrift.example.com:10001/cliservice. Its path is the HTTP path. For a Databricks cluster, use https://<workspace-host>:443/sql/protocolv1/o/<org-id>/<cluster-id>, not the jdbc: URL. It cannot hold a user, a password, a query or a fragment.")
 	return cmd
 }
 
@@ -3135,12 +3440,14 @@ func newCredentialsDeleteCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsDeleteGcpDataformCmd())
 	cmd.AddCommand(newCredentialsDeleteGcpSecretManagerCmd())
 	cmd.AddCommand(newCredentialsDeleteGlueCmd())
+	cmd.AddCommand(newCredentialsDeleteHiveCmd())
 	cmd.AddCommand(newCredentialsDeleteHiveMysqlCmd())
 	cmd.AddCommand(newCredentialsDeleteHiveS3Cmd())
 	cmd.AddCommand(newCredentialsDeleteInformaticaV2Cmd())
 	cmd.AddCommand(newCredentialsDeleteLookerCmd())
 	cmd.AddCommand(newCredentialsDeleteLookerGitCloneCmd())
 	cmd.AddCommand(newCredentialsDeleteMariadbCmd())
+	cmd.AddCommand(newCredentialsDeleteMicrosoftFabricCmd())
 	cmd.AddCommand(newCredentialsDeleteMotherduckCmd())
 	cmd.AddCommand(newCredentialsDeleteMulesoftCmd())
 	cmd.AddCommand(newCredentialsDeleteMysqlCmd())
@@ -3148,12 +3455,14 @@ func newCredentialsDeleteCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsDeletePineconeCmd())
 	cmd.AddCommand(newCredentialsDeletePostgresCmd())
 	cmd.AddCommand(newCredentialsDeletePowerBiCmd())
+	cmd.AddCommand(newCredentialsDeletePrestoCmd())
 	cmd.AddCommand(newCredentialsDeleteRedshiftCmd())
 	cmd.AddCommand(newCredentialsDeleteS3Cmd())
 	cmd.AddCommand(newCredentialsDeleteSalesforceCrmCmd())
 	cmd.AddCommand(newCredentialsDeleteSalesforceDataCloudCmd())
 	cmd.AddCommand(newCredentialsDeleteSapHanaCmd())
 	cmd.AddCommand(newCredentialsDeleteSnowflakeCmd())
+	cmd.AddCommand(newCredentialsDeleteSparkCmd())
 	cmd.AddCommand(newCredentialsDeleteSqlServerCmd())
 	cmd.AddCommand(newCredentialsDeleteStarburstEnterpriseCmd())
 	cmd.AddCommand(newCredentialsDeleteStarburstGalaxyCmd())
@@ -3642,6 +3951,30 @@ func newCredentialsDeleteGlueCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsDeleteHiveCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "hive <credentials_id>",
+		Short: "Delete Hive credentials",
+		Long:  "Delete Hive credentials.\n\nRefused while a connection still uses them. Delete the connection first.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete hive credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeleteHiveCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
 func newCredentialsDeleteHiveMysqlCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "hive-mysql <credentials_id>",
@@ -3777,6 +4110,30 @@ func newCredentialsDeleteMariadbCmd() *cobra.Command {
 				return err
 			}
 			req := api.CredentialsAPI.DeleteMariadbCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
+func newCredentialsDeleteMicrosoftFabricCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "microsoft-fabric <credentials_id>",
+		Short: "Delete Microsoft Fabric credentials",
+		Long:  "Delete Microsoft Fabric credentials.\n\nRefused while a connection still uses them. Delete the connection first. Monte Carlo stops\nusing the stored client secret. Revoke it in Entra ID if the secret itself must be retired.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete microsoft-fabric credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeleteMicrosoftFabricCredentials(ctx, args[0])
 			if resp, err := req.Execute(); err != nil {
 				return apiErr(resp, err)
 			}
@@ -3954,6 +4311,30 @@ func newCredentialsDeletePowerBiCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsDeletePrestoCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "presto <credentials_id>",
+		Short: "Delete Presto credentials",
+		Long:  "Delete Presto credentials.\n\nRefused while a connection still uses them. Delete the connection first. Monte Carlo stops\nusing the stored password. Change it on the cluster if the password itself must be retired.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete presto credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeletePrestoCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
 func newCredentialsDeleteRedshiftCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "redshift <credentials_id>",
@@ -4089,6 +4470,30 @@ func newCredentialsDeleteSnowflakeCmd() *cobra.Command {
 				return err
 			}
 			req := api.CredentialsAPI.DeleteSnowflakeCredentials(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
+func newCredentialsDeleteSparkCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "spark <credentials_id>",
+		Short: "Delete Spark credentials",
+		Long:  "Delete Spark credentials.\n\nRefused while a connection still uses them. Delete the connection first. Monte Carlo stops\nusing the stored password, if any. Change the password on the server if it must be retired.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete spark credential"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.DeleteSparkCredentials(ctx, args[0])
 			if resp, err := req.Execute(); err != nil {
 				return apiErr(resp, err)
 			}
@@ -4257,12 +4662,14 @@ func newCredentialsGetCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsGetGcpDataformCmd())
 	cmd.AddCommand(newCredentialsGetGcpSecretManagerCmd())
 	cmd.AddCommand(newCredentialsGetGlueCmd())
+	cmd.AddCommand(newCredentialsGetHiveCmd())
 	cmd.AddCommand(newCredentialsGetHiveMysqlCmd())
 	cmd.AddCommand(newCredentialsGetHiveS3Cmd())
 	cmd.AddCommand(newCredentialsGetInformaticaV2Cmd())
 	cmd.AddCommand(newCredentialsGetLookerCmd())
 	cmd.AddCommand(newCredentialsGetLookerGitCloneCmd())
 	cmd.AddCommand(newCredentialsGetMariadbCmd())
+	cmd.AddCommand(newCredentialsGetMicrosoftFabricCmd())
 	cmd.AddCommand(newCredentialsGetMotherduckCmd())
 	cmd.AddCommand(newCredentialsGetMulesoftCmd())
 	cmd.AddCommand(newCredentialsGetMysqlCmd())
@@ -4270,12 +4677,14 @@ func newCredentialsGetCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsGetPineconeCmd())
 	cmd.AddCommand(newCredentialsGetPostgresCmd())
 	cmd.AddCommand(newCredentialsGetPowerBiCmd())
+	cmd.AddCommand(newCredentialsGetPrestoCmd())
 	cmd.AddCommand(newCredentialsGetRedshiftCmd())
 	cmd.AddCommand(newCredentialsGetS3Cmd())
 	cmd.AddCommand(newCredentialsGetSalesforceCrmCmd())
 	cmd.AddCommand(newCredentialsGetSalesforceDataCloudCmd())
 	cmd.AddCommand(newCredentialsGetSapHanaCmd())
 	cmd.AddCommand(newCredentialsGetSnowflakeCmd())
+	cmd.AddCommand(newCredentialsGetSparkCmd())
 	cmd.AddCommand(newCredentialsGetSqlServerCmd())
 	cmd.AddCommand(newCredentialsGetStarburstEnterpriseCmd())
 	cmd.AddCommand(newCredentialsGetStarburstGalaxyCmd())
@@ -4724,6 +5133,28 @@ func newCredentialsGetGlueCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsGetHiveCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "hive <credentials_id>",
+		Short: "Get Hive credentials",
+		Long:  "Get one set of Hive credentials.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetHiveCredentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "user", "db_name", "auth_mode")
+		},
+	}
+	return cmd
+}
+
 func newCredentialsGetHiveMysqlCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "hive-mysql <credentials_id>",
@@ -4851,6 +5282,28 @@ func newCredentialsGetMariadbCmd() *cobra.Command {
 				return apiErr(resp, err)
 			}
 			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user")
+		},
+	}
+	return cmd
+}
+
+func newCredentialsGetMicrosoftFabricCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "microsoft-fabric <credentials_id>",
+		Short: "Get Microsoft Fabric credentials",
+		Long:  "Get one set of Microsoft Fabric credentials, without the client secret.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetMicrosoftFabricCredentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "tenant_id", "app_client_id")
 		},
 	}
 	return cmd
@@ -5010,6 +5463,28 @@ func newCredentialsGetPowerBiCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsGetPrestoCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "presto <credentials_id>",
+		Short: "Get Presto credentials",
+		Long:  "Get one set of Presto credentials, without the password.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetPrestoCredentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "user", "catalog", "schema", "http_scheme", "metadata_catalog_id", "ssl_skip_verification")
+		},
+	}
+	return cmd
+}
+
 func newCredentialsGetRedshiftCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "redshift <credentials_id>",
@@ -5137,6 +5612,28 @@ func newCredentialsGetSnowflakeCmd() *cobra.Command {
 				return apiErr(resp, err)
 			}
 			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "account", "user", "warehouse")
+		},
+	}
+	return cmd
+}
+
+func newCredentialsGetSparkCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "spark <credentials_id>",
+		Short: "Get Spark credentials",
+		Long:  "Get one set of Spark credentials, without the password.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.GetSparkCredentials(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "mode", "host", "port", "db_name", "url", "user")
 		},
 	}
 	return cmd
@@ -5332,12 +5829,14 @@ func newCredentialsUpdateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsUpdateGcpDataformCmd())
 	cmd.AddCommand(newCredentialsUpdateGcpSecretManagerCmd())
 	cmd.AddCommand(newCredentialsUpdateGlueCmd())
+	cmd.AddCommand(newCredentialsUpdateHiveCmd())
 	cmd.AddCommand(newCredentialsUpdateHiveMysqlCmd())
 	cmd.AddCommand(newCredentialsUpdateHiveS3Cmd())
 	cmd.AddCommand(newCredentialsUpdateInformaticaV2Cmd())
 	cmd.AddCommand(newCredentialsUpdateLookerCmd())
 	cmd.AddCommand(newCredentialsUpdateLookerGitCloneCmd())
 	cmd.AddCommand(newCredentialsUpdateMariadbCmd())
+	cmd.AddCommand(newCredentialsUpdateMicrosoftFabricCmd())
 	cmd.AddCommand(newCredentialsUpdateMotherduckCmd())
 	cmd.AddCommand(newCredentialsUpdateMulesoftCmd())
 	cmd.AddCommand(newCredentialsUpdateMysqlCmd())
@@ -5345,12 +5844,14 @@ func newCredentialsUpdateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsUpdatePineconeCmd())
 	cmd.AddCommand(newCredentialsUpdatePostgresCmd())
 	cmd.AddCommand(newCredentialsUpdatePowerBiCmd())
+	cmd.AddCommand(newCredentialsUpdatePrestoCmd())
 	cmd.AddCommand(newCredentialsUpdateRedshiftCmd())
 	cmd.AddCommand(newCredentialsUpdateS3Cmd())
 	cmd.AddCommand(newCredentialsUpdateSalesforceCrmCmd())
 	cmd.AddCommand(newCredentialsUpdateSalesforceDataCloudCmd())
 	cmd.AddCommand(newCredentialsUpdateSapHanaCmd())
 	cmd.AddCommand(newCredentialsUpdateSnowflakeCmd())
+	cmd.AddCommand(newCredentialsUpdateSparkCmd())
 	cmd.AddCommand(newCredentialsUpdateSqlServerCmd())
 	cmd.AddCommand(newCredentialsUpdateStarburstEnterpriseCmd())
 	cmd.AddCommand(newCredentialsUpdateStarburstGalaxyCmd())
@@ -6591,6 +7092,75 @@ func newCredentialsUpdateGlueCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsUpdateHiveCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "hive <credentials_id>",
+		Short: "Update Hive credentials",
+		Long:  "Change Hive credentials in place.\n\nEvery connection using the credentials picks up the change. Sending an empty body returns\nthe credentials as they are.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdateHiveCredentials(ctx, args[0])
+			body := sdk.NewHiveCredentialsPatch()
+			if changed(cmd, "auth-mode") {
+				authModeValue, err := flagString(cmd, "auth-mode")
+				if err != nil {
+					return err
+				}
+				authMode, err := sdk.NewHiveAuthModeFromValue(authModeValue)
+				if err != nil {
+					return usageError("%w", err)
+				}
+				body.SetAuthMode(*authMode)
+			}
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "user") {
+				user, err := flagString(cmd, "user")
+				if err != nil {
+					return err
+				}
+				body.SetUser(user)
+			}
+			req = req.HiveCredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "user", "db_name", "auth_mode")
+		},
+	}
+	cmd.Flags().String("auth-mode", "", "How Monte Carlo signs in. Omit it for SASL.")
+	_ = cmd.RegisterFlagCompletionFunc("auth-mode", enumCompletion(sdk.AllowedHiveAuthModeEnumValues))
+	cmd.Flags().String("db-name", "", "Database Monte Carlo connects to.")
+	cmd.Flags().String("host", "", "Hostname of the HiveServer2.")
+	cmd.Flags().Int32("port", 0, "Port the HiveServer2 listens on in binary mode.")
+	cmd.Flags().String("user", "", "User Monte Carlo signs in as. Hive takes no password.")
+	return cmd
+}
+
 func newCredentialsUpdateHiveMysqlCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "hive-mysql <credentials_id>",
@@ -7038,6 +7608,79 @@ func newCredentialsUpdateMariadbCmd() *cobra.Command {
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
 	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
+	return cmd
+}
+
+func newCredentialsUpdateMicrosoftFabricCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "microsoft-fabric <credentials_id>",
+		Short: "Update Microsoft Fabric credentials",
+		Long:  "Change Microsoft Fabric credentials in place.\n\nEvery connection using the credentials picks up the change. Send only the fields to change: a\nfield left out is unchanged, and `app_client_secret` set to null is unchanged. A new `host`\nneeds `app_client_secret` sent with it. Sending an empty body returns the credentials as they\nare. The rules for `host`, `port` and `db_name` apply to the credentials after the change.\nCredentials stored without a valid `db_name` need one sent with any change, a new secret too.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdateMicrosoftFabricCredentials(ctx, args[0])
+			body := sdk.NewMicrosoftFabricCredentialsPatch()
+			if changed(cmd, "app-client-id") {
+				appClientId, err := flagString(cmd, "app-client-id")
+				if err != nil {
+					return err
+				}
+				body.SetAppClientId(appClientId)
+			}
+			if changed(cmd, "app-client-secret", "app-client-secret-prompt") {
+				appClientSecret, err := flagSecret(cmd, "app-client-secret")
+				if err != nil {
+					return err
+				}
+				body.SetAppClientSecret(appClientSecret)
+			}
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "tenant-id") {
+				tenantId, err := flagString(cmd, "tenant-id")
+				if err != nil {
+					return err
+				}
+				body.SetTenantId(tenantId)
+			}
+			req = req.MicrosoftFabricCredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "tenant_id", "app_client_id")
+		},
+	}
+	cmd.Flags().String("app-client-id", "", "Client ID of the Entra ID app registration Monte Carlo signs in with.")
+	cmd.Flags().String("app-client-secret", "", "Secret of the app registration. Stored by Monte Carlo and never returned. Visible in the process list; --app-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("app-client-secret-prompt", false, "Read --app-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("db-name", "", "Warehouse or lakehouse to connect to. It goes unquoted into the connection string Monte Carlo builds, so it cannot contain whitespace or any of ;, {, } and =.")
+	cmd.Flags().String("host", "", "Hostname of the Fabric warehouse or lakehouse SQL analytics endpoint, as Fabric shows it under SQL connection string, such as abc123.datawarehouse.fabric.microsoft.com. It goes unquoted into the connection string Monte Carlo builds, so it cannot contain whitespace or any of ;, {, } and =. Changing it requires sending the credentials' secrets again.")
+	cmd.Flags().Int32("port", 0, "Port of the SQL endpoint. Fabric serves it on 1433.")
+	cmd.Flags().String("tenant-id", "", "Microsoft Entra ID tenant the Fabric workspace belongs to.")
 	return cmd
 }
 
@@ -7595,6 +8238,103 @@ func newCredentialsUpdatePowerBiCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsUpdatePrestoCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "presto <credentials_id>",
+		Short: "Update Presto credentials",
+		Long:  "Change Presto credentials in place.\n\nEvery connection using the credentials picks up the change. Send only the fields to\nchange: a field left out is unchanged, and `password` set to null is unchanged. Sending an\nempty body returns the credentials as they are.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdatePrestoCredentials(ctx, args[0])
+			body := sdk.NewPrestoCredentialsPatch()
+			if changed(cmd, "catalog") {
+				catalog, err := flagString(cmd, "catalog")
+				if err != nil {
+					return err
+				}
+				body.SetCatalog(catalog)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "http-scheme") {
+				httpScheme, err := flagString(cmd, "http-scheme")
+				if err != nil {
+					return err
+				}
+				body.SetHttpScheme(httpScheme)
+			}
+			if changed(cmd, "metadata-catalog-id") {
+				metadataCatalogId, err := flagString(cmd, "metadata-catalog-id")
+				if err != nil {
+					return err
+				}
+				body.SetMetadataCatalogId(metadataCatalogId)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "schema") {
+				schema, err := flagString(cmd, "schema")
+				if err != nil {
+					return err
+				}
+				body.SetSchema(schema)
+			}
+			if changed(cmd, "ssl-skip-verification") {
+				sslSkipVerification, err := flagBool(cmd, "ssl-skip-verification")
+				if err != nil {
+					return err
+				}
+				body.SetSslSkipVerification(sslSkipVerification)
+			}
+			if changed(cmd, "user") {
+				user, err := flagString(cmd, "user")
+				if err != nil {
+					return err
+				}
+				body.SetUser(user)
+			}
+			req = req.PrestoCredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "user", "catalog", "schema", "http_scheme", "metadata_catalog_id", "ssl_skip_verification")
+		},
+	}
+	cmd.Flags().String("catalog", "", "Catalog Monte Carlo queries.")
+	cmd.Flags().String("host", "", "Hostname of the Presto or Trino coordinator. Changing it requires sending password again when one is stored.")
+	cmd.Flags().String("http-scheme", "", "Whether to reach the coordinator over http or https. Changing it requires sending password again when one is stored.")
+	cmd.Flags().String("metadata-catalog-id", "", "Name of the catalog in the metadata store, when it differs from catalog. Requires catalog, which may then hold only lowercase letters, digits, _ and -.")
+	cmd.Flags().String("password", "", "New password of user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port the coordinator listens on.")
+	cmd.Flags().String("schema", "", "Schema Monte Carlo queries by default.")
+	cmd.Flags().Bool("ssl-skip-verification", false, "Connect over TLS without checking the server's certificate. Changing it requires sending password again when one is stored.")
+	cmd.Flags().String("user", "", "User Monte Carlo signs in as.")
+	return cmd
+}
+
 func newCredentialsUpdateRedshiftCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "redshift <credentials_id>",
@@ -8067,6 +8807,92 @@ func newCredentialsUpdateSnowflakeCmd() *cobra.Command {
 	cmd.Flags().Bool("private-key-passphrase-prompt", false, "Read --private-key-passphrase from a hidden prompt instead of the command line.")
 	cmd.Flags().String("user", "", "New Snowflake user.")
 	cmd.Flags().String("warehouse", "", "New Snowflake virtual warehouse. An explicit null clears it; queries then run in the user's default.")
+	return cmd
+}
+
+func newCredentialsUpdateSparkCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "spark <credentials_id>",
+		Short: "Update Spark credentials",
+		Long:  "Change Spark credentials in place.\n\nEvery connection using the credentials picks up the change. Send only the fields to change.\nA new `mode` drops the fields of the old one, so send all of the new mode's fields with it.\nA switch to `binary` also drops the password unless the change sends one. A new `host` or\n`url` needs `password` sent again when the credentials hold one. Sending an empty body\nreturns the credentials as they are.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.UpdateSparkCredentials(ctx, args[0])
+			body := sdk.NewSparkCredentialsPatch()
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "mode") {
+				modeValue, err := flagString(cmd, "mode")
+				if err != nil {
+					return err
+				}
+				mode, err := sdk.NewSparkModeFromValue(modeValue)
+				if err != nil {
+					return usageError("%w", err)
+				}
+				body.SetMode(*mode)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "url") {
+				url, err := flagString(cmd, "url")
+				if err != nil {
+					return err
+				}
+				body.SetUrl(url)
+			}
+			if changed(cmd, "user") {
+				user, err := flagString(cmd, "user")
+				if err != nil {
+					return err
+				}
+				body.SetUser(user)
+			}
+			req = req.SparkCredentialsPatch(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "mode", "host", "port", "db_name", "url", "user")
+		},
+	}
+	cmd.Flags().String("db-name", "", "Database Monte Carlo connects to, such as default, for binary.")
+	cmd.Flags().String("host", "", "Host name of the Thrift server, for binary. Changing it requires sending password again when the credentials hold one.")
+	cmd.Flags().String("mode", "", "How Monte Carlo reaches the Spark Thrift server. binary takes host, port and db_name. http takes url and password.")
+	_ = cmd.RegisterFlagCompletionFunc("mode", enumCompletion(sdk.AllowedSparkModeEnumValues))
+	cmd.Flags().String("password", "", "New password of user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port of the Thrift server, such as 10000, for binary.")
+	cmd.Flags().String("url", "", "URL of the Thrift server's HTTP endpoint, for http, such as https://thrift.example.com:10001/cliservice. Its path is the HTTP path. For a Databricks cluster, use https://<workspace-host>:443/sql/protocolv1/o/<org-id>/<cluster-id>, not the jdbc: URL. It cannot hold a user, a password, a query or a fragment. Changing it requires sending password again when the credentials hold one.")
+	cmd.Flags().String("user", "", "User Monte Carlo signs in as.")
 	return cmd
 }
 
@@ -8592,6 +9418,8 @@ func newCredentialsValidateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsValidateLookerGitCloneChangeCmd())
 	cmd.AddCommand(newCredentialsValidateMariadbCmd())
 	cmd.AddCommand(newCredentialsValidateMariadbChangeCmd())
+	cmd.AddCommand(newCredentialsValidateMicrosoftFabricCmd())
+	cmd.AddCommand(newCredentialsValidateMicrosoftFabricChangeCmd())
 	cmd.AddCommand(newCredentialsValidateMotherduckCmd())
 	cmd.AddCommand(newCredentialsValidateMotherduckChangeCmd())
 	cmd.AddCommand(newCredentialsValidateMulesoftCmd())
@@ -8616,6 +9444,8 @@ func newCredentialsValidateCmd() *cobra.Command {
 	cmd.AddCommand(newCredentialsValidateSapHanaChangeCmd())
 	cmd.AddCommand(newCredentialsValidateSnowflakeCmd())
 	cmd.AddCommand(newCredentialsValidateSnowflakeChangeCmd())
+	cmd.AddCommand(newCredentialsValidateSparkCmd())
+	cmd.AddCommand(newCredentialsValidateSparkChangeCmd())
 	cmd.AddCommand(newCredentialsValidateSqlServerCmd())
 	cmd.AddCommand(newCredentialsValidateSqlServerChangeCmd())
 	cmd.AddCommand(newCredentialsValidateStarburstEnterpriseCmd())
@@ -13331,6 +14161,216 @@ func newCredentialsValidateMariadbChangeCmd() *cobra.Command {
 	return cmd
 }
 
+func newCredentialsValidateMicrosoftFabricCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "microsoft-fabric",
+		Short: "Validate Microsoft Fabric credentials",
+		Long:  "Check a candidate Microsoft Fabric service principal against Fabric.\n\nNo credentials are created. Send the values you would create the credentials with, and a\ndeployment to run them from, and the checks run against your Fabric SQL endpoint.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireAny(cmd, "app-client-secret", "app-client-secret-prompt"); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateMicrosoftFabricCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			host, err := flagString(cmd, "host")
+			if err != nil {
+				return err
+			}
+			port, err := flagInt(cmd, "port")
+			if err != nil {
+				return err
+			}
+			dbName, err := flagString(cmd, "db-name")
+			if err != nil {
+				return err
+			}
+			tenantId, err := flagString(cmd, "tenant-id")
+			if err != nil {
+				return err
+			}
+			appClientId, err := flagString(cmd, "app-client-id")
+			if err != nil {
+				return err
+			}
+			appClientSecret, err := flagSecret(cmd, "app-client-secret")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewMicrosoftFabricCredentialsValidateIn(deploymentId, host, port, dbName, tenantId, appClientId, appClientSecret)
+			req = req.MicrosoftFabricCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("host", "", "Hostname of the Fabric warehouse or lakehouse SQL analytics endpoint, as Fabric shows it under SQL connection string, such as abc123.datawarehouse.fabric.microsoft.com. It goes unquoted into the connection string Monte Carlo builds, so it cannot contain whitespace or any of ;, {, } and =.")
+	_ = cmd.MarkFlagRequired("host")
+	cmd.Flags().Int32("port", 0, "Port of the SQL endpoint. Fabric serves it on 1433.")
+	_ = cmd.MarkFlagRequired("port")
+	cmd.Flags().String("db-name", "", "Warehouse or lakehouse to connect to. It goes unquoted into the connection string Monte Carlo builds, so it cannot contain whitespace or any of ;, {, } and =.")
+	_ = cmd.MarkFlagRequired("db-name")
+	cmd.Flags().String("tenant-id", "", "Microsoft Entra ID tenant the Fabric workspace belongs to.")
+	_ = cmd.MarkFlagRequired("tenant-id")
+	cmd.Flags().String("app-client-id", "", "Client ID of the Entra ID app registration Monte Carlo signs in with.")
+	_ = cmd.MarkFlagRequired("app-client-id")
+	cmd.Flags().String("app-client-secret", "", "Secret of the app registration. Used for this check and not kept. Visible in the process list; --app-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("app-client-secret-prompt", false, "Read --app-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateMicrosoftFabricChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "microsoft-fabric-change <credentials_id>",
+		Short: "Validate a change to Microsoft Fabric credentials",
+		Long:  "Check a change to Microsoft Fabric credentials before making it.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateMicrosoftFabricCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewMicrosoftFabricCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "app-client-id") {
+				appClientId, err := flagString(cmd, "app-client-id")
+				if err != nil {
+					return err
+				}
+				body.SetAppClientId(appClientId)
+			}
+			if changed(cmd, "app-client-secret", "app-client-secret-prompt") {
+				appClientSecret, err := flagSecret(cmd, "app-client-secret")
+				if err != nil {
+					return err
+				}
+				body.SetAppClientSecret(appClientSecret)
+			}
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "tenant-id") {
+				tenantId, err := flagString(cmd, "tenant-id")
+				if err != nil {
+					return err
+				}
+				body.SetTenantId(tenantId)
+			}
+			req = req.MicrosoftFabricCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("app-client-id", "", "Client ID of the Entra ID app registration Monte Carlo signs in with.")
+	cmd.Flags().String("app-client-secret", "", "Secret of the app registration. Stored by Monte Carlo and never returned. Visible in the process list; --app-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("app-client-secret-prompt", false, "Read --app-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("db-name", "", "Warehouse or lakehouse to connect to. It goes unquoted into the connection string Monte Carlo builds, so it cannot contain whitespace or any of ;, {, } and =.")
+	cmd.Flags().String("host", "", "Hostname of the Fabric warehouse or lakehouse SQL analytics endpoint, as Fabric shows it under SQL connection string, such as abc123.datawarehouse.fabric.microsoft.com. It goes unquoted into the connection string Monte Carlo builds, so it cannot contain whitespace or any of ;, {, } and =. Changing it requires sending the credentials' secrets again.")
+	cmd.Flags().Int32("port", 0, "Port of the SQL endpoint. Fabric serves it on 1433.")
+	cmd.Flags().String("tenant-id", "", "Microsoft Entra ID tenant the Fabric workspace belongs to.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
 func newCredentialsValidateMotherduckCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "motherduck",
@@ -16097,6 +17137,248 @@ func newCredentialsValidateSnowflakeChangeCmd() *cobra.Command {
 	cmd.Flags().Bool("private-key-passphrase-prompt", false, "Read --private-key-passphrase from a hidden prompt instead of the command line.")
 	cmd.Flags().String("user", "", "New Snowflake user.")
 	cmd.Flags().String("warehouse", "", "New Snowflake virtual warehouse. An explicit null clears it; queries then run in the user's default.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateSparkCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "spark",
+		Short: "Validate Spark credentials",
+		Long:  "Check candidate Spark credentials against the Thrift server.\n\nNo credentials are created. Send the values you would create the credentials with, and a\ndeployment to run them from, and the checks run against your Thrift server.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateSparkCredentials(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			modeValue, err := flagString(cmd, "mode")
+			if err != nil {
+				return err
+			}
+			mode, err := sdk.NewSparkModeFromValue(modeValue)
+			if err != nil {
+				return usageError("%w", err)
+			}
+			user, err := flagString(cmd, "user")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewSparkCredentialsValidateIn(deploymentId, *mode, user)
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "url") {
+				url, err := flagString(cmd, "url")
+				if err != nil {
+					return err
+				}
+				body.SetUrl(url)
+			}
+			req = req.SparkCredentialsValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("mode", "", "How Monte Carlo reaches the Spark Thrift server. binary takes host, port and db_name. http takes url and password.")
+	_ = cmd.RegisterFlagCompletionFunc("mode", enumCompletion(sdk.AllowedSparkModeEnumValues))
+	_ = cmd.MarkFlagRequired("mode")
+	cmd.Flags().String("user", "", "User Monte Carlo signs in as.")
+	_ = cmd.MarkFlagRequired("user")
+	cmd.Flags().String("db-name", "", "Database Monte Carlo connects to, such as default, for binary.")
+	cmd.Flags().String("host", "", "Host name of the Thrift server, for binary.")
+	cmd.Flags().String("password", "", "Password of user. http needs one, and binary ignores it. Used for this check and not kept. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port of the Thrift server, such as 10000, for binary.")
+	cmd.Flags().String("url", "", "URL of the Thrift server's HTTP endpoint, for http, such as https://thrift.example.com:10001/cliservice. Its path is the HTTP path. For a Databricks cluster, use https://<workspace-host>:443/sql/protocolv1/o/<org-id>/<cluster-id>, not the jdbc: URL. It cannot hold a user, a password, a query or a fragment.")
+	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
+	return cmd
+}
+
+func newCredentialsValidateSparkChangeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "spark-change <credentials_id>",
+		Short: "Validate a change to Spark credentials",
+		Long:  "Check a change to Spark credentials before making it.\n\nSend the fields you would update the credentials with, and a deployment to run them from.\nThe change is applied to a copy of the stored credentials, and the checks run against\nthat copy. The credentials and the connections using them are left as they are.\n\nAn id that does not exist, belongs to another account, or names credentials of another\nkind returns 404.\n\nThe response is the run as it starts, and `Location` names where to read it. Poll that\nuntil the run's status is `completed`; each validation carries its own verdict.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CredentialsAPI.ValidateSparkCredentialsChange(ctx, args[0])
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewSparkCredentialsChangeValidateIn(deploymentId)
+			if changed(cmd, "db-name") {
+				dbName, err := flagString(cmd, "db-name")
+				if err != nil {
+					return err
+				}
+				body.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				host, err := flagString(cmd, "host")
+				if err != nil {
+					return err
+				}
+				body.SetHost(host)
+			}
+			if changed(cmd, "mode") {
+				modeValue, err := flagString(cmd, "mode")
+				if err != nil {
+					return err
+				}
+				mode, err := sdk.NewSparkModeFromValue(modeValue)
+				if err != nil {
+					return usageError("%w", err)
+				}
+				body.SetMode(*mode)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				password, err := flagSecret(cmd, "password")
+				if err != nil {
+					return err
+				}
+				body.SetPassword(password)
+			}
+			if changed(cmd, "port") {
+				port, err := flagInt(cmd, "port")
+				if err != nil {
+					return err
+				}
+				body.SetPort(port)
+			}
+			if changed(cmd, "url") {
+				url, err := flagString(cmd, "url")
+				if err != nil {
+					return err
+				}
+				body.SetUrl(url)
+			}
+			if changed(cmd, "user") {
+				user, err := flagString(cmd, "user")
+				if err != nil {
+					return err
+				}
+				body.SetUser(user)
+			}
+			req = req.SparkCredentialsChangeValidateIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				passed, err := followValidationRun(cmd, out, func(since *int64, etag string) (any, *http.Response, error) {
+					req := api.ValidationsAPI.GetValidationRun(ctx, out.GetId())
+					if since != nil {
+						req = req.Since(int32(*since))
+					}
+					if etag != "" {
+						req = req.IfNoneMatch(etag)
+					}
+					run, resp, err := req.Execute()
+					if err == nil {
+						out = run
+					}
+					return run, resp, err
+				}, "")
+				if err != nil {
+					return err
+				}
+				if err := renderIfJSON(cmd, out); err != nil {
+					return err
+				}
+				if !passed {
+					return validationsFailed("not every validation passed")
+				}
+				return nil
+			}
+			return render(cmd, out, "id", "status", "revision", "target_type", "target_id", "validations_passed", "validations_total", "started_at", "finished_at", "expires_at", "validations")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "Deployment that runs the validations. It has to be one GET /deployments lists, and it has to be able to reach the system the credentials are for.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("db-name", "", "Database Monte Carlo connects to, such as default, for binary.")
+	cmd.Flags().String("host", "", "Host name of the Thrift server, for binary. Changing it requires sending password again when the credentials hold one.")
+	cmd.Flags().String("mode", "", "How Monte Carlo reaches the Spark Thrift server. binary takes host, port and db_name. http takes url and password.")
+	_ = cmd.RegisterFlagCompletionFunc("mode", enumCompletion(sdk.AllowedSparkModeEnumValues))
+	cmd.Flags().String("password", "", "New password of user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port of the Thrift server, such as 10000, for binary.")
+	cmd.Flags().String("url", "", "URL of the Thrift server's HTTP endpoint, for http, such as https://thrift.example.com:10001/cliservice. Its path is the HTTP path. For a Databricks cluster, use https://<workspace-host>:443/sql/protocolv1/o/<org-id>/<cluster-id>, not the jdbc: URL. It cannot hold a user, a password, a query or a fragment. Changing it requires sending password again when the credentials hold one.")
+	cmd.Flags().String("user", "", "User Monte Carlo signs in as.")
 	cmd.Flags().Bool("no-wait", false, "Print the run as it starts, without waiting for it to finish.")
 	return cmd
 }
