@@ -350,6 +350,9 @@ func newConnectionsAddCmd() *cobra.Command {
 	cmd.AddCommand(newConnectionsAddHiveMysqlCmd())
 	cmd.AddCommand(newConnectionsAddDremioCmd())
 	cmd.AddCommand(newConnectionsAddMotherduckCmd())
+	cmd.AddCommand(newConnectionsAddMicrosoftFabricCmd())
+	cmd.AddCommand(newConnectionsAddPrestoCmd())
+	cmd.AddCommand(newConnectionsAddHiveCmd())
 	cmd.AddCommand(newConnectionsAddSqlServerCmd())
 	cmd.AddCommand(newConnectionsAddSalesforceCrmCmd())
 	cmd.AddCommand(newConnectionsAddSalesforceDataCloudCmd())
@@ -369,6 +372,7 @@ func newConnectionsAddCmd() *cobra.Command {
 	cmd.AddCommand(newConnectionsAddAthenaCmd())
 	cmd.AddCommand(newConnectionsAddS3Cmd())
 	cmd.AddCommand(newConnectionsAddHiveS3Cmd())
+	cmd.AddCommand(newConnectionsAddSparkCmd())
 	return cmd
 }
 
@@ -883,6 +887,83 @@ func newConnectionsAddMotherduckCmd() *cobra.Command {
 	return cmd
 }
 
+func newConnectionsAddMicrosoftFabricCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "microsoft-fabric",
+		Short: "Add a connection of type microsoft-fabric, creating its warehouse and credentials",
+		Long:  "Adds a connection of type microsoft-fabric in one step, as the add command does. Pass microsoft-fabric credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsAdd(cmd, "microsoft-fabric", &connectionsAddNative{
+				group:          flagGroup{"microsoft-fabric", []string{"host", "port", "db-name", "tenant-id", "app-client-id", "app-client-secret", "app-client-secret-prompt"}},
+				selfHostedOnly: []string{"bq-project-id", "sql-warehouse-id"},
+				build:          buildConnectionsAddMicrosoftFabric,
+			})
+		},
+	}
+	cmd.Flags().String("host", "", "Hostname of the Fabric warehouse or lakehouse SQL analytics endpoint, as Fabric shows it under SQL connection string, such as abc123.datawarehouse.fabric.microsoft.com. It goes unquoted into the connection string Monte Carlo builds, so it cannot contain whitespace or any of ;, {, } and =.")
+	cmd.Flags().Int32("port", 0, "Port of the SQL endpoint. Fabric serves it on 1433.")
+	cmd.Flags().String("db-name", "", "Warehouse or lakehouse to connect to. It goes unquoted into the connection string Monte Carlo builds, so it cannot contain whitespace or any of ;, {, } and =.")
+	cmd.Flags().String("tenant-id", "", "Microsoft Entra ID tenant the Fabric workspace belongs to.")
+	cmd.Flags().String("app-client-id", "", "Client ID of the Entra ID app registration Monte Carlo signs in with.")
+	cmd.Flags().String("app-client-secret", "", "Secret of the app registration. Stored by Monte Carlo and never returned. Visible in the process list; --app-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("app-client-secret-prompt", false, "Read --app-client-secret from a hidden prompt instead of the command line.")
+	registerConnectionsAddFlags(cmd)
+	return cmd
+}
+
+func newConnectionsAddPrestoCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "presto",
+		Short: "Add a connection of type presto, creating its warehouse and credentials",
+		Long:  "Adds a connection of type presto in one step, as the add command does. Pass presto credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsAdd(cmd, "presto", &connectionsAddNative{
+				group:          flagGroup{"presto", []string{"host", "port", "user", "catalog", "http-scheme", "metadata-catalog-id", "password", "password-prompt", "schema", "ssl-skip-verification"}},
+				selfHostedOnly: []string{"bq-project-id", "sql-warehouse-id"},
+				build:          buildConnectionsAddPresto,
+			})
+		},
+	}
+	cmd.Flags().String("host", "", "Hostname of the Presto or Trino coordinator.")
+	cmd.Flags().Int32("port", 0, "Port the coordinator listens on.")
+	cmd.Flags().String("user", "", "User Monte Carlo signs in as.")
+	cmd.Flags().String("catalog", "", "Catalog Monte Carlo queries.")
+	cmd.Flags().String("http-scheme", "", "Whether to reach the coordinator over http or https.")
+	cmd.Flags().String("metadata-catalog-id", "", "Name of the catalog in the metadata store, when it differs from catalog. Requires catalog, which may then hold only lowercase letters, digits, _ and -.")
+	cmd.Flags().String("password", "", "Password of user. Leave it out for a cluster that takes none. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().String("schema", "", "Schema Monte Carlo queries by default.")
+	cmd.Flags().Bool("ssl-skip-verification", false, "Connect over TLS without checking the server's certificate.")
+	registerConnectionsAddFlags(cmd)
+	return cmd
+}
+
+func newConnectionsAddHiveCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "hive",
+		Short: "Add a connection of type hive, creating its warehouse and credentials",
+		Long:  "Adds a connection of type hive in one step, as the add command does. Pass hive credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsAdd(cmd, "hive", &connectionsAddNative{
+				group:          flagGroup{"hive", []string{"host", "user", "auth-mode", "db-name", "port"}},
+				selfHostedOnly: []string{"bq-project-id", "sql-warehouse-id"},
+				build:          buildConnectionsAddHive,
+			})
+		},
+	}
+	cmd.Flags().String("host", "", "Hostname of the HiveServer2.")
+	cmd.Flags().String("user", "", "User Monte Carlo signs in as. Hive takes no password.")
+	cmd.Flags().String("auth-mode", "", "How Monte Carlo signs in. Omit it for SASL.")
+	_ = cmd.RegisterFlagCompletionFunc("auth-mode", enumCompletion(sdk.AllowedHiveAuthModeEnumValues))
+	cmd.Flags().String("db-name", "", "Database Monte Carlo connects to.")
+	cmd.Flags().Int32("port", 0, "Port the HiveServer2 listens on in binary mode.")
+	registerConnectionsAddFlags(cmd)
+	return cmd
+}
+
 func newConnectionsAddSqlServerCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sql-server",
@@ -1366,6 +1447,33 @@ func newConnectionsAddHiveS3Cmd() *cobra.Command {
 	cmd.Flags().String("bucket", "", "S3 bucket Monte Carlo reads from.")
 	cmd.Flags().String("prefix", "", "Key prefix of the EMR log root, such as emr/prod. Leave out the bucket, a leading / and any s3:// scheme. Send an empty string when the cluster's EMR log URI is the bucket root. Monte Carlo reads each cluster's Hive logs under <prefix>/<cluster-id>/node/<instance-id>/applications/hive/.")
 	cmd.Flags().String("external-id", "", "External id your role's trust policy requires, if it requires one. It is not the deployment's aws_external_id.")
+	registerConnectionsAddFlags(cmd)
+	return cmd
+}
+
+func newConnectionsAddSparkCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "spark",
+		Short: "Add a connection of type spark, creating its warehouse and credentials",
+		Long:  "Adds a connection of type spark in one step, as the add command does. Pass spark credentials with the flags below, or self-hosted credentials with one set of --self-hosted-* flags.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsAdd(cmd, "spark", &connectionsAddNative{
+				group:          flagGroup{"spark", []string{"mode", "user", "db-name", "host", "password", "password-prompt", "port", "url"}},
+				selfHostedOnly: []string{"bq-project-id", "sql-warehouse-id"},
+				build:          buildConnectionsAddSpark,
+			})
+		},
+	}
+	cmd.Flags().String("mode", "", "How Monte Carlo reaches the Spark Thrift server. binary takes host, port and db_name. http takes url and password.")
+	_ = cmd.RegisterFlagCompletionFunc("mode", enumCompletion(sdk.AllowedSparkModeEnumValues))
+	cmd.Flags().String("user", "", "User Monte Carlo signs in as.")
+	cmd.Flags().String("db-name", "", "Database Monte Carlo connects to, such as default, for binary.")
+	cmd.Flags().String("host", "", "Host name of the Thrift server, for binary.")
+	cmd.Flags().String("password", "", "Password of user. http needs one. binary does not send it to the server, so it is optional there. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port of the Thrift server, such as 10000, for binary.")
+	cmd.Flags().String("url", "", "URL of the Thrift server's HTTP endpoint, for http, such as https://thrift.example.com:10001/cliservice. Its path is the HTTP path. For a Databricks cluster, use https://<workspace-host>:443/sql/protocolv1/o/<org-id>/<cluster-id>, not the jdbc: URL. It cannot hold a user, a password, a query or a fragment.")
 	registerConnectionsAddFlags(cmd)
 	return cmd
 }
@@ -3066,6 +3174,238 @@ func buildConnectionsAddMotherduck(cmd *cobra.Command, api *sdk.APIClient, conne
 	}, nil
 }
 
+func buildConnectionsAddMicrosoftFabric(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
+	var err error
+	if err := requireAny(cmd, "host"); err != nil {
+		return nil, err
+	}
+	host, err := flagString(cmd, "host")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "port"); err != nil {
+		return nil, err
+	}
+	port, err := flagInt(cmd, "port")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "db-name"); err != nil {
+		return nil, err
+	}
+	dbName, err := flagString(cmd, "db-name")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "tenant-id"); err != nil {
+		return nil, err
+	}
+	tenantId, err := flagString(cmd, "tenant-id")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "app-client-id"); err != nil {
+		return nil, err
+	}
+	appClientId, err := flagString(cmd, "app-client-id")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "app-client-secret", "app-client-secret-prompt"); err != nil {
+		return nil, err
+	}
+	appClientSecret, err := flagSecret(cmd, "app-client-secret")
+	if err != nil {
+		return nil, err
+	}
+	body := sdk.NewMicrosoftFabricCredentialsIn(host, port, dbName, tenantId, appClientId, appClientSecret)
+	return &connectionsAddCredentials{
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			candidate := sdk.NewMicrosoftFabricCredentialsValidateIn(deploymentId, host, port, dbName, tenantId, appClientId, appClientSecret)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateMicrosoftFabricCredentials(ctx).MicrosoftFabricCredentialsValidateIn(*candidate).Execute)
+		},
+		create: func(ctx context.Context) (string, *http.Response, error) {
+			out, resp, err := retryOnTransient(cmd, api.CredentialsAPI.CreateMicrosoftFabricCredentials(ctx).MicrosoftFabricCredentialsIn(*body).Execute)
+			if err != nil {
+				return "", resp, err
+			}
+			return out.GetId(), resp, nil
+		},
+		del: func(ctx context.Context, id string) (*http.Response, error) {
+			return api.CredentialsAPI.DeleteMicrosoftFabricCredentials(ctx, id).Execute()
+		},
+		deleteCmd: "credentials delete microsoft-fabric",
+		listCmd:   "credentials list",
+	}, nil
+}
+
+func buildConnectionsAddPresto(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
+	var err error
+	if err := requireAny(cmd, "host"); err != nil {
+		return nil, err
+	}
+	host, err := flagString(cmd, "host")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "port"); err != nil {
+		return nil, err
+	}
+	port, err := flagInt(cmd, "port")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "user"); err != nil {
+		return nil, err
+	}
+	user, err := flagString(cmd, "user")
+	if err != nil {
+		return nil, err
+	}
+	var catalog string
+	if changed(cmd, "catalog") {
+		catalog, err = flagString(cmd, "catalog")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var httpScheme string
+	if changed(cmd, "http-scheme") {
+		httpScheme, err = flagString(cmd, "http-scheme")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var metadataCatalogId string
+	if changed(cmd, "metadata-catalog-id") {
+		metadataCatalogId, err = flagString(cmd, "metadata-catalog-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var password string
+	if changed(cmd, "password", "password-prompt") {
+		password, err = flagSecret(cmd, "password")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var schema string
+	if changed(cmd, "schema") {
+		schema, err = flagString(cmd, "schema")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var sslSkipVerification bool
+	if changed(cmd, "ssl-skip-verification") {
+		sslSkipVerification, err = flagBool(cmd, "ssl-skip-verification")
+		if err != nil {
+			return nil, err
+		}
+	}
+	body := sdk.NewPrestoCredentialsIn(host, port, user)
+	if changed(cmd, "catalog") {
+		body.SetCatalog(catalog)
+	}
+	if changed(cmd, "http-scheme") {
+		body.SetHttpScheme(httpScheme)
+	}
+	if changed(cmd, "metadata-catalog-id") {
+		body.SetMetadataCatalogId(metadataCatalogId)
+	}
+	if changed(cmd, "password", "password-prompt") {
+		body.SetPassword(password)
+	}
+	if changed(cmd, "schema") {
+		body.SetSchema(schema)
+	}
+	if changed(cmd, "ssl-skip-verification") {
+		body.SetSslSkipVerification(sslSkipVerification)
+	}
+	return &connectionsAddCredentials{
+		create: func(ctx context.Context) (string, *http.Response, error) {
+			out, resp, err := retryOnTransient(cmd, api.CredentialsAPI.CreatePrestoCredentials(ctx).PrestoCredentialsIn(*body).Execute)
+			if err != nil {
+				return "", resp, err
+			}
+			return out.GetId(), resp, nil
+		},
+		del: func(ctx context.Context, id string) (*http.Response, error) {
+			return api.CredentialsAPI.DeletePrestoCredentials(ctx, id).Execute()
+		},
+		deleteCmd: "credentials delete presto",
+		listCmd:   "credentials list",
+	}, nil
+}
+
+func buildConnectionsAddHive(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
+	var err error
+	if err := requireAny(cmd, "host"); err != nil {
+		return nil, err
+	}
+	host, err := flagString(cmd, "host")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAny(cmd, "user"); err != nil {
+		return nil, err
+	}
+	user, err := flagString(cmd, "user")
+	if err != nil {
+		return nil, err
+	}
+	var authMode *sdk.HiveAuthMode
+	if changed(cmd, "auth-mode") {
+		authModeValue, err := flagString(cmd, "auth-mode")
+		if err != nil {
+			return nil, err
+		}
+		authMode, err = sdk.NewHiveAuthModeFromValue(authModeValue)
+		if err != nil {
+			return nil, usageError("%w", err)
+		}
+	}
+	var dbName string
+	if changed(cmd, "db-name") {
+		dbName, err = flagString(cmd, "db-name")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var port int32
+	if changed(cmd, "port") {
+		port, err = flagInt(cmd, "port")
+		if err != nil {
+			return nil, err
+		}
+	}
+	body := sdk.NewHiveCredentialsIn(host, user)
+	if changed(cmd, "auth-mode") {
+		body.SetAuthMode(*authMode)
+	}
+	if changed(cmd, "db-name") {
+		body.SetDbName(dbName)
+	}
+	if changed(cmd, "port") {
+		body.SetPort(port)
+	}
+	return &connectionsAddCredentials{
+		create: func(ctx context.Context) (string, *http.Response, error) {
+			out, resp, err := retryOnTransient(cmd, api.CredentialsAPI.CreateHiveCredentials(ctx).HiveCredentialsIn(*body).Execute)
+			if err != nil {
+				return "", resp, err
+			}
+			return out.GetId(), resp, nil
+		},
+		del: func(ctx context.Context, id string) (*http.Response, error) {
+			return api.CredentialsAPI.DeleteHiveCredentials(ctx, id).Execute()
+		},
+		deleteCmd: "credentials delete hive",
+		listCmd:   "credentials list",
+	}, nil
+}
+
 func buildConnectionsAddSqlServer(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
 	var err error
 	if err := requireAny(cmd, "host"); err != nil {
@@ -4614,6 +4954,112 @@ func buildConnectionsAddHiveS3(cmd *cobra.Command, api *sdk.APIClient, connectio
 	}, nil
 }
 
+func buildConnectionsAddSpark(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
+	var err error
+	if err := requireAny(cmd, "mode"); err != nil {
+		return nil, err
+	}
+	modeValue, err := flagString(cmd, "mode")
+	if err != nil {
+		return nil, err
+	}
+	mode, err := sdk.NewSparkModeFromValue(modeValue)
+	if err != nil {
+		return nil, usageError("%w", err)
+	}
+	if err := requireAny(cmd, "user"); err != nil {
+		return nil, err
+	}
+	user, err := flagString(cmd, "user")
+	if err != nil {
+		return nil, err
+	}
+	var dbName string
+	if changed(cmd, "db-name") {
+		dbName, err = flagString(cmd, "db-name")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var host string
+	if changed(cmd, "host") {
+		host, err = flagString(cmd, "host")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var password string
+	if changed(cmd, "password", "password-prompt") {
+		password, err = flagSecret(cmd, "password")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var port int32
+	if changed(cmd, "port") {
+		port, err = flagInt(cmd, "port")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var url string
+	if changed(cmd, "url") {
+		url, err = flagString(cmd, "url")
+		if err != nil {
+			return nil, err
+		}
+	}
+	body := sdk.NewSparkCredentialsIn(*mode, user)
+	if changed(cmd, "db-name") {
+		body.SetDbName(dbName)
+	}
+	if changed(cmd, "host") {
+		body.SetHost(host)
+	}
+	if changed(cmd, "password", "password-prompt") {
+		body.SetPassword(password)
+	}
+	if changed(cmd, "port") {
+		body.SetPort(port)
+	}
+	if changed(cmd, "url") {
+		body.SetUrl(url)
+	}
+	return &connectionsAddCredentials{
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			candidate := sdk.NewSparkCredentialsValidateIn(deploymentId, *mode, user)
+			if changed(cmd, "db-name") {
+				candidate.SetDbName(dbName)
+			}
+			if changed(cmd, "host") {
+				candidate.SetHost(host)
+			}
+			if changed(cmd, "password", "password-prompt") {
+				candidate.SetPassword(password)
+			}
+			if changed(cmd, "port") {
+				candidate.SetPort(port)
+			}
+			if changed(cmd, "url") {
+				candidate.SetUrl(url)
+			}
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateSparkCredentials(ctx).SparkCredentialsValidateIn(*candidate).Execute)
+		},
+		create: func(ctx context.Context) (string, *http.Response, error) {
+			out, resp, err := retryOnTransient(cmd, api.CredentialsAPI.CreateSparkCredentials(ctx).SparkCredentialsIn(*body).Execute)
+			if err != nil {
+				return "", resp, err
+			}
+			return out.GetId(), resp, nil
+		},
+		del: func(ctx context.Context, id string) (*http.Response, error) {
+			return api.CredentialsAPI.DeleteSparkCredentials(ctx, id).Execute()
+		},
+		deleteCmd: "credentials delete spark",
+		listCmd:   "credentials list",
+	}, nil
+}
+
 func buildConnectionsAddSelfHostedAws(cmd *cobra.Command, api *sdk.APIClient, connectionType string) (*connectionsAddCredentials, error) {
 	var err error
 	if err := requireAny(cmd, "self-hosted-aws-secret"); err != nil {
@@ -5410,6 +5856,9 @@ func newConnectionsUpdateCmd() *cobra.Command {
 	cmd.AddCommand(newConnectionsUpdateHiveMysqlCmd())
 	cmd.AddCommand(newConnectionsUpdateDremioCmd())
 	cmd.AddCommand(newConnectionsUpdateMotherduckCmd())
+	cmd.AddCommand(newConnectionsUpdateMicrosoftFabricCmd())
+	cmd.AddCommand(newConnectionsUpdatePrestoCmd())
+	cmd.AddCommand(newConnectionsUpdateHiveCmd())
 	cmd.AddCommand(newConnectionsUpdateSqlServerCmd())
 	cmd.AddCommand(newConnectionsUpdateSalesforceCrmCmd())
 	cmd.AddCommand(newConnectionsUpdateSalesforceDataCloudCmd())
@@ -5429,6 +5878,7 @@ func newConnectionsUpdateCmd() *cobra.Command {
 	cmd.AddCommand(newConnectionsUpdateAthenaCmd())
 	cmd.AddCommand(newConnectionsUpdateS3Cmd())
 	cmd.AddCommand(newConnectionsUpdateHiveS3Cmd())
+	cmd.AddCommand(newConnectionsUpdateSparkCmd())
 	return cmd
 }
 
@@ -5945,6 +6395,83 @@ func newConnectionsUpdateMotherduckCmd() *cobra.Command {
 	return cmd
 }
 
+func newConnectionsUpdateMicrosoftFabricCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "microsoft-fabric <connection_id>",
+		Short: "Update a connection of type microsoft-fabric, and change its credentials",
+		Long:  "Updates a connection of type microsoft-fabric, as the update command does, changing its microsoft-fabric credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
+				group:   flagGroup{"microsoft-fabric", []string{"app-client-id", "app-client-secret", "app-client-secret-prompt", "db-name", "host", "port", "tenant-id"}},
+				storage: "mc_managed",
+				build:   buildConnectionsUpdateMicrosoftFabric,
+			})
+		},
+	}
+	cmd.Flags().String("app-client-id", "", "Client ID of the Entra ID app registration Monte Carlo signs in with.")
+	cmd.Flags().String("app-client-secret", "", "Secret of the app registration. Stored by Monte Carlo and never returned. Visible in the process list; --app-client-secret-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("app-client-secret-prompt", false, "Read --app-client-secret from a hidden prompt instead of the command line.")
+	cmd.Flags().String("db-name", "", "Warehouse or lakehouse to connect to. It goes unquoted into the connection string Monte Carlo builds, so it cannot contain whitespace or any of ;, {, } and =.")
+	cmd.Flags().String("host", "", "Hostname of the Fabric warehouse or lakehouse SQL analytics endpoint, as Fabric shows it under SQL connection string, such as abc123.datawarehouse.fabric.microsoft.com. It goes unquoted into the connection string Monte Carlo builds, so it cannot contain whitespace or any of ;, {, } and =. Changing it requires sending the credentials' secrets again.")
+	cmd.Flags().Int32("port", 0, "Port of the SQL endpoint. Fabric serves it on 1433.")
+	cmd.Flags().String("tenant-id", "", "Microsoft Entra ID tenant the Fabric workspace belongs to.")
+	registerConnectionsUpdateFlags(cmd)
+	return cmd
+}
+
+func newConnectionsUpdatePrestoCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "presto <connection_id>",
+		Short: "Update a connection of type presto, and change its credentials",
+		Long:  "Updates a connection of type presto, as the update command does, changing its presto credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
+				group:   flagGroup{"presto", []string{"catalog", "host", "http-scheme", "metadata-catalog-id", "password", "password-prompt", "port", "schema", "ssl-skip-verification", "user"}},
+				storage: "mc_managed",
+				build:   buildConnectionsUpdatePresto,
+			})
+		},
+	}
+	cmd.Flags().String("catalog", "", "Catalog Monte Carlo queries.")
+	cmd.Flags().String("host", "", "Hostname of the Presto or Trino coordinator. Changing it requires sending password again when one is stored.")
+	cmd.Flags().String("http-scheme", "", "Whether to reach the coordinator over http or https. Changing it requires sending password again when one is stored.")
+	cmd.Flags().String("metadata-catalog-id", "", "Name of the catalog in the metadata store, when it differs from catalog. Requires catalog, which may then hold only lowercase letters, digits, _ and -.")
+	cmd.Flags().String("password", "", "New password of user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port the coordinator listens on.")
+	cmd.Flags().String("schema", "", "Schema Monte Carlo queries by default.")
+	cmd.Flags().Bool("ssl-skip-verification", false, "Connect over TLS without checking the server's certificate. Changing it requires sending password again when one is stored.")
+	cmd.Flags().String("user", "", "User Monte Carlo signs in as.")
+	registerConnectionsUpdateFlags(cmd)
+	return cmd
+}
+
+func newConnectionsUpdateHiveCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "hive <connection_id>",
+		Short: "Update a connection of type hive, and change its credentials",
+		Long:  "Updates a connection of type hive, as the update command does, changing its hive credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
+				group:   flagGroup{"hive", []string{"auth-mode", "db-name", "host", "port", "user"}},
+				storage: "mc_managed",
+				build:   buildConnectionsUpdateHive,
+			})
+		},
+	}
+	cmd.Flags().String("auth-mode", "", "How Monte Carlo signs in. Omit it for SASL.")
+	_ = cmd.RegisterFlagCompletionFunc("auth-mode", enumCompletion(sdk.AllowedHiveAuthModeEnumValues))
+	cmd.Flags().String("db-name", "", "Database Monte Carlo connects to.")
+	cmd.Flags().String("host", "", "Hostname of the HiveServer2.")
+	cmd.Flags().Int32("port", 0, "Port the HiveServer2 listens on in binary mode.")
+	cmd.Flags().String("user", "", "User Monte Carlo signs in as. Hive takes no password.")
+	registerConnectionsUpdateFlags(cmd)
+	return cmd
+}
+
 func newConnectionsUpdateSqlServerCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sql-server <connection_id>",
@@ -6428,6 +6955,33 @@ func newConnectionsUpdateHiveS3Cmd() *cobra.Command {
 	cmd.Flags().String("bucket", "", "S3 bucket Monte Carlo reads from.")
 	cmd.Flags().String("external-id", "", "External id your role's trust policy requires, if it requires one. It is not the deployment's aws_external_id.")
 	cmd.Flags().String("prefix", "", "Key prefix of the EMR log root, such as emr/prod. Leave out the bucket, a leading / and any s3:// scheme. Send an empty string when the cluster's EMR log URI is the bucket root. Monte Carlo reads each cluster's Hive logs under <prefix>/<cluster-id>/node/<instance-id>/applications/hive/.")
+	registerConnectionsUpdateFlags(cmd)
+	return cmd
+}
+
+func newConnectionsUpdateSparkCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "spark <connection_id>",
+		Short: "Update a connection of type spark, and change its credentials",
+		Long:  "Updates a connection of type spark, as the update command does, changing its spark credentials with the flags below.\n\n`--credentials-id` points the connection at other credentials of its type instead. Create them first with a `credentials` create command. Nothing validates the connection against them; run `connections validate` afterwards.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
+				group:   flagGroup{"spark", []string{"db-name", "host", "mode", "password", "password-prompt", "port", "url", "user"}},
+				storage: "mc_managed",
+				build:   buildConnectionsUpdateSpark,
+			})
+		},
+	}
+	cmd.Flags().String("db-name", "", "Database Monte Carlo connects to, such as default, for binary.")
+	cmd.Flags().String("host", "", "Host name of the Thrift server, for binary. Changing it requires sending password again when the credentials hold one.")
+	cmd.Flags().String("mode", "", "How Monte Carlo reaches the Spark Thrift server. binary takes host, port and db_name. http takes url and password.")
+	_ = cmd.RegisterFlagCompletionFunc("mode", enumCompletion(sdk.AllowedSparkModeEnumValues))
+	cmd.Flags().String("password", "", "New password of user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
+	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
+	cmd.Flags().Int32("port", 0, "Port of the Thrift server, such as 10000, for binary.")
+	cmd.Flags().String("url", "", "URL of the Thrift server's HTTP endpoint, for http, such as https://thrift.example.com:10001/cliservice. Its path is the HTTP path. For a Databricks cluster, use https://<workspace-host>:443/sql/protocolv1/o/<org-id>/<cluster-id>, not the jdbc: URL. It cannot hold a user, a password, a query or a fragment. Changing it requires sending password again when the credentials hold one.")
+	cmd.Flags().String("user", "", "User Monte Carlo signs in as.")
 	registerConnectionsUpdateFlags(cmd)
 	return cmd
 }
@@ -8614,6 +9168,319 @@ func buildConnectionsUpdateMotherduck(cmd *cobra.Command, api *sdk.APIClient, cu
 	}, nil
 }
 
+func buildConnectionsUpdateMicrosoftFabric(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
+	var err error
+	var appClientId string
+	if changed(cmd, "app-client-id") {
+		appClientId, err = flagString(cmd, "app-client-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var appClientSecret string
+	if changed(cmd, "app-client-secret", "app-client-secret-prompt") {
+		appClientSecret, err = flagSecret(cmd, "app-client-secret")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var dbName string
+	if changed(cmd, "db-name") {
+		dbName, err = flagString(cmd, "db-name")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var host string
+	if changed(cmd, "host") {
+		host, err = flagString(cmd, "host")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var port int32
+	if changed(cmd, "port") {
+		port, err = flagInt(cmd, "port")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var tenantId string
+	if changed(cmd, "tenant-id") {
+		tenantId, err = flagString(cmd, "tenant-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	patch := sdk.NewMicrosoftFabricCredentialsPatchWithDefaults()
+	check := sdk.NewMicrosoftFabricCredentialsChangeValidateInWithDefaults()
+	if changed(cmd, "app-client-id") {
+		if appClientId == "" {
+			patch.SetAppClientIdNil()
+			check.SetAppClientIdNil()
+		} else {
+			patch.SetAppClientId(appClientId)
+			check.SetAppClientId(appClientId)
+		}
+	}
+	if changed(cmd, "app-client-secret", "app-client-secret-prompt") {
+		if appClientSecret == "" {
+			patch.SetAppClientSecretNil()
+			check.SetAppClientSecretNil()
+		} else {
+			patch.SetAppClientSecret(appClientSecret)
+			check.SetAppClientSecret(appClientSecret)
+		}
+	}
+	if changed(cmd, "db-name") {
+		if dbName == "" {
+			patch.SetDbNameNil()
+			check.SetDbNameNil()
+		} else {
+			patch.SetDbName(dbName)
+			check.SetDbName(dbName)
+		}
+	}
+	if changed(cmd, "host") {
+		if host == "" {
+			patch.SetHostNil()
+			check.SetHostNil()
+		} else {
+			patch.SetHost(host)
+			check.SetHost(host)
+		}
+	}
+	if changed(cmd, "port") {
+		patch.SetPort(port)
+		check.SetPort(port)
+	}
+	if changed(cmd, "tenant-id") {
+		if tenantId == "" {
+			patch.SetTenantIdNil()
+			check.SetTenantIdNil()
+		} else {
+			patch.SetTenantId(tenantId)
+			check.SetTenantId(tenantId)
+		}
+	}
+	return &connectionsUpdateCredentials{
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateMicrosoftFabricCredentialsChange(ctx, currentCredentialsId).MicrosoftFabricCredentialsChangeValidateIn(*check).Execute)
+		},
+		patch: func(ctx context.Context) (*http.Response, error) {
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateMicrosoftFabricCredentials(ctx, currentCredentialsId).MicrosoftFabricCredentialsPatch(*patch).Execute)
+			return resp, err
+		},
+	}, nil
+}
+
+func buildConnectionsUpdatePresto(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
+	var err error
+	var catalog string
+	if changed(cmd, "catalog") {
+		catalog, err = flagString(cmd, "catalog")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var host string
+	if changed(cmd, "host") {
+		host, err = flagString(cmd, "host")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var httpScheme string
+	if changed(cmd, "http-scheme") {
+		httpScheme, err = flagString(cmd, "http-scheme")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var metadataCatalogId string
+	if changed(cmd, "metadata-catalog-id") {
+		metadataCatalogId, err = flagString(cmd, "metadata-catalog-id")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var password string
+	if changed(cmd, "password", "password-prompt") {
+		password, err = flagSecret(cmd, "password")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var port int32
+	if changed(cmd, "port") {
+		port, err = flagInt(cmd, "port")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var schema string
+	if changed(cmd, "schema") {
+		schema, err = flagString(cmd, "schema")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var sslSkipVerification bool
+	if changed(cmd, "ssl-skip-verification") {
+		sslSkipVerification, err = flagBool(cmd, "ssl-skip-verification")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var user string
+	if changed(cmd, "user") {
+		user, err = flagString(cmd, "user")
+		if err != nil {
+			return nil, err
+		}
+	}
+	patch := sdk.NewPrestoCredentialsPatchWithDefaults()
+	if changed(cmd, "catalog") {
+		if catalog == "" {
+			patch.SetCatalogNil()
+		} else {
+			patch.SetCatalog(catalog)
+		}
+	}
+	if changed(cmd, "host") {
+		if host == "" {
+			patch.SetHostNil()
+		} else {
+			patch.SetHost(host)
+		}
+	}
+	if changed(cmd, "http-scheme") {
+		if httpScheme == "" {
+			patch.SetHttpSchemeNil()
+		} else {
+			patch.SetHttpScheme(httpScheme)
+		}
+	}
+	if changed(cmd, "metadata-catalog-id") {
+		if metadataCatalogId == "" {
+			patch.SetMetadataCatalogIdNil()
+		} else {
+			patch.SetMetadataCatalogId(metadataCatalogId)
+		}
+	}
+	if changed(cmd, "password", "password-prompt") {
+		if password == "" {
+			patch.SetPasswordNil()
+		} else {
+			patch.SetPassword(password)
+		}
+	}
+	if changed(cmd, "port") {
+		patch.SetPort(port)
+	}
+	if changed(cmd, "schema") {
+		if schema == "" {
+			patch.SetSchemaNil()
+		} else {
+			patch.SetSchema(schema)
+		}
+	}
+	if changed(cmd, "ssl-skip-verification") {
+		patch.SetSslSkipVerification(sslSkipVerification)
+	}
+	if changed(cmd, "user") {
+		if user == "" {
+			patch.SetUserNil()
+		} else {
+			patch.SetUser(user)
+		}
+	}
+	return &connectionsUpdateCredentials{
+		patch: func(ctx context.Context) (*http.Response, error) {
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdatePrestoCredentials(ctx, currentCredentialsId).PrestoCredentialsPatch(*patch).Execute)
+			return resp, err
+		},
+	}, nil
+}
+
+func buildConnectionsUpdateHive(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
+	var err error
+	var authMode *sdk.HiveAuthMode
+	if changed(cmd, "auth-mode") {
+		authModeValue, err := flagString(cmd, "auth-mode")
+		if err != nil {
+			return nil, err
+		}
+		authMode, err = sdk.NewHiveAuthModeFromValue(authModeValue)
+		if err != nil {
+			return nil, usageError("%w", err)
+		}
+	}
+	var dbName string
+	if changed(cmd, "db-name") {
+		dbName, err = flagString(cmd, "db-name")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var host string
+	if changed(cmd, "host") {
+		host, err = flagString(cmd, "host")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var port int32
+	if changed(cmd, "port") {
+		port, err = flagInt(cmd, "port")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var user string
+	if changed(cmd, "user") {
+		user, err = flagString(cmd, "user")
+		if err != nil {
+			return nil, err
+		}
+	}
+	patch := sdk.NewHiveCredentialsPatchWithDefaults()
+	if changed(cmd, "auth-mode") {
+		patch.SetAuthMode(*authMode)
+	}
+	if changed(cmd, "db-name") {
+		if dbName == "" {
+			patch.SetDbNameNil()
+		} else {
+			patch.SetDbName(dbName)
+		}
+	}
+	if changed(cmd, "host") {
+		if host == "" {
+			patch.SetHostNil()
+		} else {
+			patch.SetHost(host)
+		}
+	}
+	if changed(cmd, "port") {
+		patch.SetPort(port)
+	}
+	if changed(cmd, "user") {
+		if user == "" {
+			patch.SetUserNil()
+		} else {
+			patch.SetUser(user)
+		}
+	}
+	return &connectionsUpdateCredentials{
+		patch: func(ctx context.Context) (*http.Response, error) {
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateHiveCredentials(ctx, currentCredentialsId).HiveCredentialsPatch(*patch).Execute)
+			return resp, err
+		},
+	}, nil
+}
+
 func buildConnectionsUpdateSqlServer(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
 	var err error
 	var authMode *sdk.SqlServerAuthMode
@@ -10523,6 +11390,128 @@ func buildConnectionsUpdateHiveS3(cmd *cobra.Command, api *sdk.APIClient, curren
 	return &connectionsUpdateCredentials{
 		patch: func(ctx context.Context) (*http.Response, error) {
 			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateHiveS3Credentials(ctx, currentCredentialsId).HiveS3CredentialsPatch(*patch).Execute)
+			return resp, err
+		},
+	}, nil
+}
+
+func buildConnectionsUpdateSpark(cmd *cobra.Command, api *sdk.APIClient, currentCredentialsId string) (*connectionsUpdateCredentials, error) {
+	var err error
+	var dbName string
+	if changed(cmd, "db-name") {
+		dbName, err = flagString(cmd, "db-name")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var host string
+	if changed(cmd, "host") {
+		host, err = flagString(cmd, "host")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var mode *sdk.SparkMode
+	if changed(cmd, "mode") {
+		modeValue, err := flagString(cmd, "mode")
+		if err != nil {
+			return nil, err
+		}
+		mode, err = sdk.NewSparkModeFromValue(modeValue)
+		if err != nil {
+			return nil, usageError("%w", err)
+		}
+	}
+	var password string
+	if changed(cmd, "password", "password-prompt") {
+		password, err = flagSecret(cmd, "password")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var port int32
+	if changed(cmd, "port") {
+		port, err = flagInt(cmd, "port")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var url string
+	if changed(cmd, "url") {
+		url, err = flagString(cmd, "url")
+		if err != nil {
+			return nil, err
+		}
+	}
+	var user string
+	if changed(cmd, "user") {
+		user, err = flagString(cmd, "user")
+		if err != nil {
+			return nil, err
+		}
+	}
+	patch := sdk.NewSparkCredentialsPatchWithDefaults()
+	check := sdk.NewSparkCredentialsChangeValidateInWithDefaults()
+	if changed(cmd, "db-name") {
+		if dbName == "" {
+			patch.SetDbNameNil()
+			check.SetDbNameNil()
+		} else {
+			patch.SetDbName(dbName)
+			check.SetDbName(dbName)
+		}
+	}
+	if changed(cmd, "host") {
+		if host == "" {
+			patch.SetHostNil()
+			check.SetHostNil()
+		} else {
+			patch.SetHost(host)
+			check.SetHost(host)
+		}
+	}
+	if changed(cmd, "mode") {
+		patch.SetMode(*mode)
+		check.SetMode(*mode)
+	}
+	if changed(cmd, "password", "password-prompt") {
+		if password == "" {
+			patch.SetPasswordNil()
+			check.SetPasswordNil()
+		} else {
+			patch.SetPassword(password)
+			check.SetPassword(password)
+		}
+	}
+	if changed(cmd, "port") {
+		patch.SetPort(port)
+		check.SetPort(port)
+	}
+	if changed(cmd, "url") {
+		if url == "" {
+			patch.SetUrlNil()
+			check.SetUrlNil()
+		} else {
+			patch.SetUrl(url)
+			check.SetUrl(url)
+		}
+	}
+	if changed(cmd, "user") {
+		if user == "" {
+			patch.SetUserNil()
+			check.SetUserNil()
+		} else {
+			patch.SetUser(user)
+			check.SetUser(user)
+		}
+	}
+	return &connectionsUpdateCredentials{
+		validate: func(ctx context.Context, deploymentId string) (*sdk.ValidationRunOut, *http.Response, error) {
+			check.SetDeploymentId(deploymentId)
+			return retryOnTransient(cmd, api.CredentialsAPI.ValidateSparkCredentialsChange(ctx, currentCredentialsId).SparkCredentialsChangeValidateIn(*check).Execute)
+		},
+		patch: func(ctx context.Context) (*http.Response, error) {
+			_, resp, err := retryOnTransient(cmd, api.CredentialsAPI.UpdateSparkCredentials(ctx, currentCredentialsId).SparkCredentialsPatch(*patch).Execute)
 			return resp, err
 		},
 	}, nil
