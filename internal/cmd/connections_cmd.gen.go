@@ -826,7 +826,7 @@ func newConnectionsAddHiveMysqlCmd() *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsAdd(cmd, "hive-mysql", &connectionsAddNative{
-				group:          flagGroup{"hive-mysql", []string{"host", "port", "user", "password", "password-prompt", "db-name"}},
+				group:          flagGroup{"hive-mysql", []string{"host", "port", "user", "password", "password-prompt", "db-name", "ssl-ca-url"}},
 				selfHostedOnly: []string{"bq-project-id", "sql-warehouse-id"},
 				build:          buildConnectionsAddHiveMysql,
 			})
@@ -838,6 +838,7 @@ func newConnectionsAddHiveMysqlCmd() *cobra.Command {
 	cmd.Flags().String("password", "", "Password of the database user. Stored by Monte Carlo and never returned. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().String("db-name", "", "MySQL database that holds the Hive metastore.")
+	cmd.Flags().String("ssl-ca-url", "", "https URL of the PEM bundle of certificate authorities the MySQL server's certificate is checked against. Monte Carlo downloads it at each connection and connects over TLS. For Amazon RDS, use https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem. Leave it out and the server's certificate is not checked.")
 	registerConnectionsAddFlags(cmd)
 	return cmd
 }
@@ -3050,7 +3051,17 @@ func buildConnectionsAddHiveMysql(cmd *cobra.Command, api *sdk.APIClient, connec
 	if err != nil {
 		return nil, err
 	}
+	var sslCaUrl string
+	if changed(cmd, "ssl-ca-url") {
+		sslCaUrl, err = flagString(cmd, "ssl-ca-url")
+		if err != nil {
+			return nil, err
+		}
+	}
 	body := sdk.NewHiveMySqlCredentialsIn(host, port, user, password, dbName)
+	if changed(cmd, "ssl-ca-url") {
+		body.SetSslCaUrl(sslCaUrl)
+	}
 	return &connectionsAddCredentials{
 		create: func(ctx context.Context) (string, *http.Response, error) {
 			out, resp, err := retryOnTransient(cmd, api.CredentialsAPI.CreateHiveMysqlCredentials(ctx).HiveMySqlCredentialsIn(*body).Execute)
@@ -6334,7 +6345,7 @@ func newConnectionsUpdateHiveMysqlCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConnectionsUpdate(cmd, args[0], &connectionsUpdateNative{
-				group:   flagGroup{"hive-mysql", []string{"db-name", "host", "password", "password-prompt", "port", "user"}},
+				group:   flagGroup{"hive-mysql", []string{"db-name", "host", "password", "password-prompt", "port", "ssl-ca-url", "user"}},
 				storage: "mc_managed",
 				build:   buildConnectionsUpdateHiveMysql,
 			})
@@ -6345,6 +6356,7 @@ func newConnectionsUpdateHiveMysqlCmd() *cobra.Command {
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	cmd.Flags().String("ssl-ca-url", "", "https URL of the PEM bundle of certificate authorities the MySQL server's certificate is checked against. Monte Carlo downloads it at each connection and connects over TLS. For Amazon RDS, use https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem. A value replaces any setup that read the CA from Monte Carlo storage or skipped the check. Null removes it. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
 	registerConnectionsUpdateFlags(cmd)
 	return cmd
@@ -8987,6 +8999,13 @@ func buildConnectionsUpdateHiveMysql(cmd *cobra.Command, api *sdk.APIClient, cur
 			return nil, err
 		}
 	}
+	var sslCaUrl string
+	if changed(cmd, "ssl-ca-url") {
+		sslCaUrl, err = flagString(cmd, "ssl-ca-url")
+		if err != nil {
+			return nil, err
+		}
+	}
 	var user string
 	if changed(cmd, "user") {
 		user, err = flagString(cmd, "user")
@@ -9018,6 +9037,13 @@ func buildConnectionsUpdateHiveMysql(cmd *cobra.Command, api *sdk.APIClient, cur
 	}
 	if changed(cmd, "port") {
 		patch.SetPort(port)
+	}
+	if changed(cmd, "ssl-ca-url") {
+		if sslCaUrl == "" {
+			patch.SetSslCaUrlNil()
+		} else {
+			patch.SetSslCaUrl(sslCaUrl)
+		}
 	}
 	if changed(cmd, "user") {
 		if user == "" {

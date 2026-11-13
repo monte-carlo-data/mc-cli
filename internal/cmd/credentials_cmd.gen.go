@@ -1371,12 +1371,19 @@ func newCredentialsCreateHiveMysqlCmd() *cobra.Command {
 				return err
 			}
 			body := sdk.NewHiveMySqlCredentialsIn(host, port, user, password, dbName)
+			if changed(cmd, "ssl-ca-url") {
+				sslCaUrl, err := flagString(cmd, "ssl-ca-url")
+				if err != nil {
+					return err
+				}
+				body.SetSslCaUrl(sslCaUrl)
+			}
 			req = req.HiveMySqlCredentialsIn(*body)
 			out, resp, err := retryOnTransient(cmd, req.Execute)
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user")
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user", "ssl_ca_url")
 		},
 	}
 	cmd.Flags().String("host", "", "Hostname of the database endpoint.")
@@ -1389,6 +1396,7 @@ func newCredentialsCreateHiveMysqlCmd() *cobra.Command {
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().String("db-name", "", "MySQL database that holds the Hive metastore.")
 	_ = cmd.MarkFlagRequired("db-name")
+	cmd.Flags().String("ssl-ca-url", "", "https URL of the PEM bundle of certificate authorities the MySQL server's certificate is checked against. Monte Carlo downloads it at each connection and connects over TLS. For Amazon RDS, use https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem. Leave it out and the server's certificate is not checked.")
 	return cmd
 }
 
@@ -5171,7 +5179,7 @@ func newCredentialsGetHiveMysqlCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user")
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user", "ssl_ca_url")
 		},
 	}
 	return cmd
@@ -7165,7 +7173,7 @@ func newCredentialsUpdateHiveMysqlCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "hive-mysql <credentials_id>",
 		Short: "Update Hive (MySQL) credentials",
-		Long:  "Change Hive (MySQL) credentials in place.\n\nEvery connection using the credentials picks up the change. Send only the fields to\nchange: a field left out is unchanged, and `password` set to null is unchanged. Sending an\nempty body returns the credentials as they are.",
+		Long:  "Change Hive (MySQL) credentials in place.\n\nEvery connection using the credentials picks up the change. Send only the fields to\nchange: a field left out is unchanged, and `password` set to null is unchanged. A new\n`host`, or a new or cleared `ssl_ca_url`, needs `password` sent again. Sending an empty\nbody returns the credentials as they are.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			api, ctx, err := apiClient(cmd)
@@ -7202,6 +7210,13 @@ func newCredentialsUpdateHiveMysqlCmd() *cobra.Command {
 				}
 				body.SetPort(port)
 			}
+			if changed(cmd, "ssl-ca-url") {
+				sslCaUrl, err := flagString(cmd, "ssl-ca-url")
+				if err != nil {
+					return err
+				}
+				body.SetSslCaUrl(sslCaUrl)
+			}
 			if changed(cmd, "user") {
 				user, err := flagString(cmd, "user")
 				if err != nil {
@@ -7214,7 +7229,7 @@ func newCredentialsUpdateHiveMysqlCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user")
+			return render(cmd, out, "id", "connection_type", "storage_type", "created_time", "host", "port", "db_name", "user", "ssl_ca_url")
 		},
 	}
 	cmd.Flags().String("db-name", "", "Database to connect to.")
@@ -7222,6 +7237,7 @@ func newCredentialsUpdateHiveMysqlCmd() *cobra.Command {
 	cmd.Flags().String("password", "", "New password of the database user. Visible in the process list; --password-prompt asks for it instead, and @<path> reads it from a file.")
 	cmd.Flags().Bool("password-prompt", false, "Read --password from a hidden prompt instead of the command line.")
 	cmd.Flags().Int32("port", 0, "Port the database listens on.")
+	cmd.Flags().String("ssl-ca-url", "", "https URL of the PEM bundle of certificate authorities the MySQL server's certificate is checked against. Monte Carlo downloads it at each connection and connects over TLS. For Amazon RDS, use https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem. A value replaces any setup that read the CA from Monte Carlo storage or skipped the check. Null removes it. Changing it requires sending the credentials' secrets again.")
 	cmd.Flags().String("user", "", "Database user Monte Carlo logs in as.")
 	return cmd
 }
