@@ -29,7 +29,7 @@ func newEtlContainersCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create an ETL container",
-		Long:  "Create an empty ETL container.\n\nThe container holds no connection until you add one. Its type is fixed at creation and\ndecides which connection it accepts. Every type except `airflow` runs through a\ndeployment, which has to be one the deployments list returns; any other id returns 404.\nA deployment that does not support the ETL tool, or needs an upgrade first, returns 409.\nA deployment takes one `fivetran` container. A name another container of the same type\nalready uses returns 409. A type your account's plan does not include returns 403.\n\nA push-only `custom-etl-connector` container receives jobs and runs pushed with a key from\n`POST /integration-keys/ingestion`. An `airflow` container receives runs reported with a\nkey from `POST /integration-keys/airflow-callbacks`.",
+		Long:  "Create an empty ETL container.\n\nThe container holds no connection until you add one. Its type is fixed at creation and\ndecides which connection it accepts. Every type except `airflow` runs through a\ndeployment, which has to be one the deployments list returns; any other id returns 404.\nAn `AGENT_OBSERVABILITY` deployment returns 404 too, because it stores agent traces and\nhosts no ETL container. A deployment that does not support the ETL tool, or needs an\nupgrade first, returns 409. A deployment takes one `fivetran` container. A name another\ncontainer of the same type already uses returns 409. A type your account's plan does not\ninclude returns 403.\n\nA push-only `custom-etl-connector` container receives jobs and runs pushed with a key from\n`POST /integration-keys/ingestion`. An `airflow` container receives runs reported with a\nkey from `POST /integration-keys/airflow-callbacks`.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			api, ctx, err := apiClient(cmd)
@@ -70,7 +70,7 @@ func newEtlContainersCreateCmd() *cobra.Command {
 	_ = cmd.MarkFlagRequired("type")
 	cmd.Flags().String("name", "", "Display name for the ETL container. No two containers of the same type can share a name.")
 	_ = cmd.MarkFlagRequired("name")
-	cmd.Flags().String("deployment-id", "", "The deployment the container's connection will run through. Pick one from the deployments list. Only a deployment on Monte Carlo's current collection platform is accepted. airflow takes none. custom-etl-connector takes the deployment of the agent that registered the connector, or none for a push-only connector. Every other type requires one.")
+	cmd.Flags().String("deployment-id", "", "The deployment the container's connection will run through. Pick one from the deployments list. Only a deployment on Monte Carlo's current collection platform is accepted. An AGENT_OBSERVABILITY deployment is not. airflow takes none. custom-etl-connector takes the deployment of the agent that registered the connector, or none for a push-only connector. Every other type requires one.")
 	return cmd
 }
 
