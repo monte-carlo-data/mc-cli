@@ -27,8 +27,24 @@ func newCollectionDataStoresCmd() *cobra.Command {
 
 func newCollectionDataStoresDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "delete",
-		Short: "Delete collection data store",
+		Use:   "delete <collection_data_store_id>",
+		Short: "Delete a collection data store",
+		Long:  "Deregister a data store, on any platform.\n\nDoes what the delete on the data store's own platform path does. Its deployment is left\nwithout one. Reprovision that deployment before registering another.\n\nThe bucket or container itself is yours and is not deleted.\n\nA data store cannot be deleted while its deployment still has a connection running through\nit. Delete or move those connections first.\n\nAn id that names no data store in your account returns 404. So does a data store on a\nplatform with no path of its own here.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete collection data store"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CollectionDataStoresAPI.DeleteCollectionDataStore(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
 	}
 	cmd.AddCommand(newCollectionDataStoresDeleteAwsCmd())
 	cmd.AddCommand(newCollectionDataStoresDeleteAzureCmd())
@@ -110,8 +126,22 @@ func newCollectionDataStoresDeleteGcpCmd() *cobra.Command {
 
 func newCollectionDataStoresGetCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "get",
-		Short: "Get collection data store",
+		Use:   "get <collection_data_store_id>",
+		Short: "Get a collection data store",
+		Long:  "Get one data store, on any platform.\n\nTakes the id the list returns. `details` holds the fields of that platform's own read, such\nas the external id of an S3 data store. A secret is never returned.\n\nAn id that names no data store in your account returns 404. So does a data store on a\nplatform with no path of its own here.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CollectionDataStoresAPI.GetCollectionDataStore(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "name", "deployment_id", "storage_type", "authentication_type", "enabled", "created_time", "last_updated_time", "platform", "endpoint", "details")
+		},
 	}
 	cmd.AddCommand(newCollectionDataStoresGetAwsCmd())
 	cmd.AddCommand(newCollectionDataStoresGetAzureCmd())
