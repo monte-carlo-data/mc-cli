@@ -122,8 +122,24 @@ func newCollectionAgentsCreateGenericTokenCmd() *cobra.Command {
 
 func newCollectionAgentsDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "delete",
-		Short: "Delete collection agent",
+		Use:   "delete <collection_agent_id>",
+		Short: "Delete a collection agent",
+		Long:  "Deregister a collection agent, on any platform.\n\nDoes what the delete on the agent's own platform path does. Its deployment is left without\nan agent. Reprovision that deployment before registering another agent on it. Every token\ncreated for a generic agent's deployment is deleted with it, so a running agent stops being\nable to connect. Its OAuth clients are deleted on a best-effort basis: one that fails to\ndelete is not reported and keeps working.\n\nAn agent cannot be deleted while its deployment still has a connection running through it.\nDelete or move those connections first.\n\nAn id that names no agent in your account returns 404. So does an agent on a platform with\nno path of its own here, such as a Snowflake agent.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete collection agent"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CollectionAgentsAPI.DeleteCollectionAgent(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
 	}
 	cmd.AddCommand(newCollectionAgentsDeleteAwsCmd())
 	cmd.AddCommand(newCollectionAgentsDeleteAzureCmd())
@@ -210,7 +226,7 @@ func newCollectionAgentsDeleteGenericCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "generic <collection_agent_id>",
 		Short: "Delete a generic collection agent",
-		Long:  "Deregister a generic collection agent.\n\nEvery credential created for its deployment is deleted with it, so a running agent stops\nbeing able to connect. Its deployment is left without an agent. Reprovision that deployment\nbefore registering another agent on it.\n\nAn agent cannot be deleted while its deployment still has a connection running through it.\nDelete or move those connections first.\n\nAn id that names an agent on another platform, or no agent in your account, returns 404.",
+		Long:  "Deregister a generic collection agent.\n\nEvery token created for its deployment is deleted with it, so a running agent stops being\nable to connect. Its OAuth clients are deleted on a best-effort basis: one that fails to\ndelete is not reported and keeps working. Its deployment is left without an agent.\nReprovision that deployment before registering another agent on it.\n\nAn agent cannot be deleted while its deployment still has a connection running through it.\nDelete or move those connections first.\n\nAn id that names an agent on another platform, or no agent in your account, returns 404.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := confirm(cmd, "Delete generic collection agent"+" "+args[0]); err != nil {
@@ -280,8 +296,22 @@ func newCollectionAgentsDeleteGenericTokenCmd() *cobra.Command {
 
 func newCollectionAgentsGetCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "get",
-		Short: "Get collection agent",
+		Use:   "get <collection_agent_id>",
+		Short: "Get a collection agent",
+		Long:  "Get one collection agent, on any platform.\n\nTakes the id the list returns. `details` holds the fields of that platform's own read, such\nas the external id of an AWS agent. A secret is never returned.\n\nAn id that names no agent in your account returns 404. So does an agent on a platform with\nno path of its own here, such as a Snowflake agent.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.CollectionAgentsAPI.GetCollectionAgent(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "name", "deployment_id", "authentication_type", "enabled", "created_time", "last_updated_time", "image_build", "image_version", "is_remote_upgradeable", "platform", "endpoint", "details")
+		},
 	}
 	cmd.AddCommand(newCollectionAgentsGetAwsCmd())
 	cmd.AddCommand(newCollectionAgentsGetAzureCmd())
