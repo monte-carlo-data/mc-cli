@@ -31,6 +31,7 @@ func newIntegrationKeysCreateCmd() *cobra.Command {
 	}
 	cmd.AddCommand(newIntegrationKeysCreateAirflowCallbacksCmd())
 	cmd.AddCommand(newIntegrationKeysCreateIngestionCmd())
+	cmd.AddCommand(newIntegrationKeysCreateOpenTelemetryCmd())
 	return cmd
 }
 
@@ -128,6 +129,44 @@ func newIntegrationKeysCreateIngestionCmd() *cobra.Command {
 	return cmd
 }
 
+func newIntegrationKeysCreateOpenTelemetryCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "open-telemetry",
+		Short: "Create an OpenTelemetry key",
+		Long:  "Create a key your agents send OpenTelemetry traces with.\n\nThe key is scoped to one `AGENT_OBSERVABILITY` deployment, which may still be\n`PROVISIONING`. An id your account does not hold returns 404. Deleting the deployment\ndeletes its keys.\n\nThe secret is returned by this call and never again. A deployment can hold any number of\nkeys, so create the next one before deleting the last when rotating.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.IntegrationKeysAPI.CreateOpenTelemetryKey(ctx)
+			deploymentId, err := flagString(cmd, "deployment-id")
+			if err != nil {
+				return err
+			}
+			body := sdk.NewOpenTelemetryKeyIn(deploymentId)
+			if changed(cmd, "description") {
+				description, err := flagString(cmd, "description")
+				if err != nil {
+					return err
+				}
+				body.SetDescription(description)
+			}
+			req = req.OpenTelemetryKeyIn(*body)
+			out, resp, err := retryOnTransient(cmd, req.Execute)
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "mcd_id", "mcd_token", "id", "deployment_id", "description", "created_time")
+		},
+	}
+	cmd.Flags().String("deployment-id", "", "The AGENT_OBSERVABILITY deployment to send traces to. It may still be PROVISIONING.")
+	_ = cmd.MarkFlagRequired("deployment-id")
+	cmd.Flags().String("description", "", "What this key is for. Monte Carlo generates one naming the deployment if you leave it out.")
+	return cmd
+}
+
 func newIntegrationKeysDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete",
@@ -135,6 +174,7 @@ func newIntegrationKeysDeleteCmd() *cobra.Command {
 	}
 	cmd.AddCommand(newIntegrationKeysDeleteAirflowCallbacksCmd())
 	cmd.AddCommand(newIntegrationKeysDeleteIngestionCmd())
+	cmd.AddCommand(newIntegrationKeysDeleteOpenTelemetryCmd())
 	return cmd
 }
 
@@ -186,6 +226,30 @@ func newIntegrationKeysDeleteIngestionCmd() *cobra.Command {
 	return cmd
 }
 
+func newIntegrationKeysDeleteOpenTelemetryCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "open-telemetry <key_id>",
+		Short: "Delete an OpenTelemetry key",
+		Long:  "Delete an OpenTelemetry key. Traces sent with it are refused from then on.\n\nDeleting an id your account does not hold, or has already deleted, also returns 204.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(cmd, "Delete open-telemetry integration key"+" "+args[0]); err != nil {
+				return err
+			}
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.IntegrationKeysAPI.DeleteOpenTelemetryKey(ctx, args[0])
+			if resp, err := req.Execute(); err != nil {
+				return apiErr(resp, err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
 func newIntegrationKeysGetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "get",
@@ -193,6 +257,7 @@ func newIntegrationKeysGetCmd() *cobra.Command {
 	}
 	cmd.AddCommand(newIntegrationKeysGetAirflowCallbacksCmd())
 	cmd.AddCommand(newIntegrationKeysGetIngestionCmd())
+	cmd.AddCommand(newIntegrationKeysGetOpenTelemetryCmd())
 	return cmd
 }
 
@@ -240,11 +305,33 @@ func newIntegrationKeysGetIngestionCmd() *cobra.Command {
 	return cmd
 }
 
+func newIntegrationKeysGetOpenTelemetryCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "open-telemetry <key_id>",
+		Short: "Get an OpenTelemetry key",
+		Long:  "Get one OpenTelemetry key. The secret is not part of it.\n\nAn id that names a key of another scope, or no key in your account, returns 404.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, ctx, err := apiClient(cmd)
+			if err != nil {
+				return err
+			}
+			req := api.IntegrationKeysAPI.GetOpenTelemetryKey(ctx, args[0])
+			out, resp, err := req.Execute()
+			if err != nil {
+				return apiErr(resp, err)
+			}
+			return render(cmd, out, "id", "description", "created_time", "deployment_id", "mcd_id")
+		},
+	}
+	return cmd
+}
+
 func newIntegrationKeysListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List integration keys",
-		Long:  "List your account's ingestion and Airflow callbacks keys.\n\nNo secret is part of the list. Keys are sorted oldest first.\n\nThe list is not paged. A warehouse or container holds a key or two in normal use.",
+		Long:  "List your account's ingestion, Airflow callbacks and OpenTelemetry keys.\n\nNo secret is part of the list. Keys are sorted oldest first.\n\nThe list is not paged. A warehouse, container or deployment holds a key or two in normal\nuse.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			api, ctx, err := apiClient(cmd)
@@ -274,11 +361,11 @@ func newIntegrationKeysListCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return renderList(cmd, out, []string{"id", "scope", "warehouse_id", "bi_container_id", "etl_container_id", "description", "created_time"})
+			return renderList(cmd, out, []string{"id", "scope", "warehouse_id", "bi_container_id", "etl_container_id", "deployment_id", "description", "created_time"})
 		},
 	}
 	cmd.Flags().String("scope", "", "Only keys of this scope.")
 	_ = cmd.RegisterFlagCompletionFunc("scope", enumCompletion(sdk.AllowedIntegrationKeyScopeEnumValues))
-	cmd.Flags().String("parent-id", "", "Only keys scoped to this warehouse, BI container or ETL container.")
+	cmd.Flags().String("parent-id", "", "Only keys scoped to this warehouse, BI container, ETL container or Agent Observability deployment.")
 	return cmd
 }

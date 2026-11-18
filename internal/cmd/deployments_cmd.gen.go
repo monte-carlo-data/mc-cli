@@ -30,7 +30,7 @@ func newDeploymentsCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create a deployment",
-		Long:  "Provision a deployment for a collection agent or a data store to be registered on.\n\nConnecting either one takes two calls, and this is the first. Monte Carlo allocates the\ndeployment, and returns an external id for a deployment it will reach by assuming a role.\nRegistering on the deployment is the second call, and that is what enables it.\n\nThe new deployment is not enabled and serves no connections until something is registered\non it. It counts against your account's deployment limit as soon as it is created, whether\nor not anything ever is.",
+		Long:  "Provision a deployment for a collection agent or a data store, or create an Agent\nObservability deployment.\n\nConnecting a collection agent or a data store takes two calls, and this is the first.\nMonte Carlo allocates the deployment, and returns an external id for a deployment it will\nreach by assuming a role. Registering on the deployment is the second call, and that is\nwhat enables it. The new deployment is not enabled and serves no connections until\nsomething is registered on it. It counts against your account's deployment limit as soon\nas it is created, whether or not anything ever is.\n\nAn `AGENT_OBSERVABILITY` deployment is hosted by Monte Carlo and stores your agents'\ntraces. Send no `runtime_platform`. It comes back with `status` `PROVISIONING`, and Monte\nCarlo sets it up after the call returns. Read it until its `status` is `READY` or\n`FAILED`. A `FAILED` deployment can be deleted and created again. It is protected from\ndeletion once it has been `READY`, unless you send `deletion_protection` as `false`.\n\nCreating one answers 422 when your account cannot have Monte Carlo hosted Agent\nObservability, 409 when it already holds as many as it may, and 429 with `Retry-After`\nwhen it has created as many as a day allows.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			api, ctx, err := apiClient(cmd)
@@ -46,15 +46,14 @@ func newDeploymentsCreateCmd() *cobra.Command {
 			if err != nil {
 				return usageError("%w", err)
 			}
-			runtimePlatformValue, err := flagString(cmd, "runtime-platform")
-			if err != nil {
-				return err
+			body := sdk.NewDeploymentIn(*type_)
+			if changed(cmd, "deletion-protection") {
+				deletionProtection, err := flagBool(cmd, "deletion-protection")
+				if err != nil {
+					return err
+				}
+				body.SetDeletionProtection(deletionProtection)
 			}
-			runtimePlatform, err := sdk.NewRuntimePlatformFromValue(runtimePlatformValue)
-			if err != nil {
-				return usageError("%w", err)
-			}
-			body := sdk.NewDeploymentIn(*type_, *runtimePlatform)
 			if changed(cmd, "name") {
 				name, err := flagString(cmd, "name")
 				if err != nil {
@@ -62,21 +61,32 @@ func newDeploymentsCreateCmd() *cobra.Command {
 				}
 				body.SetName(name)
 			}
+			if changed(cmd, "runtime-platform") {
+				runtimePlatformValue, err := flagString(cmd, "runtime-platform")
+				if err != nil {
+					return err
+				}
+				runtimePlatform, err := sdk.NewRuntimePlatformFromValue(runtimePlatformValue)
+				if err != nil {
+					return usageError("%w", err)
+				}
+				body.SetRuntimePlatform(*runtimePlatform)
+			}
 			req = req.DeploymentIn(*body)
 			out, resp, err := retryOnTransient(cmd, req.Execute)
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "id", "name", "type", "runtime_platform", "enabled", "created_time", "last_updated_time", "aws_external_id")
+			return render(cmd, out, "id", "name", "type", "runtime_platform", "enabled", "created_time", "last_updated_time", "status", "status_detail", "deletion_protection", "aws_external_id")
 		},
 	}
-	cmd.Flags().String("type", "", "What the deployment will host. Only COLLECTION_AGENT and COLLECTION_DATA_STORE can be provisioned today. Any other value is rejected.")
+	cmd.Flags().String("type", "", "What the deployment will host. COLLECTION_AGENT and COLLECTION_DATA_STORE can be provisioned, and an AGENT_OBSERVABILITY deployment can be created when your account has Monte Carlo hosted Agent Observability. Any other value is rejected.")
 	_ = cmd.RegisterFlagCompletionFunc("type", enumCompletion(sdk.AllowedDeploymentTypeEnumValues))
 	_ = cmd.MarkFlagRequired("type")
-	cmd.Flags().String("runtime-platform", "", "Where the deployment's collection agent or data store will run. Either can be provisioned on AWS, AZURE or GCP, and a collection agent also on GENERIC. Any other combination is rejected.")
-	_ = cmd.RegisterFlagCompletionFunc("runtime-platform", enumCompletion(sdk.AllowedRuntimePlatformEnumValues))
-	_ = cmd.MarkFlagRequired("runtime-platform")
+	cmd.Flags().Bool("deletion-protection", false, "Whether deleting the deployment is refused once it has been ready. Only an AGENT_OBSERVABILITY deployment can be protected, and it is protected unless you send false. Any other type accepts only false.")
 	cmd.Flags().String("name", "", "Display name for the deployment. Monte Carlo generates one if you leave it out.")
+	cmd.Flags().String("runtime-platform", "", "Where the deployment's collection agent or data store will run. Either can be provisioned on AWS, AZURE or GCP, and a collection agent also on GENERIC. Any other combination is rejected. Required for a collection agent or data store. Leave it out for AGENT_OBSERVABILITY, which Monte Carlo hosts.")
+	_ = cmd.RegisterFlagCompletionFunc("runtime-platform", enumCompletion(sdk.AllowedRuntimePlatformEnumValues))
 	return cmd
 }
 
@@ -84,7 +94,7 @@ func newDeploymentsDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <deployment_id>",
 		Short: "Delete a deployment",
-		Long:  "Delete a deployment, releasing the infrastructure Monte Carlo runs for it.\n\nThe deployment's storage is deleted with it, so empty that storage first. A deployment\nwith an enabled collection agent or data store, connections still running through it, or\nETL containers on it, cannot be deleted. Neither can one hosted by Monte Carlo, which this\nAPI does not provision. One that is not enabled is deleted along with the deployment.\n\nDeleting reaches several systems and can stop partway through. Repeating the request\npicks up where it stopped, so clear whatever a refusal named and send it again.",
+		Long:  "Delete a deployment, releasing the infrastructure Monte Carlo runs for it.\n\nThe deployment's storage is deleted with it, so empty that storage first. A deployment\nwith an enabled collection agent or data store, connections still running through it, or\nETL containers on it, cannot be deleted. Neither can one hosted by Monte Carlo, which this\nAPI does not provision. One that is not enabled is deleted along with the deployment.\n\nDeleting reaches several systems and can stop partway through. Repeating the request\npicks up where it stopped, so clear whatever a refusal named and send it again.\n\nAn `AGENT_OBSERVABILITY` deployment that has been `READY` is refused with 409 while\n`deletion_protection` is on. Turn protection off with an update, then delete it. One that\nnever became `READY` can always be deleted. The agent traces it stores are removed after\nthe call returns.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := confirm(cmd, "Delete deployment"+" "+args[0]); err != nil {
@@ -130,7 +140,7 @@ func newDeploymentsListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List deployments",
-		Long:  "List the deployments in your account.\n\nA deployment is the infrastructure that connects Monte Carlo to your environment. Each\none hosts a collection agent or a data store, or is hosted by Monte Carlo itself.\n\nOnly deployments on Monte Carlo's current collection platform are listed. Deployments on\nthe older platform are managed separately and do not appear here.\n\nDeployments are sorted by name, ignoring case.\n\nA deployment's external id is returned by the single-deployment read, not by this list.",
+		Long:  "List the deployments in your account.\n\nA deployment is the infrastructure that connects Monte Carlo to your environment. Each\none hosts a collection agent or a data store, or is hosted by Monte Carlo itself. An\n`AGENT_OBSERVABILITY` deployment is hosted by Monte Carlo and stores your agents' traces.\n\nOnly deployments on Monte Carlo's current collection platform are listed. Deployments on\nthe older platform are managed separately and do not appear here.\n\nDeployments are sorted by name, ignoring case.\n\nA deployment's external id is returned by the single-deployment read, not by this list.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			api, ctx, err := apiClient(cmd)
@@ -152,7 +162,7 @@ func newDeploymentsReprovisionCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "reprovision <deployment_id>",
 		Short: "Reprovision a deployment",
-		Long:  "Give a deployment something fresh to register.\n\nUse this to recover a deployment whose collection agent or data store was deleted, and to\nchange what a deployment hosts. The deployment itself is kept, so it does not count\nagainst your account's limit a second time, and what it hosted is discarded. An AWS\ndeployment is given a new external id, so a role trust policy naming the old one has to be\nupdated.\n\nA deployment whose collection agent or data store is enabled cannot be reprovisioned;\ndelete that first. Neither can one hosted by Monte Carlo, which this API does not\nprovision.",
+		Long:  "Give a deployment something fresh to register.\n\nUse this to recover a deployment whose collection agent or data store was deleted, and to\nchange what a deployment hosts. The deployment itself is kept, so it does not count\nagainst your account's limit a second time, and what it hosted is discarded. An AWS\ndeployment is given a new external id, so a role trust policy naming the old one has to be\nupdated.\n\nA deployment whose collection agent or data store is enabled cannot be reprovisioned;\ndelete that first. Neither can one hosted by Monte Carlo, which this API does not\nprovision. An `AGENT_OBSERVABILITY` deployment answers 409: delete it and create a new\none.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := confirm(cmd, "Reprovision deployment"+" "+args[0]); err != nil {
@@ -179,7 +189,7 @@ func newDeploymentsReprovisionCmd() *cobra.Command {
 			if err != nil {
 				return usageError("%w", err)
 			}
-			body := sdk.NewDeploymentIn(*type_, *runtimePlatform)
+			body := sdk.NewDeploymentReprovisionIn(*type_, *runtimePlatform)
 			if changed(cmd, "name") {
 				name, err := flagString(cmd, "name")
 				if err != nil {
@@ -187,12 +197,12 @@ func newDeploymentsReprovisionCmd() *cobra.Command {
 				}
 				body.SetName(name)
 			}
-			req = req.DeploymentIn(*body)
+			req = req.DeploymentReprovisionIn(*body)
 			out, resp, err := retryOnTransient(cmd, req.Execute)
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "id", "name", "type", "runtime_platform", "enabled", "created_time", "last_updated_time", "aws_external_id")
+			return render(cmd, out, "id", "name", "type", "runtime_platform", "enabled", "created_time", "last_updated_time", "status", "status_detail", "deletion_protection", "aws_external_id")
 		},
 	}
 	cmd.Flags().String("type", "", "What the deployment will host. Only COLLECTION_AGENT and COLLECTION_DATA_STORE can be provisioned today. Any other value is rejected.")
@@ -209,7 +219,7 @@ func newDeploymentsUpdateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update <deployment_id>",
 		Short: "Update a deployment",
-		Long:  "Rename a deployment.\n\nThe name is the only thing you can change here. What a deployment hosts and where it runs\nare settled when it is provisioned, so use reprovision to change either.\n\nRenaming changes nothing about the infrastructure behind the deployment. Every deployment\ncan be renamed, including one hosted by Monte Carlo. Sending an empty body leaves the\ndeployment as it is and returns it.",
+		Long:  "Rename a deployment, or change an Agent Observability deployment's deletion protection.\n\nWhat a deployment hosts and where it runs are settled when it is provisioned, so use\nreprovision to change either.\n\nRenaming changes nothing about the infrastructure behind the deployment. Every deployment\ncan be renamed, including one hosted by Monte Carlo. Sending an empty body leaves the\ndeployment as it is and returns it.\n\nOnly an `AGENT_OBSERVABILITY` deployment can be protected from deletion. Turn protection\noff here before deleting one that is protected. Any other deployment accepts\n`deletion_protection` only as `false`, which changes nothing.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			api, ctx, err := apiClient(cmd)
@@ -218,6 +228,13 @@ func newDeploymentsUpdateCmd() *cobra.Command {
 			}
 			req := api.DeploymentsAPI.UpdateDeployment(ctx, args[0])
 			body := sdk.NewDeploymentPatch()
+			if changed(cmd, "deletion-protection") {
+				deletionProtection, err := flagBool(cmd, "deletion-protection")
+				if err != nil {
+					return err
+				}
+				body.SetDeletionProtection(deletionProtection)
+			}
 			if changed(cmd, "name") {
 				name, err := flagString(cmd, "name")
 				if err != nil {
@@ -230,9 +247,10 @@ func newDeploymentsUpdateCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
-			return render(cmd, out, "id", "name", "type", "runtime_platform", "enabled", "created_time", "last_updated_time", "aws_external_id")
+			return render(cmd, out, "id", "name", "type", "runtime_platform", "enabled", "created_time", "last_updated_time", "status", "status_detail", "deletion_protection", "aws_external_id")
 		},
 	}
+	cmd.Flags().Bool("deletion-protection", false, "Whether deleting the deployment is refused once it has been READY. Left out, it is unchanged. Only an AGENT_OBSERVABILITY deployment can be protected. Any other type accepts only false.")
 	cmd.Flags().String("name", "", "New display name for the deployment. Left out, the name is unchanged.")
 	return cmd
 }
