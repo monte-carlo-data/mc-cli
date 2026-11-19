@@ -259,14 +259,14 @@ func TestWaitForStatusNamesOnlyTheIdWithoutAReadCommand(t *testing.T) {
 	}
 }
 
-// deploymentServer answers each GetDeployment with the next response, then keeps answering the
-// last. A response is a status, a Retry-After header, and a body.
+// deploymentAnswer is one response: a status, a Retry-After header, and a body.
 type deploymentAnswer struct {
 	status     int
 	retryAfter string
 	body       string
 }
 
+// deploymentServer answers each GetDeployment with the next answer, then keeps answering the last.
 func deploymentServer(t *testing.T, answers ...deploymentAnswer) (*sdk.APIClient, *atomic.Int32) {
 	t.Helper()
 	var calls atomic.Int32
