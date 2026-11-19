@@ -20,11 +20,11 @@ import (
 // duration of the test.
 func validationFixture(t *testing.T) (*cobra.Command, context.CancelFunc, *bytes.Buffer, *bytes.Buffer) {
 	t.Helper()
-	prev := []time.Duration{validationPollInterval, validationPollTimeout, validationFrameRate, transientRetryInterval, retryAfterFloor}
-	validationPollInterval, validationPollTimeout, validationFrameRate = 5*time.Millisecond, 2*time.Second, time.Millisecond
+	prev := []time.Duration{validationPollInterval, validationPollTimeout, spinnerFrameRate, transientRetryInterval, retryAfterFloor}
+	validationPollInterval, validationPollTimeout, spinnerFrameRate = 5*time.Millisecond, 2*time.Second, time.Millisecond
 	transientRetryInterval, retryAfterFloor = 5*time.Millisecond, time.Millisecond
 	t.Cleanup(func() {
-		validationPollInterval, validationPollTimeout, validationFrameRate = prev[0], prev[1], prev[2]
+		validationPollInterval, validationPollTimeout, spinnerFrameRate = prev[0], prev[1], prev[2]
 		transientRetryInterval, retryAfterFloor = prev[3], prev[4]
 	})
 	cmd := &cobra.Command{Use: "t"}

@@ -143,11 +143,6 @@ func statusFailed(id, value, detail, recheck string) error {
 	return errors.New(id + " is " + oneLine(value) + recheck)
 }
 
-// oneLine is API text made safe to print on one line.
-func oneLine(s string) string {
-	return strings.Join(terminalLines(s), " ")
-}
-
 // statusView prints a status wait's progress, one line per status and detail. Off a terminal
 // each line is printed once, when it is shown. On a terminal the latest line is redrawn in
 // place with a spinner while the wait sleeps, and drawn without one when the next line
@@ -233,7 +228,7 @@ func (v *statusView) sleep(ctx context.Context, wait time.Duration) bool {
 			return true
 		}
 	}
-	frame := time.NewTicker(validationFrameRate)
+	frame := time.NewTicker(spinnerFrameRate)
 	defer frame.Stop()
 	for i := 0; ; i++ {
 		v.frame(spinner[i%len(spinner)])

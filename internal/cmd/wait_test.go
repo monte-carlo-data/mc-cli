@@ -526,10 +526,10 @@ func TestTheStatusViewTruncatesTheSpinningLineToTheTerminal(t *testing.T) {
 func liveWaitFixture(t *testing.T) (*cobra.Command, context.CancelFunc, func() string) {
 	t.Helper()
 	cmd, cancel, _, _ := waitFixture(t)
-	prevTerminal, prevFrame := isTerminal, validationFrameRate
+	prevTerminal, prevFrame := isTerminal, spinnerFrameRate
 	isTerminal = func(*os.File) bool { return true }
-	validationFrameRate = time.Millisecond
-	t.Cleanup(func() { isTerminal, validationFrameRate = prevTerminal, prevFrame })
+	spinnerFrameRate = time.Millisecond
+	t.Cleanup(func() { isTerminal, spinnerFrameRate = prevTerminal, prevFrame })
 	f, err := os.CreateTemp(t.TempDir(), "stderr")
 	if err != nil {
 		t.Fatal(err)
