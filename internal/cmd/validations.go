@@ -296,11 +296,16 @@ func (v *validationView) draw(run validationRun, spin string) {
 
 func (v *validationView) line(row validationRow, spin string) string {
 	symbol, note := row.mark(spin)
-	text := row.label() + note
-	if v.width > 4 && utf8.RuneCountInString(text) > v.width-4 {
-		text = string([]rune(text)[:v.width-5]) + "…"
+	return "  " + v.paint(symbol) + " " + fitWidth(row.label()+note, v.width)
+}
+
+// fitWidth cuts text to fit after a four-column prefix on a terminal width columns wide, ending
+// it with an ellipsis. A width of 4 or less leaves text as it is.
+func fitWidth(text string, width int) string {
+	if width > 4 && utf8.RuneCountInString(text) > width-4 {
+		return string([]rune(text)[:width-5]) + "…"
 	}
-	return "  " + v.paint(symbol) + " " + text
+	return text
 }
 
 func (v *validationView) paint(symbol string) string {
