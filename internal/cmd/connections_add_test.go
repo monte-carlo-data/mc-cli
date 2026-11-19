@@ -146,9 +146,9 @@ func validationRunJSON(runStatus, status, passed, errs string) string {
 
 // fastPolling shrinks the validation polling budget for the duration of the test.
 func fastPolling(t *testing.T) {
-	prev := []time.Duration{validationPollInterval, validationFrameRate}
-	validationPollInterval, validationFrameRate = 5*time.Millisecond, time.Millisecond
-	t.Cleanup(func() { validationPollInterval, validationFrameRate = prev[0], prev[1] })
+	prev := []time.Duration{validationPollInterval, spinnerFrameRate}
+	validationPollInterval, spinnerFrameRate = 5*time.Millisecond, time.Millisecond
+	t.Cleanup(func() { validationPollInterval, spinnerFrameRate = prev[0], prev[1] })
 }
 
 func addArgs(srv *httptest.Server, t *testing.T, args ...string) []string {

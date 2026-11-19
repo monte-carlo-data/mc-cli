@@ -32,12 +32,7 @@ func retryOnTransient[T any](cmd *cobra.Command, call func() (T, *http.Response,
 // retryWithin is retryOnTransient waiting on ctx rather than the command's context. The retry
 // budget is also bounded by ctx's own deadline, if it has one and it is sooner.
 func retryWithin[T any](ctx context.Context, stderr io.Writer, call func() (T, *http.Response, error)) (T, *http.Response, error) {
-	deadline := time.Now().Add(transientRetryTimeout)
-	boundByCtx := false
-	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
-		deadline = d
-		boundByCtx = true
-	}
+	deadline, boundByCtx := retryDeadline(ctx, time.Now())
 	for {
 		out, resp, err := call()
 		if err == nil || resp == nil || !retryableStatus(resp.StatusCode) {
@@ -60,6 +55,17 @@ func retryWithin[T any](ctx context.Context, stderr io.Writer, call func() (T, *
 		case <-time.After(wait):
 		}
 	}
+}
+
+// retryDeadline is when the retry budget of a call that starts at start runs out: the fixed
+// budget, or ctx's own deadline when it has one and it is sooner. boundByCtx is true in the
+// second case.
+func retryDeadline(ctx context.Context, start time.Time) (deadline time.Time, boundByCtx bool) {
+	deadline = start.Add(transientRetryTimeout)
+	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
+		return d, true
+	}
+	return deadline, false
 }
 
 // retryableStatus is true for the statuses that mean the request was not carried out.

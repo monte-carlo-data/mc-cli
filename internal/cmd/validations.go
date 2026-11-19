@@ -13,8 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/spf13/cobra"
 )
@@ -23,7 +21,6 @@ import (
 var (
 	validationPollInterval = 3 * time.Second
 	validationPollTimeout  = 30 * time.Minute
-	validationFrameRate    = 120 * time.Millisecond
 )
 
 // validationRun is the part of a validation run this CLI reads. It is decoded from the API's
@@ -250,12 +247,10 @@ func (v *validationView) Write(p []byte) (int, error) {
 	return n, err
 }
 
-var spinner = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
-
 // animate redraws the run until wait has passed, or returns the context's error on Ctrl-C.
 func (v *validationView) animate(cmd *cobra.Command, run validationRun, wait time.Duration) error {
 	done := time.After(wait)
-	frame := time.NewTicker(validationFrameRate)
+	frame := time.NewTicker(spinnerFrameRate)
 	defer frame.Stop()
 	for i := 0; ; i++ {
 		v.draw(run, spinner[i%len(spinner)])
@@ -296,11 +291,7 @@ func (v *validationView) draw(run validationRun, spin string) {
 
 func (v *validationView) line(row validationRow, spin string) string {
 	symbol, note := row.mark(spin)
-	text := row.label() + note
-	if v.width > 4 && utf8.RuneCountInString(text) > v.width-4 {
-		text = string([]rune(text)[:v.width-5]) + "…"
-	}
-	return "  " + v.paint(symbol) + " " + text
+	return "  " + v.paint(symbol) + " " + fitWidth(row.label()+note, v.width)
 }
 
 func (v *validationView) paint(symbol string) string {
@@ -345,20 +336,4 @@ func deref(s *string) string {
 		return ""
 	}
 	return *s
-}
-
-// terminalLines splits API text into lines safe to print: line endings normalised, surrounding
-// blank space trimmed, and control characters other than tab shown as '?'.
-func terminalLines(s string) []string {
-	s = strings.TrimSpace(strings.NewReplacer("\r\n", "\n", "\r", "\n").Replace(s))
-	if s == "" {
-		return nil
-	}
-	s = strings.Map(func(r rune) rune {
-		if r != '\n' && r != '\t' && unicode.IsControl(r) {
-			return '?'
-		}
-		return r
-	}, s)
-	return strings.Split(s, "\n")
 }

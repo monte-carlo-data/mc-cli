@@ -5,10 +5,50 @@ package cmd
 
 import (
 	"os"
+	"strings"
+	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
+
+// spinnerFrameRate is how often a spinner on stderr advances. A variable so a test can shrink it;
+// nothing writes it at runtime.
+var spinnerFrameRate = 120 * time.Millisecond
+
+var spinner = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+
+// fitWidth cuts text to fit after a four-column prefix on a terminal width columns wide, ending
+// it with an ellipsis. A width of 4 or less leaves text as it is.
+func fitWidth(text string, width int) string {
+	if width > 4 && utf8.RuneCountInString(text) > width-4 {
+		return string([]rune(text)[:width-5]) + "…"
+	}
+	return text
+}
+
+// terminalLines splits API text into lines safe to print: line endings normalised, surrounding
+// blank space trimmed, and control characters other than tab shown as '?'.
+func terminalLines(s string) []string {
+	s = strings.TrimSpace(strings.NewReplacer("\r\n", "\n", "\r", "\n").Replace(s))
+	if s == "" {
+		return nil
+	}
+	s = strings.Map(func(r rune) rune {
+		if r != '\n' && r != '\t' && unicode.IsControl(r) {
+			return '?'
+		}
+		return r
+	}, s)
+	return strings.Split(s, "\n")
+}
+
+// oneLine is API text made safe to print on one line.
+func oneLine(s string) string {
+	return strings.Join(terminalLines(s), " ")
+}
 
 // isTerminal reports whether f is a terminal. Tests replace it.
 var isTerminal = func(f *os.File) bool { return term.IsTerminal(int(f.Fd())) }
