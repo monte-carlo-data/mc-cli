@@ -105,6 +105,45 @@ func TestWaitForStatusPollsUntilReadyWithProgressOnStderrOnly(t *testing.T) {
 	}
 }
 
+func TestWaitForStatusPrintsNoStatusLineForAFirstThatIsNil(t *testing.T) {
+	cmd, _, stdout, stderr := waitFixture(t)
+	read, calls := states(resource{"READY", "Done."})
+
+	got, err := waitForStatus(cmd, nil, statusOf, read, ready, failed, 1800, "dep-1", "deployments get")
+
+	if err != nil || got == nil || got.status != "READY" || *calls != 1 {
+		t.Fatalf("got %+v, err %v, after %d reads", got, err, *calls)
+	}
+	want := "Waiting for dep-1 to be READY:\n" +
+		"  READY: Done.\n" +
+		"dep-1 is READY.\n"
+	if stderr.String() != want {
+		t.Fatalf("stderr =\n%q\nwant\n%q", stderr, want)
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("stdout = %q", stdout)
+	}
+}
+
+func TestWaitForStatusFailsAsAPlainErrorWhenAReadHoldsNothing(t *testing.T) {
+	cmd, _, _, _ := waitFixture(t)
+	read := func() (*resource, *http.Response, error) {
+		return nil, &http.Response{StatusCode: http.StatusOK, Header: http.Header{}}, nil
+	}
+
+	got, err := waitForStatus(cmd, &resource{status: "PROVISIONING"}, statusOf, read, ready, failed, 1800, "dep-1", "deployments get")
+
+	if err == nil || err.Error() != "cannot read dep-1: the response held nothing" {
+		t.Fatalf("err = %v", err)
+	}
+	if code := exitCode(cmd.Context(), err); code != exitFailure {
+		t.Errorf("exit code %d, want %d", code, exitFailure)
+	}
+	if got == nil || got.status != "PROVISIONING" {
+		t.Errorf("got %+v, want the value held before the read", got)
+	}
+}
+
 func TestWaitForStatusFailsWithTheDetailAsAPlainError(t *testing.T) {
 	cmd, _, stdout, stderr := waitFixture(t)
 	read, _ := states(resource{"PROVISIONING", ""}, resource{"FAILED", "Step 2 of 2 did not finish.\nSee the log."})
