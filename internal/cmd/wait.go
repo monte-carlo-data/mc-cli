@@ -53,6 +53,8 @@ func waitForStatus[T any](
 	timeoutSeconds int,
 	id, readCmd string,
 ) (*T, error) {
+	// id comes from an API response, so it is made safe to print like the status and detail.
+	safeID := oneLine(id)
 	held := first
 	value, detail := "", ""
 	if held != nil {
@@ -63,14 +65,14 @@ func waitForStatus[T any](
 	}
 	recheck := ""
 	if readCmd != "" {
-		recheck = fmt.Sprintf("\ncheck it with: %s %s %s", binaryName, readCmd, id)
+		recheck = fmt.Sprintf("\ncheck it with: %s %s %s", binaryName, readCmd, safeID)
 	}
 	if slices.Contains(failed, value) {
-		return held, statusFailed(id, value, detail, recheck)
+		return held, statusFailed(safeID, value, detail, recheck)
 	}
 
 	w := cmd.ErrOrStderr()
-	fmt.Fprintf(w, "Waiting for %s to be %s:\n", id, strings.Join(ready, " or "))
+	fmt.Fprintf(w, "Waiting for %s to be %s:\n", safeID, strings.Join(ready, " or "))
 	view := &statusView{w: w, live: stderrIsTerminal(cmd), width: stderrWidth(cmd)}
 	view.show(value, detail)
 
@@ -87,9 +89,9 @@ func waitForStatus[T any](
 	// own, starting with a newline, that goes before the recheck line.
 	stopped := func(extra string) error {
 		if err := cmd.Context().Err(); err != nil {
-			return fmt.Errorf("stopped waiting: %w; %s%s%s%s", err, id, still(), extra, recheck)
+			return fmt.Errorf("stopped waiting: %w; %s%s%s%s", err, safeID, still(), extra, recheck)
 		}
-		return fmt.Errorf("stopped waiting after %s; %s%s%s%s", timeout, id, still(), extra, recheck)
+		return fmt.Errorf("stopped waiting after %s; %s%s%s%s", timeout, safeID, still(), extra, recheck)
 	}
 	poll := func() error {
 		for {
@@ -111,10 +113,10 @@ func waitForStatus[T any](
 					return stopped("\nthe last read failed: " + apiErr(resp, err).Error())
 				}
 				// The retry budget ran out first. The failure is kept, with its exit code.
-				return fmt.Errorf("%w\n%s%s%s", apiErr(resp, err), id, still(), recheck)
+				return fmt.Errorf("%w\n%s%s%s", apiErr(resp, err), safeID, still(), recheck)
 			}
 			if next == nil {
-				return fmt.Errorf("cannot read %s: the response held nothing", id)
+				return fmt.Errorf("cannot read %s: the response held nothing", safeID)
 			}
 			held = next
 			value, detail = status(held)
@@ -123,14 +125,14 @@ func waitForStatus[T any](
 			case slices.Contains(ready, value):
 				return nil
 			case slices.Contains(failed, value):
-				return statusFailed(id, value, detail, recheck)
+				return statusFailed(safeID, value, detail, recheck)
 			}
 		}
 	}
 	err := poll()
 	view.end()
 	if err == nil {
-		fmt.Fprintf(w, "%s is %s.\n", id, oneLine(value))
+		fmt.Fprintf(w, "%s is %s.\n", safeID, oneLine(value))
 	}
 	return held, err
 }

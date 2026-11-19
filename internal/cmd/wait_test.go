@@ -165,6 +165,23 @@ func TestWaitForStatusFailsWithTheDetailAsAPlainError(t *testing.T) {
 	}
 }
 
+func TestWaitForStatusMakesTheIdSafeToPrint(t *testing.T) {
+	cmd, _, _, stderr := waitFixture(t)
+	read, _ := states(resource{"FAILED", "It did not finish."})
+
+	_, err := waitForStatus(cmd, &resource{status: "PROVISIONING"}, statusOf, read, ready, failed, 1800, "dep-1\x1b[2J\nx", "deployments get")
+
+	if err == nil {
+		t.Fatal("no error")
+	}
+	if strings.Contains(stderr.String(), "\x1b") || strings.Contains(err.Error(), "\x1b") {
+		t.Errorf("an escape reached the output: stderr %q, err %q", stderr, err)
+	}
+	if want := "\ncheck it with: montecarlo deployments get dep-1?[2J x"; !strings.HasSuffix(err.Error(), want) {
+		t.Errorf("err = %q, want it to end with %q", err, want)
+	}
+}
+
 func TestWaitForStatusFailsWithoutReadingWhenFirstHasFailed(t *testing.T) {
 	cmd, _, _, stderr := waitFixture(t)
 	read, calls := states(resource{status: "READY"})
