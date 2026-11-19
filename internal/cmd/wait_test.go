@@ -310,6 +310,112 @@ func TestWaitForStatusEndsOnAnyOtherReadFailure(t *testing.T) {
 	}
 }
 
+// waitForDeploymentWithin is waitForDeployment with the wait's timeout in seconds given.
+func waitForDeploymentWithin(cmd *cobra.Command, api *sdk.APIClient, timeoutSeconds int) (*sdk.DeploymentOut, error) {
+	ctx := cmd.Context()
+	return waitForStatus(cmd, sdk.NewDeploymentOut("dep-1", "d", false, sdk.DEPLOYMENTSTATUS_PROVISIONING, false),
+		func(o *sdk.DeploymentOut) (string, string) {
+			return string(o.GetStatus()), o.GetStatusDetail()
+		}, func() (*sdk.DeploymentOut, *http.Response, error) {
+			return api.DeploymentsAPI.GetDeployment(ctx, "dep-1").Execute()
+		}, []string{"READY"}, []string{"FAILED"}, timeoutSeconds, "dep-1", "deployments get")
+}
+
+func TestWaitForStatusTimesOutWhenARetryWouldOutlastTheDeadline(t *testing.T) {
+	for _, status := range []int{http.StatusServiceUnavailable, http.StatusTooManyRequests} {
+		t.Run(strconv.Itoa(status), func(t *testing.T) {
+			cmd, _, _, _ := waitFixture(t)
+			// The wait lasts three seconds, far less than the retry budget, so the wait's own
+			// deadline bounds the retries, and a retry would wait an hour.
+			statusTimeoutUnit = 100 * time.Millisecond
+			prev := transientRetryTimeout
+			t.Cleanup(func() { transientRetryTimeout = prev })
+			transientRetryTimeout, transientRetryInterval = time.Hour, time.Hour
+			api, _ := deploymentServer(t, deploymentAnswer{status, "", problemBody(status)})
+
+			_, err := waitForDeploymentWithin(cmd, api, 30)
+
+			if err == nil {
+				t.Fatal("no error")
+			}
+			lines := strings.Split(err.Error(), "\n")
+			if lines[0] != "stopped waiting after 30s; dep-1 is still PROVISIONING" {
+				t.Errorf("first line = %q", lines[0])
+			}
+			if !strings.Contains(err.Error(), "\nthe last read failed: ") || !strings.Contains(err.Error(), strconv.Itoa(status)) {
+				t.Errorf("err = %v\nwant it to name the failed read and %d", err, status)
+			}
+			if last := lines[len(lines)-1]; last != "check it with: montecarlo deployments get dep-1" {
+				t.Errorf("last line = %q", last)
+			}
+			if code := exitCode(cmd.Context(), err); code != exitFailure {
+				t.Errorf("exit code %d, want %d", code, exitFailure)
+			}
+		})
+	}
+}
+
+func TestWaitForStatusNamesTheResourceWhenTheRetryBudgetRunsOut(t *testing.T) {
+	for _, status := range []int{http.StatusServiceUnavailable, http.StatusTooManyRequests} {
+		t.Run(strconv.Itoa(status), func(t *testing.T) {
+			cmd, _, _, _ := waitFixture(t)
+			// The wait lasts eighteen seconds; the retry budget ten milliseconds, so the budget
+			// runs out first, and a retry would wait an hour.
+			statusTimeoutUnit = 10 * time.Millisecond
+			prev := transientRetryTimeout
+			t.Cleanup(func() { transientRetryTimeout = prev })
+			transientRetryTimeout, transientRetryInterval = 10*time.Millisecond, time.Hour
+			api, _ := deploymentServer(t, deploymentAnswer{status, "", problemBody(status)})
+
+			_, err := waitForDeployment(cmd, api, sdk.NewDeploymentOut("dep-1", "d", false, sdk.DEPLOYMENTSTATUS_PROVISIONING, false))
+
+			if err == nil {
+				t.Fatal("no error")
+			}
+			lines := strings.Split(err.Error(), "\n")
+			if len(lines) < 3 || !strings.Contains(lines[0], strconv.Itoa(status)) {
+				t.Fatalf("err = %v\nwant it to begin with the API error naming %d", err, status)
+			}
+			if got := lines[len(lines)-2]; got != "dep-1 is still PROVISIONING" {
+				t.Errorf("second to last line = %q", got)
+			}
+			if got := lines[len(lines)-1]; got != "check it with: montecarlo deployments get dep-1" {
+				t.Errorf("last line = %q", got)
+			}
+			if code := exitCode(cmd.Context(), err); code != exitTransient {
+				t.Errorf("exit code %d, want %d", code, exitTransient)
+			}
+		})
+	}
+}
+
+func TestWaitForStatusStopsOnCtrlCDuringARetry(t *testing.T) {
+	cmd, cancel, _, _ := waitFixture(t)
+	// The wait lasts five hours (1800 units of ten seconds), so the two-hour retry budget binds
+	// rather than the wait's deadline, and the one-hour retry fits in it and really sleeps.
+	statusTimeoutUnit = 10 * time.Second
+	prev := transientRetryTimeout
+	t.Cleanup(func() { transientRetryTimeout = prev })
+	transientRetryTimeout, transientRetryInterval = 2*time.Hour, time.Hour
+	api, calls := deploymentServer(t, deploymentAnswer{http.StatusServiceUnavailable, "", problemBody(503)})
+	// Interrupt once the server has answered the 503, while the retry sleeps.
+	go func() {
+		for calls.Load() == 0 {
+			time.Sleep(time.Millisecond)
+		}
+		cancel()
+	}()
+
+	_, err := waitForDeployment(cmd, api, sdk.NewDeploymentOut("dep-1", "d", false, sdk.DEPLOYMENTSTATUS_PROVISIONING, false))
+
+	if err == nil || exitCode(cmd.Context(), err) != exitInterrupted {
+		t.Fatalf("err = %v", err)
+	}
+	if want := "dep-1 is still PROVISIONING\ncheck it with: montecarlo deployments get dep-1"; !strings.HasSuffix(err.Error(), want) {
+		t.Errorf("err = %v\nwant it to end %s", err, want)
+	}
+}
+
 func TestTheStatusViewRedrawsTheLineInPlaceWhileTheStatusHolds(t *testing.T) {
 	var out bytes.Buffer
 	view := &statusView{w: &out, live: true}

@@ -35,12 +35,15 @@ var (
 // line each time the status or its detail changes, the latest redrawn in place with a spinner
 // on a terminal, then a summary. Stdout stays clean for the caller to print the result.
 //
-// A failed status is an error carrying the detail. So is the wait running past timeoutSeconds,
-// and Ctrl-C, which stops the wait through the command's context. Each of these errors names id
-// and, on a line of its own, readCmd, the command without the binary name that reads the
-// resource; the id is appended to it. An empty readCmd adds no such line. A read failing with
-// anything other than a 503 or a 429 ends the wait with that failure. With every error, the
-// latest value held is returned too.
+// A failed status is an error carrying the detail. The wait running past timeoutSeconds is an
+// error naming the last status, as is Ctrl-C, which stops the wait through the command's
+// context; so is a 503 or a 429 whose retry would outlast the wait, with that read's failure
+// added as text. A 503 or a 429 still answering when the retries' own budget runs out ends the
+// wait with that failure, its exit code kept, followed by the id and the last status. Each of
+// these errors names id and, on a line of its own, readCmd, the command without the binary
+// name that reads the resource; the id is appended to it. An empty readCmd adds no such line. A
+// read failing with anything other than a 503 or a 429 ends the wait with that failure alone.
+// With every error, the latest value held is returned too.
 func waitForStatus[T any](
 	cmd *cobra.Command,
 	first *T,
@@ -74,27 +77,41 @@ func waitForStatus[T any](
 	timeout := time.Duration(timeoutSeconds) * time.Second
 	ctx, cancel := context.WithTimeout(cmd.Context(), time.Duration(timeoutSeconds)*statusTimeoutUnit)
 	defer cancel()
-	stopped := func() error {
-		still := ""
-		if value != "" {
-			still = " is still " + oneLine(value)
+	still := func() string {
+		if value == "" {
+			return ""
 		}
+		return " is still " + oneLine(value)
+	}
+	// stopped is the error for a wait that ended early. extra, when not empty, is a line of its
+	// own, starting with a newline, that goes before the recheck line.
+	stopped := func(extra string) error {
 		if err := cmd.Context().Err(); err != nil {
-			return fmt.Errorf("stopped waiting: %w; %s%s%s", err, id, still, recheck)
+			return fmt.Errorf("stopped waiting: %w; %s%s%s%s", err, id, still(), extra, recheck)
 		}
-		return fmt.Errorf("stopped waiting after %s; %s%s%s", timeout, id, still, recheck)
+		return fmt.Errorf("stopped waiting after %s; %s%s%s%s", timeout, id, still(), extra, recheck)
 	}
 	poll := func() error {
 		for {
 			if !view.sleep(ctx, statusPollInterval) {
-				return stopped()
+				return stopped("")
 			}
+			start := time.Now()
 			next, resp, err := retryWithin(ctx, view, read)
 			if err != nil {
 				if ctx.Err() != nil {
-					return stopped()
+					return stopped("")
 				}
-				return apiErr(resp, err)
+				if resp == nil || !retryableStatus(resp.StatusCode) {
+					return apiErr(resp, err)
+				}
+				if _, boundByCtx := retryDeadline(ctx, start); boundByCtx {
+					// The wait's own deadline cut the retries short. The failure is text, so the
+					// exit code stays that of a wait that ran out.
+					return stopped("\nthe last read failed: " + apiErr(resp, err).Error())
+				}
+				// The retry budget ran out first. The failure is kept, with its exit code.
+				return fmt.Errorf("%w\n%s%s%s", apiErr(resp, err), id, still(), recheck)
 			}
 			if next == nil {
 				return fmt.Errorf("cannot read %s: the response held nothing", id)
