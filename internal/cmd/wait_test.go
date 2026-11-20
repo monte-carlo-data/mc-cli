@@ -377,29 +377,46 @@ func waitForDeploymentWithin(cmd *cobra.Command, api *sdk.APIClient, timeoutSeco
 		}, []string{"READY"}, []string{"FAILED"}, timeoutSeconds, "dep-1", "deployments get")
 }
 
-func TestWaitForStatusTimesOutWhenARetryWouldOutlastTheDeadline(t *testing.T) {
-	for _, status := range []int{http.StatusServiceUnavailable, http.StatusTooManyRequests} {
-		t.Run(strconv.Itoa(status), func(t *testing.T) {
+func TestWaitForStatusStopsEarlyWhenARetryWouldOutlastTheTimeout(t *testing.T) {
+	for name, answer := range map[string]deploymentAnswer{
+		"429 asking for 300s":       {http.StatusTooManyRequests, "300", problemBody(429)},
+		"503 asking for 300s":       {http.StatusServiceUnavailable, "300", problemBody(503)},
+		"429 at the fixed interval": {http.StatusTooManyRequests, "", problemBody(429)},
+		"503 at the fixed interval": {http.StatusServiceUnavailable, "", problemBody(503)},
+	} {
+		t.Run(name, func(t *testing.T) {
 			cmd, _, _, _ := waitFixture(t)
 			// The wait lasts three seconds, far less than the retry budget, so the wait's own
-			// deadline bounds the retries, and a retry would wait an hour.
+			// deadline bounds the retries. Both the 300s Retry-After and the hour-long fixed
+			// interval outlast it, so the wait stops at once, with most of its time left.
 			statusTimeoutUnit = 100 * time.Millisecond
 			prev := transientRetryTimeout
 			t.Cleanup(func() { transientRetryTimeout = prev })
 			transientRetryTimeout, transientRetryInterval = time.Hour, time.Hour
-			api, _ := deploymentServer(t, deploymentAnswer{status, "", problemBody(status)})
+			api, calls := deploymentServer(t,
+				deploymentAnswer{http.StatusOK, "", deployment("PROVISIONING", "latest")},
+				answer,
+			)
+			start := time.Now()
 
-			_, err := waitForDeploymentWithin(cmd, api, 30)
+			got, err := waitForDeploymentWithin(cmd, api, 30)
 
 			if err == nil {
 				t.Fatal("no error")
 			}
-			lines := strings.Split(err.Error(), "\n")
-			if lines[0] != "stopped waiting after 30s; dep-1 is still PROVISIONING" {
-				t.Errorf("first line = %q", lines[0])
+			if took := time.Since(start); took > time.Second {
+				t.Errorf("took %s, want it to stop before the timeout", took)
 			}
-			if !strings.Contains(err.Error(), "\nthe last read failed: ") || !strings.Contains(err.Error(), strconv.Itoa(status)) {
-				t.Errorf("err = %v\nwant it to name the failed read and %d", err, status)
+			lines := strings.Split(err.Error(), "\n")
+			want := "stopped waiting: retrying the read would outlast the 30s timeout; dep-1 is still PROVISIONING"
+			if lines[0] != want {
+				t.Errorf("first line = %q\nwant %q", lines[0], want)
+			}
+			if strings.Contains(err.Error(), "stopped waiting after") {
+				t.Errorf("err = %v\nwant it not to claim the timeout ran out", err)
+			}
+			if len(lines) != 3 || !strings.HasPrefix(lines[1], "the last read failed: ") || !strings.Contains(lines[1], strconv.Itoa(answer.status)) {
+				t.Errorf("err = %v\nwant its second line to name the failed read and %d", err, answer.status)
 			}
 			if last := lines[len(lines)-1]; last != "check it with: montecarlo deployments get dep-1" {
 				t.Errorf("last line = %q", last)
@@ -407,7 +424,33 @@ func TestWaitForStatusTimesOutWhenARetryWouldOutlastTheDeadline(t *testing.T) {
 			if code := exitCode(cmd.Context(), err); code != exitFailure {
 				t.Errorf("exit code %d, want %d", code, exitFailure)
 			}
+			if calls.Load() != 2 || got == nil || got.GetStatusDetail() != "latest" {
+				t.Errorf("got %+v after %d reads, want the value the first read returned", got, calls.Load())
+			}
 		})
+	}
+}
+
+func TestWaitForStatusNamesTheTimeoutWhenItRunsOutDuringARetry(t *testing.T) {
+	cmd, _, _, _ := waitFixture(t)
+	// The wait lasts thirty milliseconds, and the read answers a 503 only well after it has
+	// passed, so the timeout has run out by the time the retry gives up.
+	read := func() (*resource, *http.Response, error) {
+		time.Sleep(200 * time.Millisecond)
+		return nil, &http.Response{StatusCode: http.StatusServiceUnavailable, Header: http.Header{}}, errors.New("unavailable")
+	}
+
+	got, err := waitForStatus(cmd, &resource{"PROVISIONING", "latest"}, statusOf, read, ready, failed, 30, "dep-1", "deployments get")
+
+	want := "stopped waiting after 30s; dep-1 is still PROVISIONING\ncheck it with: montecarlo deployments get dep-1"
+	if err == nil || err.Error() != want {
+		t.Fatalf("err = %v\nwant %s", err, want)
+	}
+	if got == nil || got.detail != "latest" {
+		t.Errorf("got %+v", got)
+	}
+	if code := exitCode(cmd.Context(), err); code != exitFailure {
+		t.Errorf("exit code %d, want %d", code, exitFailure)
 	}
 }
 
