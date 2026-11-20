@@ -433,10 +433,10 @@ func TestWaitForStatusStopsEarlyWhenARetryWouldOutlastTheTimeout(t *testing.T) {
 
 func TestWaitForStatusNamesTheTimeoutWhenItRunsOutDuringARetry(t *testing.T) {
 	cmd, _, _, _ := waitFixture(t)
-	// The wait lasts thirty milliseconds, and the read answers a 503 only after it has passed,
-	// so the timeout has run out by the time the retry gives up.
+	// The wait lasts thirty milliseconds, and the read answers a 503 only well after it has
+	// passed, so the timeout has run out by the time the retry gives up.
 	read := func() (*resource, *http.Response, error) {
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(200 * time.Millisecond)
 		return nil, &http.Response{StatusCode: http.StatusServiceUnavailable, Header: http.Header{}}, errors.New("unavailable")
 	}
 
