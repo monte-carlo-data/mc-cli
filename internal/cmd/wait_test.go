@@ -387,8 +387,8 @@ func TestWaitForStatusStopsEarlyWhenARetryWouldOutlastTheTimeout(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			cmd, _, _, _ := waitFixture(t)
 			// The wait lasts three seconds, far less than the retry budget, so the wait's own
-			// deadline bounds the retries. Either retry waits longer than that, so the wait
-			// stops at once, with most of its time left.
+			// deadline bounds the retries. Both the 300s Retry-After and the hour-long fixed
+			// interval outlast it, so the wait stops at once, with most of its time left.
 			statusTimeoutUnit = 100 * time.Millisecond
 			prev := transientRetryTimeout
 			t.Cleanup(func() { transientRetryTimeout = prev })
