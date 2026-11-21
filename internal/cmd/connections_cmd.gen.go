@@ -172,7 +172,7 @@ func newConnectionsListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List connections",
-		Long:  "List the connections in your account, a page at a time.\n\nConnections are returned oldest first. Pass `warehouse_id`, `bi_container_id` or\n`etl_container_id` to list one parent's connections; an id you cannot see returns an\nempty page. A caller whose asset access is restricted to certain domains sees only the\nconnections of warehouses holding assets in those domains, and every BI and ETL\nconnection.\n\nFiltering by an ETL container also returns a warehouse or BI connection that collects ETL\njobs through it, such as a Snowflake Tasks or Power BI dataflows connection.",
+		Long:  "List the connections in your account, a page at a time.\n\nConnections are returned oldest first. Pass `warehouse_id`, `bi_container_id` or\n`etl_container_id` to list one parent's connections; an id you cannot see returns an\nempty page. A caller whose asset access is restricted to certain domains sees only the\nconnections of warehouses holding assets in those domains, and every BI and ETL\nconnection.\n\nFiltering by an ETL container also returns a warehouse or BI connection that collects ETL\njobs through it, such as a Snowflake Tasks or Power BI ETL connection.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			api, ctx, err := apiClient(cmd)
@@ -7002,7 +7002,7 @@ func newConnectionsUpdateSparkCmd() *cobra.Command {
 // credentials keep their storage, so a native type's subcommand takes no self-hosted flags.
 func registerConnectionsUpdateFlags(cmd *cobra.Command) {
 	cmd.Flags().String("credentials-id", "", "Credentials for the connection to read with from now on. They must be for the connection's own type, and may be stored by Monte Carlo or self-hosted. The previous credentials are kept, and can be deleted once nothing uses them. Omit it to keep the current credentials. An explicit null is ignored, the same as omitting the field.")
-	cmd.Flags().StringSlice("job-types", nil, "The connection's job types with etl added or removed. Adding etl turns on ETL collection for a Snowflake (Snowflake Tasks), Power BI (dataflows) or Salesforce Data Cloud connection, and creates the ETL container that etl_container_id then names. Removing it deletes that container. No other job can be added or removed. Omit it to leave the job types unchanged.")
+	cmd.Flags().StringSlice("job-types", nil, "The connection's job types with etl added or removed. Adding etl turns on ETL collection for a Snowflake (Snowflake Tasks), Power BI or Salesforce Data Cloud connection, and creates the ETL container that etl_container_id then names. Removing it deletes that container. No other job can be added or removed. Omit it to leave the job types unchanged.")
 	cmd.Flags().String("name", "", "New display name for the connection. Omit it to leave the name unchanged. An explicit null is ignored, the same as omitting the field.")
 	cmd.Flags().Bool("validate-only", false, "Validate the credentials change and change nothing.")
 	cmd.Flags().Bool("skip-validations", false, "Change the credentials without validating them first, and without asking.")
