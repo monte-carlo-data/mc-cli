@@ -71,24 +71,33 @@ func deploymentBody(status, detail string) string {
 	if detail != "" {
 		statusDetail = fmt.Sprintf("%q", detail)
 	}
-	return fmt.Sprintf(`{"id": %q, "name": "traces", "type": "AGENT_OBSERVABILITY", "enabled": false,
-		"status": %q, "status_detail": %s, "deletion_protection": true}`,
+	return fmt.Sprintf(`{"id": %q, "name": "traces", "type": "AGENT_OBSERVABILITY",
+		"runtime_platform": null, "enabled": false,
+		"created_time": "2026-11-23T15:00:00Z", "last_updated_time": "2026-11-23T15:00:00Z",
+		"status": %q, "status_detail": %s, "deletion_protection": true, "aws_external_id": null}`,
 		waitingDeploymentID, status, statusDetail)
 }
 
-// createDeployment runs `deployments create` against api, with the wait's timing shrunk so one
-// timeout second lasts a millisecond.
-func createDeployment(t *testing.T, api *deploymentAPI, extra ...string) (code int, stdout, stderr string) {
+// createDeployment runs `deployments create` against api and prints in the given output
+// format. The wait polls every millisecond, and one second of its timeout lasts a millisecond.
+func createDeployment(t *testing.T, api *deploymentAPI, output string, extra ...string) (code int, stdout, stderr string) {
+	t.Helper()
+	return createDeploymentWithin(t, api, time.Millisecond, output, extra...)
+}
+
+// createDeploymentWithin is createDeployment with timeoutUnit as the length of one second of
+// the wait's timeout.
+func createDeploymentWithin(t *testing.T, api *deploymentAPI, timeoutUnit time.Duration, output string, extra ...string) (code int, stdout, stderr string) {
 	t.Helper()
 	prev := []time.Duration{statusPollInterval, statusTimeoutUnit}
-	statusPollInterval, statusTimeoutUnit = time.Millisecond, time.Millisecond
+	statusPollInterval, statusTimeoutUnit = time.Millisecond, timeoutUnit
 	t.Cleanup(func() { statusPollInterval, statusTimeoutUnit = prev[0], prev[1] })
 	args := append([]string{
 		"deployments", "create", "--type", "AGENT_OBSERVABILITY",
 		"--endpoint", api.serve(t).URL,
 		"--api-id", "i", "--api-token", "s",
 		"--config-dir", t.TempDir(),
-		"--output", "json",
+		"--output", output,
 	}, extra...)
 	return runExit(t, context.Background(), args...)
 }
@@ -108,7 +117,7 @@ func printedStatus(t *testing.T, stdout string) string {
 func TestDeploymentsCreateReadsNothingWhenTheDeploymentIsAlreadyReady(t *testing.T) {
 	api := &deploymentAPI{created: deploymentBody("READY", "")}
 
-	code, stdout, stderr := createDeployment(t, api)
+	code, stdout, stderr := createDeployment(t, api, "json")
 
 	if code != exitOK {
 		t.Fatalf("exit %d, want %d; stderr:\n%s", code, exitOK, stderr)
@@ -133,7 +142,7 @@ func TestDeploymentsCreateWaitsUntilTheDeploymentIsReady(t *testing.T) {
 		},
 	}
 
-	code, stdout, stderr := createDeployment(t, api)
+	code, stdout, stderr := createDeployment(t, api, "json")
 
 	if code != exitOK {
 		t.Fatalf("exit %d, want %d; stderr:\n%s", code, exitOK, stderr)
@@ -153,7 +162,7 @@ func TestDeploymentsCreateWaitsUntilTheDeploymentIsReady(t *testing.T) {
 func TestDeploymentsCreateNoWaitPrintsTheDeploymentAsCreated(t *testing.T) {
 	api := &deploymentAPI{created: deploymentBody("PROVISIONING", "")}
 
-	code, stdout, stderr := createDeployment(t, api, "--no-wait")
+	code, stdout, stderr := createDeployment(t, api, "json", "--no-wait")
 
 	if code != exitOK {
 		t.Fatalf("exit %d, want %d; stderr:\n%s", code, exitOK, stderr)
@@ -179,7 +188,7 @@ func TestDeploymentsCreateExitsOneWhenTheDeploymentFails(t *testing.T) {
 		},
 	}
 
-	code, stdout, stderr := createDeployment(t, api)
+	code, stdout, stderr := createDeployment(t, api, "json")
 
 	if code != exitFailure {
 		t.Fatalf("exit %d, want %d; stderr:\n%s", code, exitFailure, stderr)
@@ -197,18 +206,89 @@ func TestDeploymentsCreateExitsOneWhenTheDeploymentFails(t *testing.T) {
 	}
 }
 
-func TestDeploymentsCreatePrintsNoTableWhenTheDeploymentFails(t *testing.T) {
-	api := &deploymentAPI{
-		created: deploymentBody("PROVISIONING", ""),
-		reads:   []string{deploymentBody("FAILED", "Setting up the deployment did not finish.")},
-	}
+func TestDeploymentsCreateExitsOneWhenTheDeploymentIsCreatedFailed(t *testing.T) {
+	const detail = "Setting up the deployment did not finish."
+	api := &deploymentAPI{created: deploymentBody("FAILED", detail)}
 
-	code, stdout, stderr := createDeployment(t, api, "--output", "table")
+	code, stdout, stderr := createDeployment(t, api, "json")
 
 	if code != exitFailure {
 		t.Fatalf("exit %d, want %d; stderr:\n%s", code, exitFailure, stderr)
 	}
+	if got := api.log(); got != "POST /api/v2/deployments" {
+		t.Errorf("requests:\n%s\nwant the create alone", got)
+	}
+	if got := printedStatus(t, stdout); got != "FAILED" {
+		t.Errorf("printed status %s, want FAILED", got)
+	}
+	if want := waitingDeploymentID + " is FAILED: " + detail; !strings.Contains(stderr, want) {
+		t.Errorf("stderr lacks %q:\n%s", want, stderr)
+	}
+}
+
+func TestDeploymentsCreatePrintsNoTableWhenTheDeploymentFails(t *testing.T) {
+	const detail = "Setting up the deployment did not finish."
+	api := &deploymentAPI{
+		created: deploymentBody("PROVISIONING", ""),
+		reads:   []string{deploymentBody("FAILED", detail)},
+	}
+
+	code, stdout, stderr := createDeployment(t, api, "table")
+
+	if code != exitFailure {
+		t.Fatalf("exit %d, want %d; stderr:\n%s", code, exitFailure, stderr)
+	}
+	read := "GET /api/v2/deployments/" + waitingDeploymentID
+	if got, want := api.log(), "POST /api/v2/deployments\n"+read; got != want {
+		t.Errorf("requests:\n%s\nwant:\n%s", got, want)
+	}
+	if want := waitingDeploymentID + " is FAILED: " + detail; !strings.Contains(stderr, want) {
+		t.Errorf("stderr lacks %q:\n%s", want, stderr)
+	}
 	if stdout != "" {
 		t.Errorf("stdout %q, want nothing: the error names the deployment", stdout)
+	}
+}
+
+func TestDeploymentsCreatePrintsATableWhenTheDeploymentIsReady(t *testing.T) {
+	api := &deploymentAPI{
+		created: deploymentBody("PROVISIONING", ""),
+		reads:   []string{deploymentBody("READY", "")},
+	}
+
+	code, stdout, stderr := createDeployment(t, api, "table")
+
+	if code != exitOK {
+		t.Fatalf("exit %d, want %d; stderr:\n%s", code, exitOK, stderr)
+	}
+	for _, want := range []string{waitingDeploymentID, "READY"} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("the table lacks %q:\n%s", want, stdout)
+		}
+	}
+}
+
+func TestDeploymentsCreateExitsOneWhenTheWaitTimesOut(t *testing.T) {
+	api := &deploymentAPI{
+		created: deploymentBody("PROVISIONING", ""),
+		reads:   []string{deploymentBody("PROVISIONING", "")},
+	}
+
+	// The create's timeout is 1800 seconds, so this one lasts 18ms.
+	code, stdout, stderr := createDeploymentWithin(t, api, 10*time.Microsecond, "json")
+
+	if code != exitFailure {
+		t.Fatalf("exit %d, want %d; stderr:\n%s", code, exitFailure, stderr)
+	}
+	if got := printedStatus(t, stdout); got != "PROVISIONING" {
+		t.Errorf("printed status %s, want PROVISIONING", got)
+	}
+	for _, want := range []string{
+		"stopped waiting after 30m0s; " + waitingDeploymentID + " is still PROVISIONING",
+		"check it with: " + binaryName + " deployments get " + waitingDeploymentID,
+	} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("stderr lacks %q:\n%s", want, stderr)
+		}
 	}
 }
