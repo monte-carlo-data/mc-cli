@@ -3,6 +3,8 @@
 package cmd
 
 import (
+	"net/http"
+
 	"github.com/spf13/cobra"
 
 	sdk "github.com/monte-carlo-data/mc-sdk-go/montecarlo"
@@ -77,6 +79,25 @@ func newDeploymentsCreateCmd() *cobra.Command {
 			if err != nil {
 				return apiErr(resp, err)
 			}
+			noWait, err := flagBool(cmd, "no-wait")
+			if err != nil {
+				return err
+			}
+			if !noWait {
+				createdID := out.GetId()
+				out, err = waitForStatus(cmd, out, func(o *sdk.DeploymentOut) (string, string) {
+					return string(o.GetStatus()), o.GetStatusDetail()
+				}, func() (*sdk.DeploymentOut, *http.Response, error) {
+					return api.DeploymentsAPI.GetDeployment(ctx, createdID).Execute()
+				}, []string{"READY"}, []string{"FAILED"}, 1800, createdID, "deployments get")
+				if err != nil {
+					if out != nil {
+						// The wait's error is the one to report.
+						_ = renderIfJSON(cmd, out)
+					}
+					return err
+				}
+			}
 			return render(cmd, out, "id", "name", "type", "runtime_platform", "enabled", "created_time", "last_updated_time", "status", "status_detail", "deletion_protection", "aws_external_id")
 		},
 	}
@@ -87,6 +108,7 @@ func newDeploymentsCreateCmd() *cobra.Command {
 	cmd.Flags().String("name", "", "Display name for the deployment. Monte Carlo generates one if you leave it out.")
 	cmd.Flags().String("runtime-platform", "", "Where the deployment's collection agent or data store will run. Either can be provisioned on AWS, AZURE or GCP, and a collection agent also on GENERIC. Any other combination is rejected. Required for a collection agent or data store. Leave it out for AGENT_OBSERVABILITY, which Monte Carlo hosts.")
 	_ = cmd.RegisterFlagCompletionFunc("runtime-platform", enumCompletion(sdk.AllowedRuntimePlatformEnumValues))
+	cmd.Flags().Bool("no-wait", false, "Print the deployment as created, without waiting for its status to be READY.")
 	return cmd
 }
 
